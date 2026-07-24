@@ -87,11 +87,10 @@ The wire details are ported from the live-verified [n8n community node](https://
 
 ## Roadmap
 
-Shipped v0.2→v0.7: filesystem completion, session/fleet control, preview URLs, snapshots+volumes, templates+registry, workspace admin. See [ROADMAP.md](docs/plans/ROADMAP.md). Still ahead:
+Shipped v0.2→v1.0: filesystem completion, session/fleet control, preview URLs, snapshots+volumes, templates+registry, workspace admin, and full-parity v1.0 (84 tools, CI-enforced parity audit — no API method without a tool). v1.0.1/1.0.2 fixed two request-shape bugs found by the test suite. **v2.0.0-alpha.0** ships the HTTP/SSE transport (Streamable HTTP; `TENKI_MCP_TRANSPORT=http`) — the server is hostable, not just local-stdio. See [CHANGELOG.md](CHANGELOG.md) and [ROADMAP.md](docs/plans/ROADMAP.md). Still ahead:
 
-- **v1.0** — a CI parity-audit that fails the build if any API method lacks a tool; npm publish; MCP-registry listings
-- **v2.0** — streaming exec + interactive shells + an HTTP/SSE transport (needs a gRPC/Connect-streaming transport, the one thing plain HTTP can't do)
-- Binary file transfer via signed artifact URLs; batch file writes; SSH access; snapshot-retention settings
+- **v2.0 GA** — streaming exec (`StreamCommandOutput` via Connect length-prefixed envelopes over `fetch`; feasibility proven, see [docs/plans/V2-STATE.md](docs/plans/V2-STATE.md)); per-request HTTP auth (multi-tenant hosting); interactive shells (`Run`/`Dial`, needs a gRPC/HTTP2 or WebSocket path)
+- npm publish + MCP-registry listings (`server.json` at repo root; awaiting the human `npm publish` + `mcp-publisher login/publish` steps)
 
 ## Related
 

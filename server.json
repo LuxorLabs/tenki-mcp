@@ -1,0 +1,37 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.opencolin/tenki-mcp",
+  "title": "Tenki Sandbox MCP",
+  "description": "Model Context Protocol server for Tenki Cloud — disposable microVM sandboxes for AI agents. Create sandboxes, run code, read/write files, run git, expose preview URLs — from any MCP client. 84 tools, full parity with the Tenki unary API.",
+  "version": "2.0.0-alpha.0",
+  "websiteUrl": "https://tenki.cloud/?utm_source=mcp-registry&utm_medium=mcp-registry&utm_campaign=i10-mcp",
+  "repository": {
+    "url": "https://github.com/opencolin/tenki-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "tenki-mcp",
+      "version": "2.0.0-alpha.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "TENKI_API_KEY",
+          "description": "Tenki API key (starts with tk_). Alternatively set TENKI_AUTH_TOKEN (an ory_st_ session token or session cookie); the header is chosen by token prefix.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "TENKI_API_ENDPOINT",
+          "description": "Override the control-plane endpoint. Defaults to https://api.tenki.cloud.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
