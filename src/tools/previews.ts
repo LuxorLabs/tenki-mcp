@@ -142,9 +142,10 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Touch (keep-alive) a preview ──────────────────────────────────────────────
 	server.tool(
 		"tenki_touch_preview",
-		"Refresh (keep-alive) a live preview for a port so it isn't torn down as idle.",
-		{ session_id: z.string(), port: portSchema.describe("The exposed port to keep alive.") },
-		async ({ session_id, port }) => ok(await client.control("TouchPreview", { sessionId: session_id, port })),
+		"Refresh (keep-alive) a live preview by its preview token so it isn't torn down as idle.",
+		{ preview_token: z.string().describe("The preview token (from create_preview_url / open_preview).") },
+		// TouchPreview takes a previewToken, not session/port (live-verified).
+		async ({ preview_token }) => ok(await client.control("TouchPreview", { previewToken: preview_token })),
 	);
 
 	// ── Bind / unbind a named preview URL to a session+port ───────────────────────

@@ -2,6 +2,16 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
+## [Unreleased] — Registry/preview/artifact request-shape fixes
+
+An API-contract review live-probed the write paths and found **11 more request-shape bugs** beyond the two already fixed — the registry module was almost entirely non-functional (it sent `reference` where the API wants `ref` / `imageId` / `imageRef`, failing 100%% of the time). All fixed and live-verified (each now reaches a clean not-found instead of a validation error); regression-guarded by test/registry-shapes.test.mjs.
+
+- **registry** (9): `get_image`, `resolve_image_ref` (needs `ref`+`workspaceId`), `set_image_visibility` (needs `ref`+`REGISTRY_VISIBILITY_*` enum), `delete_image` (whole=`ref`; version=`imageId`+`snapshotId`), `share_image` (`imageRef`+`targetWorkspaceId`), `unshare_image` (`ref`), `revoke_image_share_grant` (`grantId`), `publish_image` (needs `ref`+`kind`+`snapshotId`/`sourceTemplateId`, not a session).
+- **previews** (1): `touch_preview` takes a `previewToken`, not session/port.
+- **artifacts** (1): `get_download_url` supports download-by-artifact-id only (the API rejects a path); the non-functional `path` option was removed.
+
+Known-unverified (flagged for follow-up): `update_workspace_settings` / `update_snapshot_retention_settings` field names cannot be black-box verified (the server silently accepts unknown fields) — need checking against the SDK descriptor.
+
 ## [2.0.0-alpha.0] — 2026-07-21 — HTTP transport (v2 begins)
 
 The server now speaks **Streamable HTTP** in addition to stdio, so it can be hosted for remote MCP clients (`TENKI_MCP_TRANSPORT=http PORT=3000`). Verified end-to-end (connect → tools/list → tool call over HTTP; stdio unchanged, 84 tools). Server construction refactored into a shared `createServer()` factory (src/server.ts) used by both transports.

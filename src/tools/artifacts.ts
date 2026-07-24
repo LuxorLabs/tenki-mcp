@@ -38,19 +38,13 @@ export function registerArtifacts(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_get_download_url",
-		"Get a short-lived signed URL to download (HTTP GET) a binary file or command artifact from a sandbox. Provide either a path or an artifact_id (e.g. a command's stdout artifact).",
+		"Get a short-lived signed URL to download (HTTP GET) a command artifact from a sandbox by its artifact id (e.g. a command's stdout/stderr artifact). Note: the API supports download-by-artifact-id only, not download-by-path.",
 		{
 			session_id: z.string(),
-			path: z.string().optional().describe("Path of the file in the sandbox to download."),
-			artifact_id: z.string().optional().describe("Artifact id (e.g. a command's stdout/stderr artifact)."),
+			artifact_id: z.string().describe("Artifact id to download (e.g. a command's stdout/stderr artifact)."),
 		},
-		async ({ session_id, path, artifact_id }) =>
-			ok(
-				await client.control("GetArtifactDownloadUrl", {
-					sessionId: session_id,
-					...(path ? { path } : {}),
-					...(artifact_id ? { artifactId: artifact_id } : {}),
-				}),
-			),
+		// GetArtifactDownloadUrl only accepts an artifact UUID; a `path` is rejected (live-verified).
+		async ({ session_id, artifact_id }) =>
+			ok(await client.control("GetArtifactDownloadUrl", { sessionId: session_id, artifactId: artifact_id })),
 	);
 }
