@@ -26,3 +26,5 @@ Now unblocked by the gating result. Add a Connect-streaming path to the client (
 - **T2** — writing this forward-plan; next: refactor `index.ts` to a shared `createServer(client)` + add the HTTP transport mode.
 - **T3** — refactored to `src/server.ts` `createServer()`; added `src/http.ts` (StreamableHTTPServerTransport, stateful per-session) + `TENKI_MCP_TRANSPORT` switch in index.ts.
 - **T4** — built; stdio regression-checked (84 tools); HTTP transport test green (5/5: start → connect → tools/list(84) → whoami → close). Cut **v2.0.0-alpha.0**. Next (new session): build streaming exec (`StreamCommandOutput` via fetch envelope codec) — feasibility proven in T1; then per-request HTTP auth; then bidi/interactive.
+
+- **T5** — independent security review of the HTTP transport → hardened (loopback default, bearer auth, DNS-rebinding protection, DoS caps, graceful shutdown). Test asserts the gates (7/7). Cut 2.0.0-alpha.1 (PR).

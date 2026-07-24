@@ -72,10 +72,22 @@ Besides stdio, the server speaks **Streamable HTTP** so it can be hosted for rem
 
 ```bash
 TENKI_MCP_TRANSPORT=http PORT=3000 TENKI_API_KEY=… node dist/index.js
-# → tenki-mcp running on http://localhost:3000/mcp
+# → tenki-mcp running on http://127.0.0.1:3000/mcp (Streamable HTTP) [loopback only, no auth]
 ```
 
-Point an HTTP-capable MCP client at `http://localhost:3000/mcp`. v2.0-alpha uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is a later step. Verified end-to-end (`test/http-transport.test.mjs`: connect → tools/list → tool call over HTTP). Streaming exec (`StreamCommandOutput`) is designed and proven feasible over `fetch` — see `docs/plans/V2-STATE.md`.
+**Security — this endpoint is a capability.** In HTTP mode the process holds one shared `TENKI_API_KEY` and exposes every tool, including arbitrary code execution and credit spend. So by default it:
+
+- **binds to loopback (`127.0.0.1`) only** — set `TENKI_MCP_HTTP_HOST=0.0.0.0` to expose it, but then
+- it **requires a bearer token**: set `TENKI_MCP_HTTP_TOKEN` and send `Authorization: Bearer <token>`. It **refuses to start** on a non-loopback host without one.
+- **DNS-rebinding protection** is on (Host-header allowlist), so a malicious web page can't drive your local server.
+
+```bash
+# expose to a network safely:
+TENKI_MCP_TRANSPORT=http TENKI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
+  TENKI_MCP_HTTP_TOKEN=$(openssl rand -hex 32) TENKI_API_KEY=… node dist/index.js
+```
+
+Point an HTTP-capable MCP client at `/mcp`. v2.0-alpha uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is a later step. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP). Streaming exec (`StreamCommandOutput`) is designed and proven feasible over `fetch` — see `docs/plans/V2-STATE.md`.
 
 ## How it works
 

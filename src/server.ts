@@ -23,7 +23,7 @@ import { registerWorkspace } from "./tools/workspace.js";
 import { registerArtifacts } from "./tools/artifacts.js";
 import { registerSsh } from "./tools/ssh.js";
 
-export const VERSION = "2.0.0-alpha.0";
+export const VERSION = "2.0.0-alpha.1";
 
 /** Every tool module registers here. Add new domains to this list. */
 const modules = [

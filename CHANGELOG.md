@@ -2,6 +2,16 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
+## [2.0.0-alpha.1] — 2026-07-21 — Harden the HTTP transport (security)
+
+An independent security review of the v2.0.0-alpha.0 HTTP transport found three coupled HIGH issues (the endpoint holds a shared TENKI_API_KEY and exposes code-execution + credit-spend tools). All fixed:
+
+- **Loopback-only by default** — binds `127.0.0.1`, not `0.0.0.0`; the banner now shows the real host. Expose with `TENKI_MCP_HTTP_HOST`.
+- **Bearer auth** — set `TENKI_MCP_HTTP_TOKEN` (constant-time checked); the server **refuses to bind to a non-loopback host without it**.
+- **DNS-rebinding protection ON** — Host-header allowlist, so a malicious web page cannot drive the local server (verified: forged Host → 403).
+
+Also: session count cap + idle reaping (init-flood DoS), 1 MiB request-body cap (memory DoS), malformed JSON → JSON-RPC `-32700`/400, no internals in error responses, and SIGTERM/SIGINT graceful shutdown. Test `test/http-transport.test.mjs` now asserts the auth gate + rebinding rejection alongside the happy path (7/7). stdio + tool parity unchanged (84).
+
 ## [2.0.0-alpha.0] — 2026-07-21 — HTTP transport (v2 begins)
 
 The server now speaks **Streamable HTTP** in addition to stdio, so it can be hosted for remote MCP clients (`TENKI_MCP_TRANSPORT=http PORT=3000`). Verified end-to-end (connect → tools/list → tool call over HTTP; stdio unchanged, 84 tools). Server construction refactored into a shared `createServer()` factory (src/server.ts) used by both transports.
