@@ -17,18 +17,66 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { TenkiClient } from "./client.js";
 import { createServer } from "./server.js";
 
+// MCP messages are small JSON documents. Bound unauthenticated input so a
+// hosted endpoint cannot be forced to retain an arbitrarily large body.
+const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
+
+class RequestBodyTooLargeError extends Error {
+	constructor() {
+		super(`Request body exceeds the ${MAX_REQUEST_BODY_BYTES}-byte limit.`);
+		this.name = "RequestBodyTooLargeError";
+	}
+}
+
 function readJson(req: http.IncomingMessage): Promise<unknown> {
 	return new Promise((resolve, reject) => {
+		const declaredLength = Number(req.headers["content-length"]);
+		if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BODY_BYTES) {
+			req.resume();
+			reject(new RequestBodyTooLargeError());
+			return;
+		}
+
 		let data = "";
-		req.on("data", (c) => (data += c));
-		req.on("end", () => {
+		let bytes = 0;
+		let settled = false;
+
+		const cleanup = () => {
+			req.off("data", onData);
+			req.off("end", onEnd);
+			req.off("error", onError);
+		};
+		const onData = (chunk: Buffer | string) => {
+			bytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
+			if (bytes > MAX_REQUEST_BODY_BYTES) {
+				settled = true;
+				cleanup();
+				req.resume();
+				reject(new RequestBodyTooLargeError());
+				return;
+			}
+			data += chunk;
+		};
+		const onEnd = () => {
+			if (settled) return;
+			settled = true;
+			cleanup();
 			try {
 				resolve(data ? JSON.parse(data) : undefined);
 			} catch (e) {
 				reject(e);
 			}
-		});
-		req.on("error", reject);
+		};
+		const onError = (error: Error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			reject(error);
+		};
+
+		req.on("data", onData);
+		req.on("end", onEnd);
+		req.on("error", onError);
 	});
 }
 
@@ -83,6 +131,22 @@ export function startHttp(client: TenkiClient, port: number): http.Server {
 
 			res.writeHead(405, { "Content-Type": "text/plain" }).end("method not allowed");
 		} catch (e) {
+			if (e instanceof RequestBodyTooLargeError) {
+				if (!res.headersSent) {
+					res.writeHead(413, {
+						"Content-Type": "application/json",
+						Connection: "close",
+					});
+				}
+				res.end(
+					JSON.stringify({
+						jsonrpc: "2.0",
+						error: { code: -32001, message: e.message },
+						id: null,
+					}),
+				);
+				return;
+			}
 			if (!res.headersSent) res.writeHead(500, { "Content-Type": "text/plain" });
 			res.end(`internal error: ${(e as Error).message}`);
 		}
