@@ -23,28 +23,57 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { TenkiClient } from "./client.js";
 import { createServer } from "./server.js";
 
-const MAX_BODY_BYTES = 1 << 20; // 1 MiB — reject larger POST bodies
+const MAX_BODY_BYTES = 1 << 20; // 1 MiB — reject larger POST bodies (memory-DoS guard)
 const MAX_SESSIONS = 256; // cap concurrent sessions (init-flood DoS guard)
 const SESSION_IDLE_MS = 30 * 60 * 1000; // reap sessions idle longer than this
 
-class BodyTooLarge extends Error {}
+class BodyTooLarge extends Error {
+	constructor() {
+		super(`Request body exceeds the ${MAX_BODY_BYTES}-byte limit.`);
+		this.name = "BodyTooLarge";
+	}
+}
 class BadJson extends Error {}
 
-/** Read a JSON request body with a hard size cap (never throws un-typed). */
+/**
+ * Read a JSON request body with a hard size cap (never throws un-typed).
+ * Rejects early on an oversized Content-Length, and independently enforces the
+ * cap while streaming, so a lying or absent Content-Length can't slip past the
+ * byte counter. Listeners are always removed on the first settle.
+ */
 function readJson(req: http.IncomingMessage): Promise<unknown> {
 	return new Promise((resolve, reject) => {
+		const declared = Number(req.headers["content-length"]);
+		if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+			req.resume(); // drain so the socket can close cleanly
+			reject(new BodyTooLarge());
+			return;
+		}
+
 		let size = 0;
 		const chunks: Buffer[] = [];
-		req.on("data", (c: Buffer) => {
+		let settled = false;
+		const cleanup = () => {
+			req.off("data", onData);
+			req.off("end", onEnd);
+			req.off("error", onError);
+		};
+		const onData = (c: Buffer) => {
+			if (settled) return;
 			size += c.length;
 			if (size > MAX_BODY_BYTES) {
+				settled = true;
+				cleanup();
+				req.resume();
 				reject(new BodyTooLarge());
-				req.destroy();
 				return;
 			}
 			chunks.push(c);
-		});
-		req.on("end", () => {
+		};
+		const onEnd = () => {
+			if (settled) return;
+			settled = true;
+			cleanup();
 			const s = Buffer.concat(chunks).toString("utf8");
 			if (!s) return resolve(undefined);
 			try {
@@ -52,8 +81,17 @@ function readJson(req: http.IncomingMessage): Promise<unknown> {
 			} catch {
 				reject(new BadJson());
 			}
-		});
-		req.on("error", reject);
+		};
+		const onError = (error: Error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			reject(error);
+		};
+
+		req.on("data", onData);
+		req.on("end", onEnd);
+		req.on("error", onError);
 	});
 }
 
@@ -65,6 +103,20 @@ function authOk(header: string | undefined, expected: string): boolean {
 	const a = Buffer.from(m[1]);
 	const b = Buffer.from(expected);
 	return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Host:port values the DNS-rebinding guard accepts: the configured host plus the
+ * loopback aliases, at BOTH the configured port and the port actually bound (so
+ * an ephemeral `port: 0` bind still accepts its own address). Anything else —
+ * e.g. a rebound attacker domain — is rejected by the transport.
+ */
+function allowedHostsFor(server: http.Server, host: string, port: number): string[] {
+	const addr = server.address();
+	const bound = addr && typeof addr === "object" ? addr.port : port;
+	const ports = Array.from(new Set([port, bound]));
+	const hosts = Array.from(new Set([host, "127.0.0.1", "localhost", "[::1]", "::1"]));
+	return hosts.flatMap((h) => ports.map((p) => `${h}:${p}`));
 }
 
 export function startHttp(client: TenkiClient, port: number): http.Server {
@@ -117,7 +169,9 @@ export function startHttp(client: TenkiClient, port: number): http.Server {
 					body = await readJson(req);
 				} catch (e) {
 					if (e instanceof BodyTooLarge) {
-						res.writeHead(413, { "Content-Type": "text/plain" }).end("payload too large");
+						res
+							.writeHead(413, { "Content-Type": "application/json", Connection: "close" })
+							.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: e.message }, id: null }));
 						return;
 					}
 					res
@@ -137,7 +191,7 @@ export function startHttp(client: TenkiClient, port: number): http.Server {
 						// DNS-rebinding defense: only accept these Host headers, so a rebound
 						// attacker-domain request from a browser is rejected.
 						enableDnsRebindingProtection: true,
-						allowedHosts: [`${host}:${port}`, `127.0.0.1:${port}`, `localhost:${port}`],
+						allowedHosts: allowedHostsFor(httpServer, host, port),
 						onsessioninitialized: (id) => {
 							sessions.set(id, { transport, lastSeen: Date.now() });
 						},

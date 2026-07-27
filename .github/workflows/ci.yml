@@ -16,6 +16,8 @@ jobs:
       - run: npm install
       - name: Build
         run: npm run build
+      - name: HTTP input boundary (offline regression)
+        run: node test/http-input.test.mjs
       - name: Parity audit (fails if any API method lacks a tool)
         run: node scripts/parity-audit.mjs
       - name: Offline test suite (no live token needed)
