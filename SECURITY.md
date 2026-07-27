@@ -25,7 +25,7 @@ Grant the smallest set that the use case needs.
 
 ### Transport security (MCP-05, MCP-10)
 - **stdio** (default) has no network surface.
-- **HTTP** (`TENKI_MCP_TRANSPORT=http`) binds **loopback-only** by default, **requires a bearer token** to bind to a non-loopback host, has **DNS-rebinding protection**, and caps sessions + body size. For network exposure put it behind a **TLS-terminating proxy**. (See `docs/plans/V2-STATE.md`; hardening details in the transport module.)
+- **HTTP** (`TENKI_MCP_TRANSPORT=http`) binds **loopback-only** by default, **requires a bearer token** to bind to a non-loopback host, has **DNS-rebinding protection**, and caps sessions + body size. For network exposure put it behind a **TLS-terminating proxy**. (Hardening details in the transport module, `src/http.ts`.)
 
 ### Secrets & audit (MCP-04, Observability)
 - The key is read from env and sent only as an auth header — never logged, never in error responses.
@@ -36,7 +36,7 @@ Grant the smallest set that the use case needs.
 | # | Risk | tenki-mcp posture |
 |---|---|---|
 | MCP-01 | Prompt Injection | zod-validates every tool arg pre-network; **sandbox output is untrusted** (treat tool results as data) |
-| MCP-02 | Confused Deputy | single shared key; HTTP endpoint requires its own bearer token; `READONLY`/denylist bound the blast radius; per-request auth is a roadmap item |
+| MCP-02 | Confused Deputy | single shared key; HTTP endpoint requires its own bearer token; `READONLY`/denylist bound the blast radius; per-request auth is not yet implemented |
 | MCP-03 | Tool Poisoning | tool descriptions are static and authored (no dynamic/remote descriptions); verify the package via its npm provenance + MCP-registry namespace ownership |
 | MCP-04 | Credential/Token Exposure | key via env only; never logged/committed/echoed; audit logs keys not values |
 | MCP-05 | Insecure Configuration | HTTP transport is loopback + token + DNS-rebinding-protected + DoS-capped by default |

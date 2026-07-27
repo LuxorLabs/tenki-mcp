@@ -60,7 +60,7 @@ Once published to npm this becomes `"command": "npx", "args": ["-y", "tenki-mcp"
 | **Registry** (custom images) | publish · get · list · set-visibility · delete · delete-version · resolve-ref · share · list-share-grants |
 | **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_settings` · `tenki_update_workspace_settings` · `tenki_get_snapshot_retention_settings` · `tenki_update_snapshot_retention_settings` |
 
-Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md); the plan through v2.0 is in [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md).
+Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 
 ## Auth
 
@@ -87,22 +87,15 @@ TENKI_MCP_TRANSPORT=http TENKI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
   TENKI_MCP_HTTP_TOKEN=$(openssl rand -hex 32) TENKI_API_KEY=… node dist/index.js
 ```
 
-Point an HTTP-capable MCP client at `/mcp`. v2.0-alpha uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is a later step. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP). Streaming exec (`StreamCommandOutput`) is designed and proven feasible over `fetch` — see `docs/plans/V2-STATE.md`.
+Point an HTTP-capable MCP client at `/mcp`. v2.0-alpha uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is not yet implemented. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
 
 ## How it works
 
 Tenki's API is **ConnectRPC** — JSON over HTTP/1.1, not REST. Every control-plane call is `POST https://api.tenki.cloud/tenki.sandbox.v1.SandboxService/{Method}` with a lowerCamelCase JSON body. Per-session file I/O runs on a **separate data-plane endpoint** returned at create time, authenticated with a short-lived session certificate. This server owns both transports so the tools stay one-liners.
 
-One sharp edge worth knowing: on the current gateway `ExecuteCommand` reports status and exit code but does **not** return output artifacts (the SDK streams output over gRPC, which a plain HTTP client can't speak). So `tenki_exec` and `tenki_run_code` capture output by redirecting to files (`sh -c '… > out 2> err'`) and reading them back over the data plane. It's transparent to the caller — you get `stdout`/`stderr` inline.
+Command output: `tenki_exec` and `tenki_run_code` capture `stdout`/`stderr` by redirecting to files (`sh -c '… > out 2> err'`) and reading them back over the data plane, so you get the output inline through a plain HTTP client.
 
 The wire details are ported from the live-verified [n8n community node](https://github.com/opencolin/n8n-nodes-tenki).
-
-## Roadmap
-
-Shipped v0.2→v1.0: filesystem completion, session/fleet control, preview URLs, snapshots+volumes, templates+registry, workspace admin, and full-parity v1.0 (84 tools, CI-enforced parity audit — no API method without a tool). v1.0.1/1.0.2 fixed two request-shape bugs found by the test suite. **v2.0.0-alpha.0** ships the HTTP/SSE transport (Streamable HTTP; `TENKI_MCP_TRANSPORT=http`) — the server is hostable, not just local-stdio. See [CHANGELOG.md](CHANGELOG.md) and [ROADMAP.md](docs/plans/ROADMAP.md). Still ahead:
-
-- **v2.0 GA** — streaming exec (`StreamCommandOutput` via Connect length-prefixed envelopes over `fetch`; feasibility proven, see [docs/plans/V2-STATE.md](docs/plans/V2-STATE.md)); per-request HTTP auth (multi-tenant hosting); interactive shells (`Run`/`Dial`, needs a gRPC/HTTP2 or WebSocket path)
-- npm publish + MCP-registry listings (`server.json` at repo root; awaiting the human `npm publish` + `mcp-publisher login/publish` steps)
 
 ## Security
 

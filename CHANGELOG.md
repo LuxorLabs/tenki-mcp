@@ -36,7 +36,7 @@ Also: session count cap + idle reaping (init-flood DoS), a 1 MiB request-body ca
 
 The server now speaks **Streamable HTTP** in addition to stdio, so it can be hosted for remote MCP clients (`TENKI_MCP_TRANSPORT=http PORT=3000`). Verified end-to-end (connect → tools/list → tool call over HTTP; stdio unchanged, 84 tools). Server construction refactored into a shared `createServer()` factory (src/server.ts) used by both transports.
 
-**Gating experiment done:** Tenki's gateway accepts Connect *streaming* over HTTP/1.1 (application/connect+json → 200), so v2 streaming exec is feasible with plain fetch + envelope framing — no heavy dependency. Streaming exec (StreamCommandOutput) is designed + unblocked but not yet built; per-request HTTP auth is deferred. See docs/plans/V2-STATE.md. Alpha: not for production hosting yet.
+Streaming exec (`StreamCommandOutput`) and per-request HTTP auth are not yet implemented. Alpha: not for production hosting yet.
 
 ## [1.0.2] — 2026-07-21 — Fixes from comprehensive testing
 
@@ -45,7 +45,7 @@ A PM-council test matrix (34 scenarios) executed via a worktree fan-out against 
 - **tenki_attach_volume** sent a flat request; AttachVolumeRequest nests the target under a `volume` sub-message (`{sessionId, volume:{volumeId, mountPath, readOnly?}}`). Every attach was rejected — this broke the volume warm-cache workflow. Fixed.
 - **tenki_list_image_share_grants** sent `reference`; the API field is `ref` (required). It was silently ignored, 400-ing every call and making the ACL-read surface unreachable. Fixed.
 
-Also: a real MCP **test suite** (`test/`) — a cleanup-safe harness driving the actual MCP protocol + 5 suites (coverage, client-integration, errors-edge, journeys, admin-previews) — **68 checks, all green**. Doc fixes (workspace tool names; create_template setup_script). See docs/plans/TEST-REPORT.md. No tool count change (84).
+Also: a real MCP **test suite** (`test/`) — a cleanup-safe harness driving the actual MCP protocol + 5 suites (coverage, client-integration, errors-edge, journeys, admin-previews) — **68 checks, all green**. Doc fixes (workspace tool names; create_template setup_script). No tool count change (84).
 
 ## [1.0.1] — 2026-07-20 — Fix ResizeVolume field
 
@@ -59,7 +59,7 @@ Live-verifying the volume write path (once a workspace volume-quota block was cl
 
 ## [0.7.0] — 2026-07-20 — Workspace administration
 
-Workspace-level administration: sandbox usage reporting and get/update of workspace sandbox settings. Live-verified. (SSH access + snapshot-retention settings are tracked for a follow-up — see docs/plans/STATE.md.)
+Workspace-level administration: sandbox usage reporting and get/update of workspace sandbox settings. Live-verified.
 
 **Tools:** tenki_get_workspace_usage, tenki_get_workspace_sandbox_settings, tenki_update_workspace_sandbox_settings
 
@@ -105,5 +105,3 @@ Initial release. **15 MCP tools over stdio, live-verified against `api.tenki.clo
 - Ports: `tenki_expose_port`, `tenki_list_exposed_ports`
 
 Dependency-free ConnectRPC client (control + data plane), ported from the live-verified [n8n node](https://github.com/opencolin/n8n-nodes-tenki). Tools organized into self-registering modules under `src/tools/`.
-
-<!-- Upcoming releases are grouped per docs/plans/ROADMAP.md. -->

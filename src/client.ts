@@ -7,10 +7,10 @@
  * separate data-plane endpoint returned at session-create time, authenticated
  * with a short-lived session certificate.
  *
- * The wire details here (headers, the control/data-plane split, the fact that
- * ExecuteCommand returns no output on the live gateway so stdout/stderr must be
- * captured via `sh -c` redirect + data-plane ReadFile) are ported from the
- * live-verified n8n community node (github.com/opencolin/n8n-nodes-tenki).
+ * The wire details here (headers, the control/data-plane split, and capturing
+ * command stdout/stderr via an `sh -c` redirect + data-plane ReadFile) are
+ * ported from the live-verified n8n community node
+ * (github.com/opencolin/n8n-nodes-tenki).
  */
 
 const CONTROL_SERVICE = "tenki.sandbox.v1.SandboxService";
@@ -219,10 +219,10 @@ export class TenkiClient {
 	/**
 	 * Run a command in a session and return stdout/stderr inline.
 	 *
-	 * The live gateway's ExecuteCommand does not populate output artifacts, so we
-	 * wrap the command in `sh -c '<cmd> > out 2> err'`, then read the capture files
-	 * back over the data plane (the only plain-HTTP path to output). Capture-read
-	 * failures degrade gracefully into `captureError` rather than losing the run.
+	 * We wrap the command in `sh -c '<cmd> > out 2> err'`, then read the capture
+	 * files back over the data plane, so output is available through a plain-HTTP
+	 * client. Capture-read failures degrade gracefully into `captureError` rather
+	 * than losing the run.
 	 */
 	async execCaptured(
 		sessionId: string,

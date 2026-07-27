@@ -41,12 +41,12 @@ export function loadToken() {
 
 /**
  * True if an error looks like a transient network/environment condition rather
- * than a code bug: the intermittent data-plane endpoint, or a sandbox that can't
- * reach the internet (outbound/DNS flakiness). Such checks SKIP, they don't fail.
+ * than a code bug (connection failure, timeout, or DNS resolution failure). Such
+ * checks SKIP, they don't fail.
  */
 export function isDataPlaneOutage(err) {
 	const m = (err?.message ?? String(err)).toLowerCase();
-	return /fetch failed|connect timeout|timeout|econn|100\.\d+\.\d+\.\d+|could not resolve|resolve host|network is unreachable|temporary failure in name resolution/.test(m);
+	return /fetch failed|connect timeout|timeout|econn|could not resolve|resolve host|network is unreachable|temporary failure in name resolution/.test(m);
 }
 
 export class Harness {
