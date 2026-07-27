@@ -2,6 +2,18 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
+## [Unreleased] — MCP security hardening (least privilege + annotations)
+
+Applies MCP-native security controls, mapped to the CSA MCP Server Top-10 (esp. MCP-07 excessive permissions). See SECURITY.md.
+
+- **Tool annotations** on all 84 tools (`readOnlyHint` on 36 read tools, `destructiveHint` on the 13 delete/terminate/revoke tools, `openWorldHint` on all) so clients can surface/gate dangerous tools.
+- **Least-privilege env controls:** `TENKI_MCP_READONLY=1` registers only read tools (no create/run/delete/spend); `TENKI_MCP_DISABLED_TOOLS=a,b` drops named tools. Applied centrally via a registration guard — no change to the tool modules.
+- **Audit logging:** `TENKI_MCP_AUDIT=1` logs each tool call name + arg keys (never values/content/token) to stderr.
+- **SECURITY.md** — threat model, trust boundaries (the key + endpoint are capabilities; sandbox output is untrusted), and a full CSA Top-10 mapping. README security section + disclosure policy.
+- Regression test `test/security.test.mjs` (10 offline checks).
+
+(Transport-layer hardening — loopback/auth/DNS-rebinding — is in the HTTP-hardening PR.)
+
 ## [2.0.0-alpha.0] — 2026-07-21 — HTTP transport (v2 begins)
 
 The server now speaks **Streamable HTTP** in addition to stdio, so it can be hosted for remote MCP clients (`TENKI_MCP_TRANSPORT=http PORT=3000`). Verified end-to-end (connect → tools/list → tool call over HTTP; stdio unchanged, 84 tools). Server construction refactored into a shared `createServer()` factory (src/server.ts) used by both transports.

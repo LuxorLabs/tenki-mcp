@@ -93,6 +93,17 @@ Shipped v0.2→v0.7: filesystem completion, session/fleet control, preview URLs,
 - **v2.0** — streaming exec + interactive shells + an HTTP/SSE transport (needs a gRPC/Connect-streaming transport, the one thing plain HTTP can't do)
 - Binary file transfer via signed artifact URLs; batch file writes; SSH access; snapshot-retention settings
 
+## Security
+
+This server holds a Tenki API key and can run code + spend credits, so treat it as a capability. Full model + [CSA MCP Server Top-10](https://modelcontextprotocol-security.io/top10/server/) mapping in **[SECURITY.md](SECURITY.md)**. Quick controls:
+
+- **Least privilege:** every tool carries MCP annotations (`readOnlyHint` / `destructiveHint`). Run `TENKI_MCP_READONLY=1` for an inspection-only server (read tools only), or `TENKI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
+- **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http-v20-alpha)).
+- **Audit:** `TENKI_MCP_AUDIT=1` logs each tool call's name to stderr.
+- **Untrusted output:** `tenki_run_code`/`tenki_exec`/`tenki_read_file` return output from untrusted code — clients should treat tool results as data, not instructions.
+
+Report vulnerabilities via a private [security advisory](https://github.com/LuxorLabs/tenki-mcp/security/advisories/new), not a public issue.
+
 ## Related
 
 - **Tenki Sandbox** — the platform: https://tenki.cloud
