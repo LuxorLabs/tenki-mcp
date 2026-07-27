@@ -43,10 +43,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/opencolin/tenki-mcp.git"
+    "url": "git+https://github.com/LuxorLabs/tenki-mcp.git"
   },
-  "homepage": "https://github.com/opencolin/tenki-mcp#readme",
+  "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
   "bugs": {
-    "url": "https://github.com/opencolin/tenki-mcp/issues"
+    "url": "https://github.com/LuxorLabs/tenki-mcp/issues"
   }
 }

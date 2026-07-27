@@ -3,7 +3,7 @@
 _Last updated: 2026-07-20. This file is the source of truth for "what's done / in flight / next." Update it as you go._
 
 ## What this is
-A public MCP server exposing Tenki Cloud (disposable Firecracker microVM sandboxes for AI agents) as MCP tools. Repo: https://github.com/opencolin/tenki-mcp. Strategy: make Tenki the execution layer coding agents reach for — "agents that ship code" (execute → test → review). Strategy doc: `tenki-ops/plan/build-in-public-goal.md` (private ops repo).
+A public MCP server exposing Tenki Cloud (disposable Firecracker microVM sandboxes for AI agents) as MCP tools. Repo: https://github.com/LuxorLabs/tenki-mcp. Strategy: make Tenki the execution layer coding agents reach for — "agents that ship code" (execute → test → review). Strategy doc: `tenki-ops/plan/build-in-public-goal.md` (private ops repo).
 
 ## Status: v0.1 LIVE-VERIFIED, rounding out to full CLI parity
 - **15 tools shipped and verified against `api.tenki.cloud`.** Modules under `src/tools/`.
