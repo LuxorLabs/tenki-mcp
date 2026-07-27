@@ -29,7 +29,10 @@ const client = new TenkiClient(token, baseUrl);
 
 async function main() {
 	if ((process.env.TENKI_MCP_TRANSPORT || "stdio").toLowerCase() === "http") {
-		startHttp(client, Number(process.env.PORT) || 3000);
+		const httpServer = startHttp(client, Number(process.env.PORT) || 3000);
+		for (const sig of ["SIGINT", "SIGTERM"] as const) {
+			process.on(sig, () => httpServer.close(() => process.exit(0)));
+		}
 		return;
 	}
 	const server = createServer(client);

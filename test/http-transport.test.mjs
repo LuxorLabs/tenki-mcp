@@ -1,13 +1,15 @@
 /**
- * v2 HTTP transport test: start tenki-mcp in HTTP mode, connect with the official
- * MCP Streamable-HTTP client, and drive tools/list + a tool call over HTTP —
- * proving the server is hostable, not just local-stdio.
+ * v2 HTTP transport test: start tenki-mcp in HTTP mode (loopback + a bearer
+ * token), prove the security gates (no token → 401; bad Host → rejected DNS
+ * rebinding), then connect with the official MCP Streamable-HTTP client and drive
+ * tools/list + a tool call over HTTP — proving the server is hostable AND guarded.
  *
  *   npm run build && TENKI_API_KEY=… node test/http-transport.test.mjs
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -31,21 +33,22 @@ if (!token) {
 
 const SERVER = join(dirname(dirname(fileURLToPath(import.meta.url))), "dist", "index.js");
 const PORT = 39217;
+const HTTP_TOKEN = "test-http-secret-" + PORT;
+const BASE = `http://127.0.0.1:${PORT}/mcp`;
 
-// Start the server in HTTP mode and wait for its banner.
 const child = spawn(process.execPath, [SERVER], {
-	env: { ...process.env, TENKI_MCP_TRANSPORT: "http", PORT: String(PORT), TENKI_API_KEY: token },
+	env: { ...process.env, TENKI_MCP_TRANSPORT: "http", PORT: String(PORT), TENKI_MCP_HTTP_TOKEN: HTTP_TOKEN, TENKI_API_KEY: token },
 	stdio: ["ignore", "pipe", "pipe"],
 });
 let pass = 0, fail = 0;
+const check = (name, cond, detail = "") => {
+	if (cond) { console.log(`  ✓ ${name}`); pass++; }
+	else { console.log(`  ✗ ${name}${detail ? " — " + detail : ""}`); fail++; }
+};
 const done = (code) => {
-	try {
-		child.kill("SIGTERM");
-	} catch {
-		/* ignore */
-	}
+	try { child.kill("SIGTERM"); } catch { /* ignore */ }
 	console.log(`\n${pass} passed, ${fail} failed`);
-	process.exit(code);
+	process.exit(code ?? (fail ? 1 : 0));
 };
 
 async function waitForBanner(timeoutMs = 8000) {
@@ -54,44 +57,56 @@ async function waitForBanner(timeoutMs = 8000) {
 		const t = setTimeout(() => reject(new Error("server did not start in time")), timeoutMs);
 		child.stderr.on("data", (d) => {
 			buf += d.toString();
-			if (buf.includes("running on http")) {
-				clearTimeout(t);
-				resolve();
-			}
+			if (buf.includes("running on http")) { clearTimeout(t); resolve(buf); }
 		});
-		child.on("exit", (c) => {
-			clearTimeout(t);
-			reject(new Error(`server exited early (${c}): ${buf.slice(0, 200)}`));
-		});
+		child.on("exit", (c) => { clearTimeout(t); reject(new Error(`server exited early (${c}): ${buf.slice(0, 200)}`)); });
+	});
+}
+
+const initBody = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "t", version: "0" } } });
+
+/** Raw POST /mcp — lets us set headers (like Host) that fetch/undici won't override. */
+function rawPost(headers, body) {
+	return new Promise((resolve) => {
+		const req = http.request(
+			{ host: "127.0.0.1", port: PORT, path: "/mcp", method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "Content-Length": Buffer.byteLength(body), ...headers } },
+			(r) => { let d = ""; r.on("data", (c) => (d += c)); r.on("end", () => resolve({ code: r.statusCode, body: d })); },
+		);
+		req.on("error", (e) => resolve({ code: "ERR", body: e.message }));
+		req.write(body);
+		req.end();
 	});
 }
 
 try {
-	await waitForBanner();
-	console.log(`  ✓ server started in HTTP mode on :${PORT}`);
-	pass++;
+	const banner = await waitForBanner();
+	check("server started on loopback with auth", banner.includes("127.0.0.1") && banner.includes("bearer auth required"), banner.trim());
 
-	const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${PORT}/mcp`));
+	// Security gate 1: no bearer token → 401
+	const noAuth = await fetch(BASE, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: initBody });
+	check("rejects request with no bearer token (401)", noAuth.status === 401, `got ${noAuth.status}`);
+
+	// Security gate 2: valid token but forged Host → DNS-rebinding protection rejects.
+	// Must use raw http.request — fetch/undici won't let you override the Host header.
+	const badHost = await rawPost({ Authorization: `Bearer ${HTTP_TOKEN}`, Host: "evil.example.com" }, initBody);
+	check("rejects forged Host header (DNS-rebinding guard)", badHost.code === 403, `got ${badHost.code}`);
+
+	// Happy path: authorized client over the SDK transport
+	const transport = new StreamableHTTPClientTransport(new URL(BASE), { requestInit: { headers: { Authorization: `Bearer ${HTTP_TOKEN}` } } });
 	const client = new Client({ name: "http-test", version: "1.0.0" });
 	await client.connect(transport);
-	console.log("  ✓ connected over Streamable HTTP");
-	pass++;
+	check("authorized client connects over Streamable HTTP", true);
 
 	const { tools } = await client.listTools();
-	if (tools.length < 80) throw new Error(`expected 84 tools, got ${tools.length}`);
-	console.log(`  ✓ tools/list over HTTP → ${tools.length} tools`);
-	pass++;
+	check("tools/list over HTTP → 84 tools", tools.length >= 80, `${tools.length}`);
 
 	const res = await client.callTool({ name: "tenki_whoami", arguments: {} });
 	const j = JSON.parse(res.content?.find((c) => c.type === "text")?.text ?? "{}");
-	if (j.ownerType !== "USER") throw new Error(`whoami over HTTP unexpected: ${JSON.stringify(j).slice(0, 80)}`);
-	console.log("  ✓ tools/call tenki_whoami over HTTP → authenticated");
-	pass++;
+	check("tools/call tenki_whoami over HTTP → authenticated", j.ownerType === "USER", JSON.stringify(j).slice(0, 60));
 
 	await client.close();
-	console.log("  ✓ clean client close");
-	pass++;
-	done(0);
+	check("clean client close", true);
+	done();
 } catch (e) {
 	console.error("  ✗ " + (e?.message ?? e));
 	fail++;
