@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.opencolin/tenki-mcp",
+  "name": "io.github.LuxorLabs/tenki-mcp",
   "title": "Tenki Sandbox MCP",
   "description": "Model Context Protocol server for Tenki Cloud — disposable microVM sandboxes for AI agents. Create sandboxes, run code, read/write files, run git, expose preview URLs — from any MCP client. 84 tools, full parity with the Tenki unary API.",
   "version": "2.0.0-alpha.0",
   "websiteUrl": "https://tenki.cloud/?utm_source=mcp-registry&utm_medium=mcp-registry&utm_campaign=i10-mcp",
   "repository": {
-    "url": "https://github.com/opencolin/tenki-mcp",
+    "url": "https://github.com/LuxorLabs/tenki-mcp",
     "source": "github"
   },
   "packages": [
