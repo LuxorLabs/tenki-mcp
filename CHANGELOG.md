@@ -2,15 +2,25 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
-## [Unreleased] — Registry/preview/artifact request-shape fixes
+## [Unreleased]
 
-An API-contract review live-probed the write paths and found **11 more request-shape bugs** beyond the two already fixed — the registry module was almost entirely non-functional (it sent `reference` where the API wants `ref` / `imageId` / `imageRef`, failing 100%% of the time). All fixed and live-verified (each now reaches a clean not-found instead of a validation error); regression-guarded by test/registry-shapes.test.mjs.
+### MCP security hardening (least privilege + annotations)
+
+Applies MCP-native security controls, mapped to the CSA MCP Server Top-10 (esp. MCP-07 excessive permissions). See SECURITY.md.
+
+- **Tool annotations** on all 84 tools (`readOnlyHint` on 36 read tools, `destructiveHint` on the 13 delete/terminate/revoke tools, `openWorldHint` on all) so clients can surface/gate dangerous tools.
+- **Least-privilege env controls:** `TENKI_MCP_READONLY=1` registers only read tools (no create/run/delete/spend); `TENKI_MCP_DISABLED_TOOLS=a,b` drops named tools. Applied centrally via a registration guard — no change to the tool modules.
+- **Audit logging:** `TENKI_MCP_AUDIT=1` logs each tool call name + arg keys (never values/content/token) to stderr.
+- **SECURITY.md** — threat model, trust boundaries (the key + endpoint are capabilities; sandbox output is untrusted), and a full CSA Top-10 mapping. README security section + disclosure policy.
+- Regression test `test/security.test.mjs` (10 offline checks).
+
+### Registry/preview/artifact request-shape fixes
+
+An API-contract review of the write paths found **11 more request-shape bugs** beyond the two already fixed — the registry module was almost entirely non-functional (it sent `reference` where the API wants `ref` / `imageId` / `imageRef`). All fixed and verified (each now reaches a clean not-found instead of a validation error); regression-guarded by test/registry-shapes.test.mjs.
 
 - **registry** (9): `get_image`, `resolve_image_ref` (needs `ref`+`workspaceId`), `set_image_visibility` (needs `ref`+`REGISTRY_VISIBILITY_*` enum), `delete_image` (whole=`ref`; version=`imageId`+`snapshotId`), `share_image` (`imageRef`+`targetWorkspaceId`), `unshare_image` (`ref`), `revoke_image_share_grant` (`grantId`), `publish_image` (needs `ref`+`kind`+`snapshotId`/`sourceTemplateId`, not a session).
 - **previews** (1): `touch_preview` takes a `previewToken`, not session/port.
 - **artifacts** (1): `get_download_url` supports download-by-artifact-id only (the API rejects a path); the non-functional `path` option was removed.
-
-Known-unverified (flagged for follow-up): `update_workspace_settings` / `update_snapshot_retention_settings` field names cannot be black-box verified (the server silently accepts unknown fields) — need checking against the SDK descriptor.
 
 ## [2.0.0-alpha.1] — 2026-07-21 — Harden the HTTP transport (security)
 
@@ -20,7 +30,7 @@ An independent security review of the v2.0.0-alpha.0 HTTP transport found three 
 - **Bearer auth** — set `TENKI_MCP_HTTP_TOKEN` (constant-time checked); the server **refuses to bind to a non-loopback host without it**.
 - **DNS-rebinding protection ON** — Host-header allowlist, so a malicious web page cannot drive the local server (verified: forged Host → 403).
 
-Also: session count cap + idle reaping (init-flood DoS), 1 MiB request-body cap (memory DoS), malformed JSON → JSON-RPC `-32700`/400, no internals in error responses, and SIGTERM/SIGINT graceful shutdown. Test `test/http-transport.test.mjs` now asserts the auth gate + rebinding rejection alongside the happy path (7/7). stdio + tool parity unchanged (84).
+Also: session count cap + idle reaping (init-flood DoS), a 1 MiB request-body cap enforced on both the Content-Length header and the streamed byte count (memory DoS), malformed JSON → JSON-RPC `-32700`/400, no internals in error responses, and SIGTERM/SIGINT graceful shutdown. Offline regression `test/http-input.test.mjs` asserts the 413 + a clean init; `test/http-transport.test.mjs` asserts the auth gate + rebinding rejection (7/7). stdio + tool parity unchanged (84).
 
 ## [2.0.0-alpha.0] — 2026-07-21 — HTTP transport (v2 begins)
 
