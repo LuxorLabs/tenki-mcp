@@ -18,15 +18,7 @@ jobs:
         run: npm run build
       - name: Parity audit (fails if any API method lacks a tool)
         run: node scripts/parity-audit.mjs
-      - name: Tools register (offline smoke)
-        run: |
-          COUNT=$( (printf '%s\n' \
-            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
-            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; sleep 2) \
-            | TENKI_API_KEY=tk_dummy node dist/index.js 2>/dev/null \
-            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const l of s.split("\n")){if(!l.trim())continue;try{const m=JSON.parse(l);if(m.id===2)console.log(m.result.tools.length)}catch{}}})' )
-          echo "registered tools: $COUNT"
-          test "$COUNT" -ge 84
-      - name: Run test suite (offline checks only)
-        run: npm run test
+      - name: Offline test suite (no live token needed)
+        run: node test/offline.test.mjs
+      # The live suites (test/*.test.mjs against api.tenki.cloud) need a TENKI_API_KEY
+      # secret + reachable data plane; run them locally with `npm run test:all`.
