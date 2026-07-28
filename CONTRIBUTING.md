@@ -32,7 +32,7 @@ There are two tiers:
   TENKI_API_KEY=tk_... npm run test:all
   ```
 
-CI (`.github/workflows/ci.yml`) runs build + parity + the offline suites on Node 18/20/22.
+CI (`.github/workflows/ci.yml`) runs build + parity + the offline suites on Node 20 and 22.
 It requires **no secrets** — the live suites are local-only by design.
 
 ## Adding a tool
