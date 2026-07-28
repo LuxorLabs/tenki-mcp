@@ -169,15 +169,27 @@ export class TenkiClient {
 	 * Resolve the calling identity + a default workspace/project for CreateSession
 	 * (which requires a projectId). Picks the first workspace that has a project so
 	 * the (workspace, project) pair stays consistent.
+	 *
+	 * CreateSession validates owner_type ∈ {SERVICE, USER} and requires a
+	 * non-empty owner_id, but derives the real owner from the authenticated
+	 * identity server-side. WhoAmI can return other owner types (e.g. WORKSPACE
+	 * for workspace-scoped keys), which the validator rejects — so for those we
+	 * send the same placeholder the first-party SDKs hardcode ("SERVICE"/"self").
 	 */
 	async resolveOwner(): Promise<{ ownerType?: string; ownerId?: string; workspaceId?: string; projectId?: string }> {
 		const resp = await this.control("WhoAmI", {});
 		const workspaces: any[] = Array.isArray(resp.workspaces) ? resp.workspaces : [];
 		const ws = workspaces.find((w) => Array.isArray(w?.projects) && w.projects.length > 0) ?? workspaces[0];
 		const proj = Array.isArray(ws?.projects) ? ws.projects[0] : undefined;
+		let ownerType = resp.ownerType as string | undefined;
+		let ownerId = resp.ownerId as string | undefined;
+		if (ownerType !== "USER" && ownerType !== "SERVICE") {
+			ownerType = "SERVICE";
+			ownerId = "self";
+		}
 		return {
-			ownerType: resp.ownerType,
-			ownerId: resp.ownerId,
+			ownerType,
+			ownerId,
 			workspaceId: ws?.workspaceId ?? ws?.id,
 			projectId: proj?.projectId ?? proj?.id,
 		};

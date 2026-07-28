@@ -102,7 +102,11 @@ try {
 
 	const res = await client.callTool({ name: "tenki_whoami", arguments: {} });
 	const j = JSON.parse(res.content?.find((c) => c.type === "text")?.text ?? "{}");
-	check("tools/call tenki_whoami over HTTP → authenticated", j.ownerType === "USER", JSON.stringify(j).slice(0, 60));
+	check(
+		"tools/call tenki_whoami over HTTP → authenticated",
+		["USER", "SERVICE", "WORKSPACE"].includes(j.ownerType),
+		JSON.stringify(j).slice(0, 60),
+	);
 
 	await client.close();
 	check("clean client close", true);

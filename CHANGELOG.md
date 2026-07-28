@@ -2,6 +2,13 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- **Sandbox creation was broken for workspace-scoped API keys.** `resolveOwner` forwarded WhoAmI's `ownerType` verbatim into `CreateSession`, but the API validates `owner_type ∈ {SERVICE, USER}` and now returns `WORKSPACE` for workspace-scoped keys → every `tenki_create_sandbox`/`tenki_run_code` failed with `400 invalid_argument`. Fix: send the same placeholder the first-party SDKs hardcode (`"SERVICE"`/`"self"`) when WhoAmI returns a type CreateSession rejects — the server derives the real owner from the authenticated identity regardless. Verified live: create → exec (structured) → terminate, 12/12 checks.
+- `test/http-transport.test.mjs` no longer asserts `ownerType === "USER"` (stale against the same API change); it accepts any authenticated owner type.
+
 ## [2.0.0-alpha.2] — 2026-07-27 — MCP security hardening + registry fixes
 
 ### MCP security hardening (least privilege + annotations)
