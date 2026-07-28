@@ -35,6 +35,8 @@ jobs:
         run: node test/offline.test.mjs
       - name: Security posture suite (annotations, read-only mode, denylist)
         run: node test/security.test.mjs
+      - name: Client network behavior (retry policy, timeouts, credential cache — local stub)
+        run: node test/client-net.test.mjs
       - name: Dependency audit (production deps)
         run: npm audit --omit=dev --audit-level=high
       # The live suites (test/*.test.mjs against api.tenki.cloud) need a TENKI_API_KEY

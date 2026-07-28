@@ -20,7 +20,26 @@ const DEFAULT_BASE_URL = "https://api.tenki.cloud";
 const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_CAP_MS = 8000;
-const RETRYABLE = new Set(["rate_limited", "ratelimited", "resource_exhausted", "resourceexhausted", "unavailable"]);
+// Rate-limit rejections happen before the server does any work, so they are
+// safe to retry for EVERY method.
+const RATE_LIMIT_CODES = new Set(["rate_limited", "ratelimited", "resource_exhausted", "resourceexhausted"]);
+// `unavailable` can arrive after the server partially applied a call, so it is
+// retried only for idempotent (read-shaped) methods — retrying a half-applied
+// CreateSession would boot and bill a second sandbox.
+const IDEMPOTENT_METHOD = /^(Get|List|WhoAmI|Resolve|Wait|Stat)/;
+const RETRY_AFTER_CAP_MS = 30_000;
+
+// Every fetch carries a timeout so a hung connection fails the tool call with a
+// clear error instead of blocking it forever (see TenkiClientOptions).
+const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_EXEC_TIMEOUT_MS = 630_000; // runCode's 600s hard cap + margin
+const EXEC_TIMEOUT_MARGIN_MS = 30_000; // headroom over a command's own timeout
+
+// Session-credential cache lifetime handling: a credential whose expiry the API
+// omits (or that we cannot parse) is assumed valid only briefly — never forever —
+// and a known expiry is refreshed early so an in-flight call cannot straddle it.
+const DEFAULT_CRED_TTL_MS = 60_000;
+const CRED_EXPIRY_SKEW_MS = 30_000;
 
 /** Home directory of the sandbox's `tenki` user; run-code scripts and capture files live here. */
 const SANDBOX_HOME = "/home/tenki";
@@ -40,7 +59,17 @@ export interface ExecResult {
 interface CachedCredential {
 	endpoint: string;
 	token: string;
-	expiresAt?: number;
+	/** Epoch ms after which the entry is considered stale (always finite). */
+	expiresAt: number;
+}
+
+export interface TenkiClientOptions {
+	/** Timeout for unary control/data-plane calls (default 30s). */
+	timeoutMs?: number;
+	/** Timeout for ExecuteCommand when the command itself has no timeout (default 630s). */
+	execTimeoutMs?: number;
+	/** Assumed session-credential lifetime when the API returns no parseable expiry (default 60s). */
+	credTtlMs?: number;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -85,31 +114,83 @@ function interpreterFor(language: Language): { file: string; command: string; ar
 export class TenkiClient {
 	private readonly baseUrl: string;
 	private readonly credCache = new Map<string, CachedCredential>();
+	private readonly timeoutMs: number;
+	private readonly execTimeoutMs: number;
+	private readonly credTtlMs: number;
 
-	constructor(private readonly token: string, baseUrl: string = DEFAULT_BASE_URL) {
+	constructor(private readonly token: string, baseUrl: string = DEFAULT_BASE_URL, opts: TenkiClientOptions = {}) {
 		this.baseUrl = baseUrl.replace(/\/+$/, "");
+		this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+		this.execTimeoutMs = opts.execTimeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
+		this.credTtlMs = opts.credTtlMs ?? DEFAULT_CRED_TTL_MS;
 	}
 
 	/**
-	 * Unary control-plane call. Retries RateLimited responses with exponential backoff.
+	 * ExecuteCommand blocks until the command finishes, so its timeout follows
+	 * the command's own timeout (plus margin) instead of the unary default.
+	 */
+	private timeoutFor(method: string, body: Record<string, unknown>): number {
+		if (method !== "ExecuteCommand") return this.timeoutMs;
+		const t = typeof body.timeout === "string" ? Number.parseInt(body.timeout, 10) : Number.NaN; // "30s"
+		return Number.isFinite(t) && t > 0 ? t * 1000 + EXEC_TIMEOUT_MARGIN_MS : this.execTimeoutMs;
+	}
+
+	/** fetch with a hard timeout and a readable error instead of a bare AbortError. */
+	private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number, what: string): Promise<Response> {
+		try {
+			return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+		} catch (e) {
+			const name = (e as Error)?.name;
+			if (name === "TimeoutError" || name === "AbortError") {
+				throw new Error(`Tenki ${what} timed out after ${timeoutMs}ms with no response.`);
+			}
+			throw e;
+		}
+	}
+
+	/** Retry policy: rate limits always; `unavailable` only for idempotent methods. */
+	private shouldRetry(method: string, status: number, code: string): boolean {
+		if (status === 429 || RATE_LIMIT_CODES.has(code)) return true;
+		return code === "unavailable" && IDEMPOTENT_METHOD.test(method);
+	}
+
+	/** Exponential backoff with half-jitter; a Retry-After header (seconds) wins, capped. */
+	private backoffMs(attempt: number, retryAfter: string | null): number {
+		const ra = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
+		if (Number.isFinite(ra) && ra >= 0) return Math.min(ra * 1000, RETRY_AFTER_CAP_MS);
+		const base = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_CAP_MS);
+		return base / 2 + Math.random() * (base / 2);
+	}
+
+	/**
+	 * Unary control-plane call. Every attempt carries a timeout. Rate-limit
+	 * rejections retry with jittered backoff (honoring Retry-After); transient
+	 * `unavailable` errors retry only for idempotent methods, because a
+	 * non-idempotent call (CreateSession) may have partially applied.
 	 * `service` defaults to SandboxService; pass another fully-qualified ConnectRPC
 	 * service (e.g. the SSH gateway service) for methods hosted elsewhere.
 	 */
 	async control(method: string, body: Record<string, unknown> = {}, service: string = CONTROL_SERVICE): Promise<Record<string, any>> {
 		const url = `${this.baseUrl}/${service}/${method}`;
+		const timeoutMs = this.timeoutFor(method, body ?? {});
 		for (let attempt = 0; ; attempt++) {
-			const res = await fetch(url, {
-				method: "POST",
-				headers: { "Content-Type": "application/json", "Connect-Protocol-Version": "1", ...authHeaders(this.token) },
-				body: JSON.stringify(body ?? {}),
-			});
+			const res = await this.fetchWithTimeout(
+				url,
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json", "Connect-Protocol-Version": "1", ...authHeaders(this.token) },
+					body: JSON.stringify(body ?? {}),
+				},
+				timeoutMs,
+				method,
+			);
 			if (res.ok) return (await res.json()) as Record<string, any>;
 
 			const text = await res.text();
 			const parsed = safeJson(text);
 			const code = typeof parsed?.code === "string" ? parsed.code.toLowerCase() : "";
-			if (attempt < MAX_RETRIES && (res.status === 429 || RETRYABLE.has(code))) {
-				await sleep(Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_CAP_MS));
+			if (attempt < MAX_RETRIES && this.shouldRetry(method, res.status, code)) {
+				await sleep(this.backoffMs(attempt, res.headers.get("retry-after")));
 				continue;
 			}
 			const msg = (parsed?.message as string) || text || res.statusText;
@@ -117,10 +198,15 @@ export class TenkiClient {
 		}
 	}
 
-	/** Mint (and cache per session) the data-plane endpoint + session certificate. */
+	/**
+	 * Mint (and cache per session) the data-plane endpoint + session certificate.
+	 * A credential with no parseable expiry is cached for credTtlMs — never
+	 * forever — and a known expiry is shortened by a skew so an in-flight call
+	 * can't straddle the real expiry.
+	 */
 	private async credentialFor(sessionId: string): Promise<CachedCredential> {
 		const cached = this.credCache.get(sessionId);
-		if (cached && (cached.expiresAt === undefined || cached.expiresAt > Date.now())) return cached;
+		if (cached && cached.expiresAt > Date.now()) return cached;
 
 		const resp = await this.control("CreateSessionCredential", { sessionId });
 		const cred = (resp.credential as Record<string, any>) ?? resp;
@@ -129,36 +215,57 @@ export class TenkiClient {
 			| string
 			| undefined;
 
-		let expiresAt: number | undefined;
+		let expiresAt = Date.now() + this.credTtlMs;
 		const raw = cred.expiresAt ?? cred.expires_at;
 		if (typeof raw === "string") {
 			const p = Date.parse(raw);
-			if (!Number.isNaN(p)) expiresAt = p;
+			if (!Number.isNaN(p)) expiresAt = p - CRED_EXPIRY_SKEW_MS;
 		}
 		const entry: CachedCredential = { endpoint: endpoint ?? "", token, expiresAt };
 		this.credCache.set(sessionId, entry);
 		return entry;
 	}
 
-	/** Unary data-plane call. The inner request is wrapped as `{ request: { sessionId, ...request } }`. */
-	async data(sessionId: string, method: string, request: Record<string, unknown> = {}): Promise<Record<string, any>> {
+	/**
+	 * Unary data-plane call. The inner request is wrapped as
+	 * `{ request: { sessionId, ...request } }`. An auth failure invalidates the
+	 * cached session certificate (it may have expired server-side regardless of
+	 * what its stated expiry said) and retries once with a fresh one.
+	 */
+	async data(
+		sessionId: string,
+		method: string,
+		request: Record<string, unknown> = {},
+		retriedAuth = false,
+	): Promise<Record<string, any>> {
 		const cred = await this.credentialFor(sessionId);
 		if (!cred.endpoint) {
 			throw new Error(`Could not resolve the data-plane endpoint for session ${sessionId}.`);
 		}
 		const url = `${cred.endpoint.replace(/\/+$/, "")}/${DATA_SERVICE}/${method}`;
-		const res = await fetch(url, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"Connect-Protocol-Version": "1",
-				"x-tenki-session-cert": cred.token,
+		const res = await this.fetchWithTimeout(
+			url,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Connect-Protocol-Version": "1",
+					"x-tenki-session-cert": cred.token,
+				},
+				body: JSON.stringify({ request: { sessionId, ...request } }),
 			},
-			body: JSON.stringify({ request: { sessionId, ...request } }),
-		});
+			this.timeoutMs,
+			`data ${method}`,
+		);
 		if (!res.ok) {
 			const text = await res.text();
 			const parsed = safeJson(text);
+			const code = typeof parsed?.code === "string" ? parsed.code.toLowerCase() : "";
+			const authFailure = res.status === 401 || res.status === 403 || code === "unauthenticated" || code === "permission_denied";
+			if (authFailure && !retriedAuth) {
+				this.credCache.delete(sessionId);
+				return this.data(sessionId, method, request, true);
+			}
 			throw new Error(`Tenki data ${method} failed (${res.status}): ${(parsed?.message as string) || text}`);
 		}
 		const wrapped = (await res.json()) as Record<string, any>;

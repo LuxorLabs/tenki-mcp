@@ -4,6 +4,13 @@ All notable changes to tenki-mcp. This project follows semantic versioning.
 
 ## [Unreleased]
 
+### Network-layer hardening (timeouts, retry policy, credential cache)
+
+- **Every fetch now carries a timeout** — a hung control- or data-plane connection fails the tool call with a clear `timed out after Nms` error instead of blocking it forever. Unary calls default to 30s; `ExecuteCommand` follows the command's own timeout + 30s margin (630s when the command has none). Tunable via `TenkiClient` options.
+- **`unavailable` is no longer retried on non-idempotent methods.** A half-applied `CreateSession` retried on `unavailable` could boot and bill a second sandbox; now only idempotent (read-shaped) methods retry it. Rate-limit rejections still retry for every method, with jittered backoff and `Retry-After` honored (capped at 30s).
+- **Session-credential cache can no longer go permanently stale.** A credential whose expiry the API omits (or that fails to parse) was previously cached *forever* — once the cert actually expired, every file operation for that session failed for the life of the process. Now: missing expiry → 60s TTL; known expiry → refreshed 30s early; and an auth failure on a data-plane call invalidates the cached credential and retries once with a fresh one (never loops).
+- New offline regression suite `test/client-net.test.mjs` (local `node:http` stub, zero external network) covering all of the above; wired into `npm test` and CI.
+
 ### Structured tool output (first tool: `tenki_exec`)
 
 - **`tenki_exec` now declares an `outputSchema` and returns `structuredContent`** alongside a plain-text rendering, so MCP clients can consume `stdout`/`stderr`/`exitCode`/`ok` as typed JSON instead of re-parsing a stringified blob. The text block carries the full output (headed by `exit <code>` and byte-count markers) for clients that don't support structured content. The SDK validates every successful result against the schema.
