@@ -35,5 +35,7 @@ jobs:
         run: node test/offline.test.mjs
       - name: Security posture suite (annotations, read-only mode, denylist)
         run: node test/security.test.mjs
+      - name: Dependency audit (production deps)
+        run: npm audit --omit=dev --audit-level=high
       # The live suites (test/*.test.mjs against api.tenki.cloud) need a TENKI_API_KEY
       # secret + reachable data plane; run them locally with `npm run test:all`.

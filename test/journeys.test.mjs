@@ -1,8 +1,7 @@
 /**
- * Journeys suite — the product-thesis COMPOSITE workflows, end to end against
- * live Tenki through the real MCP protocol. These are the multi-tool loops the
- * matrix calls the "theses" (ship-code, persistence, runtimes), distinct from
- * coverage.test.mjs's per-domain happy paths:
+ * Journeys suite — the composite, multi-tool workflows, end to end against
+ * live Tenki through the real MCP protocol (ship-code, persistence, runtimes),
+ * distinct from coverage.test.mjs's per-domain happy paths:
  *
  *   1. ship-code red→green  — create → write buggy calc + test → exec (RED) →
  *      fix → exec (GREEN). exitCode rides the control plane, so the RED→GREEN

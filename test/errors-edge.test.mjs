@@ -202,7 +202,7 @@ try {
 				const st = String((g.session ?? g).state ?? "");
 				if (!/RUNNING/i.test(st)) throw new Error(`resume-while-running left the sandbox in ${st} (wrong-state mutation)`);
 				findings.push(
-					"Tenki API semantics (not an MCP bug): tenki_resume_sandbox on a RUNNING sandbox returns a clean idempotent SUCCESS (no FailedPrecondition/conflict); the sandbox stays RUNNING. The TEST-MATRIX assumes a state-conflict error here.",
+					"Tenki API semantics (not an MCP bug): tenki_resume_sandbox on a RUNNING sandbox returns a clean idempotent SUCCESS (no FailedPrecondition/conflict); the sandbox stays RUNNING. We would otherwise expect a state-conflict error here.",
 				);
 			}
 		});
@@ -241,7 +241,7 @@ try {
 						const st = String((g.session ?? g).state ?? "");
 						if (!/PAUSE|SUSPEND/i.test(st)) throw new Error(`double-pause left the sandbox in ${st} (wrong-state mutation)`);
 						findings.push(
-							"Tenki API semantics (not an MCP bug): tenki_pause_sandbox on an already-PAUSED sandbox returns a clean idempotent SUCCESS (no conflict); the sandbox stays PAUSED. The TEST-MATRIX assumes a state-conflict error here.",
+							"Tenki API semantics (not an MCP bug): tenki_pause_sandbox on an already-PAUSED sandbox returns a clean idempotent SUCCESS (no conflict); the sandbox stays PAUSED. We would otherwise expect a state-conflict error here.",
 						);
 						pass(name);
 					}

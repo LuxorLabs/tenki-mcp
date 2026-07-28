@@ -58,11 +58,16 @@ const modules = [
 type Cls = "read" | "write" | "destructive";
 // Destroys/removes/revokes a resource → destructiveHint.
 const DESTRUCTIVE = /^tenki_(terminate|delete|remove|unshare|revoke|detach|unexpose|unbind)/;
+// Named exceptions that match the READ prefix below but actually grant a
+// write/spend capability, so they must never be treated as read-only.
+// tenki_get_upload_url returns a signed URL for an arbitrary PUT into the sandbox.
+const WRITE_OVERRIDE = new Set(["tenki_get_upload_url"]);
 // Pure inspection, no state change / no spend → readOnlyHint.
-const READ = /^tenki_(get|list|whoami|resolve|stat)/;
+const READ = /^tenki_(get|list|whoami|resolve|stat|read)/;
 
 export function classifyTool(name: string): Cls {
 	if (DESTRUCTIVE.test(name)) return "destructive";
+	if (WRITE_OVERRIDE.has(name)) return "write";
 	if (READ.test(name)) return "read";
 	return "write";
 }

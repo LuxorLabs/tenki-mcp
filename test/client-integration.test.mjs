@@ -3,7 +3,7 @@
  *
  *   npm run build && TENKI_API_KEY=… node test/client-integration.test.mjs
  *
- * Covers TEST-MATRIX category `client-integration`:
+ * Covers the client-integration scenarios:
  *   • mcp-handshake-toolslist        — handshake + protocol negotiation (latest AND an
  *                                       older pinned version) + tools/list advertises all
  *                                       84 tools with valid, unique, described object schemas.
