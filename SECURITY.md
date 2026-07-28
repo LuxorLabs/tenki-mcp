@@ -3,7 +3,7 @@
 `tenki-mcp` gives an AI agent a capability: a disposable microVM it can create, run code in, and spend Tenki credits with. Treat the server — and the API key it holds — accordingly. This document is the threat model and the controls, mapped to the [CSA MCP Server Top 10](https://modelcontextprotocol-security.io/top10/server/).
 
 ## Reporting a vulnerability
-Please **do not** open a public issue for security reports. Open a private [GitHub security advisory](https://github.com/LuxorLabs/tenki-mcp/security/advisories/new), or email the maintainers. We'll acknowledge within a few business days.
+Please **do not** open a public issue for security reports. Open a private [GitHub security advisory](https://github.com/LuxorLabs/tenki-mcp/security/advisories/new), or email **hello@luxor.tech**. We'll acknowledge within a few business days.
 
 ## Trust boundaries (read this first)
 - **The API key is a capability.** In every mode the process authenticates to Tenki with one `TENKI_API_KEY` and can create sandboxes, run arbitrary code, and spend credits. Anyone who can invoke the server can do those things. Scope the key if your Tenki plan allows it; never commit it (`.env` is gitignored).

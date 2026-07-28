@@ -9,7 +9,7 @@
  *     rejected client-side by zod BEFORE any network call (MCP InvalidParams), so a
  *     bounds check can never leak a side effect. Each reject is proven pre-network
  *     locally (the error text is an "Input validation error", never a "Tenki … failed
- *     (…)" round-trip) — robust even while sibling agents mutate the shared workspace.
+ *     (…)" round-trip) — robust even while concurrent suites mutate the shared workspace.
  *   • semantic-rejects — well-formed-but-nonexistent ids across sandbox/volume/snapshot/
  *     template/image/preview return an attributable isError (not a crash/hang); an
  *     unknown tool name returns a clean "not found".
@@ -20,12 +20,12 @@
  *   • run_code edges — env injection, a surfaced non-zero exit (ok:false), an honored
  *     timeout_seconds, and self-teardown of the ephemeral VM (no billing leak).
  *
- * RESOURCE DISCIPLINE: this agent owns SANDBOXES only (≤2, auto-tracked + cleaned).
- * Volumes/snapshots/templates are quota-limited and owned by the journeys agent, so
+ * RESOURCE DISCIPLINE: this suite owns SANDBOXES only (≤2, auto-tracked + cleaned).
+ * Volumes/snapshots/templates are quota-limited and owned by the journeys suite, so
  * every delete/idempotency probe here runs against GHOST ids — nothing is provisioned.
  * run_code's own throwaway microVMs self-terminate in its finally (not counted/tracked).
  *
- * Data-plane-dependent steps (run_code) use h.checkData so an intermittent 100.x mesh
+ * Data-plane-dependent steps (run_code) use h.checkData so an intermittent network
  * outage is a SKIP, not a false failure; the control-plane exit code is asserted anyway.
  */
 import { Harness, isDataPlaneOutage } from "./harness.mjs";

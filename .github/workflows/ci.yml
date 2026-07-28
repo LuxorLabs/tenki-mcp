@@ -5,15 +5,26 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-parity:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - run: npm install
+          node-version: ${{ matrix.node }}
+          cache: "npm"
+      - run: npm ci
       - name: Build
         run: npm run build
       - name: HTTP input boundary (offline regression)
@@ -22,5 +33,7 @@ jobs:
         run: node scripts/parity-audit.mjs
       - name: Offline test suite (no live token needed)
         run: node test/offline.test.mjs
+      - name: Security posture suite (annotations, read-only mode, denylist)
+        run: node test/security.test.mjs
       # The live suites (test/*.test.mjs against api.tenki.cloud) need a TENKI_API_KEY
       # secret + reachable data plane; run them locally with `npm run test:all`.

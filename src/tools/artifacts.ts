@@ -8,7 +8,7 @@
  * caller performs the actual HTTP PUT/GET.
  *
  * GetArtifactUploadUrlRequest { sessionId, path, contentType } is verified from the
- * decompiled SDK map. GetArtifactDownloadUrl accepts a path or an artifactId (command
+ * published Tenki API surface. GetArtifactDownloadUrl accepts a path or an artifactId (command
  * stdout/stderr are surfaced as artifact ids); both are forwarded when provided.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

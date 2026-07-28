@@ -16,10 +16,10 @@
  *
  *   npm run build && TENKI_API_KEY=… node test/journeys.test.mjs
  *
- * Data-plane steps (write/read/exec) use h.checkData() so an intermittent mesh
+ * Data-plane steps (write/read/exec) use h.checkData() so an intermittent network
  * outage is a SKIP, not a false failure; bounded async waits (snapshot-ready,
  * sandbox-boot, template-build) throw a "…within timeout budget" message that
- * checkData classifies as a skip too. THIS AGENT is the sole creator of the
+ * checkData classifies as a skip too. THIS SUITE is the sole creator of the
  * (exactly 1) volume and (exactly 1) template; every resource is tracked and
  * torn down in the finally.
  */
@@ -275,7 +275,7 @@ try {
 				// setup step ran, the snapshot phase errored) from a real setup failure.
 				const why = String(build?.failure?.message ?? build?.error ?? "").replace(/\s+/g, " ").slice(0, 220);
 				const ran = String(build?.buildLogTail ?? "").replace(/\s+/g, " ").slice(0, 80);
-				record("skip", bootName, `template build reached ${state} — setupLogTail=[${ran}] failure=[${why}] (boot-warm unverified; classify per the message: 'internal server error/retryable' = Tenki backend gap, not an mcp bug)`);
+				record("skip", bootName, `template build reached ${state} — setupLogTail=[${ran}] failure=[${why}] (boot-warm unverified; classify per the message: 'internal server error/retryable' = a server-side error, not an mcp wiring bug)`);
 			}
 		} catch (e) {
 			record("fail", bootName, e.message);

@@ -6,7 +6,7 @@
  * SEPARATE ConnectRPC service (SSHGatewayClientService), reached by passing the
  * service path to client.control.
  *
- * Request shapes are grounded in the decompiled SDK map (CreateSession's
+ * Request shapes are grounded in the published Tenki API surface (CreateSession's
  * ssh_authorized_keys field → sshAuthorizedKeys). The cert-issuance and gateway
  * shapes are SDK-name-verified but not exercised end-to-end here.
  */

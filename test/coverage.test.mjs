@@ -87,14 +87,14 @@ try {
 		await h.call("tenki_unexpose_port", { session_id: net.sessionId, port: 8080 });
 	});
 
-	// ── artifacts (signed URLs). get_upload_url is not implemented server-side yet (501). ─
-	await h.check("artifacts: get_upload_url (known API gap)", async () => {
+	// ── artifacts (signed URLs). the upload endpoint may return 501 where unavailable. ─
+	await h.check("artifacts: get_upload_url (tolerates 501)", async () => {
 		try {
 			const r = await h.call("tenki_get_upload_url", { session_id: net.sessionId, path: "/home/tenki/blob.bin", content_type: "application/octet-stream" });
 			if (!JSON.stringify(r).match(/http|url/i)) throw new Error("no signed url");
 		} catch (e) {
-			// The tool is correct; the Tenki API returns 501 "not yet implemented" for uploads.
-			if (/not yet implemented|501|unimplemented/i.test(e.message)) return; // known gap — tool wiring is correct
+			// Tolerate a 501 from the upload endpoint where it isn't available; the wiring is correct.
+			if (/not yet implemented|501|unimplemented/i.test(e.message)) return; // endpoint unavailable — tool wiring is correct
 			throw e;
 		}
 	});

@@ -33,7 +33,7 @@ import { registerWorkspace } from "./tools/workspace.js";
 import { registerArtifacts } from "./tools/artifacts.js";
 import { registerSsh } from "./tools/ssh.js";
 
-export const VERSION = "2.0.0-alpha.1";
+export const VERSION = "2.0.0-alpha.2";
 
 const modules = [
 	registerIdentity,

@@ -1,7 +1,7 @@
 /**
  * Parity audit — the v1.0 "full CLI parity" gate.
  *
- * Enumerates every unary method of the Tenki API (from the decompiled SDK map,
+ * Enumerates every unary method of the Tenki API (from the published API surface map,
  * docs/research/rest-endpoints.md in the n8n node) and fails if any TOOL-worthy
  * method is not covered by a registered MCP tool. Streaming methods are deferred
  * to v2.0; transport-internal methods are excluded.

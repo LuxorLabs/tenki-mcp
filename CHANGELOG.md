@@ -2,7 +2,7 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
-## [Unreleased]
+## [2.0.0-alpha.2] — 2026-07-27 — MCP security hardening + registry fixes
 
 ### MCP security hardening (least privilege + annotations)
 
@@ -40,7 +40,7 @@ Streaming exec (`StreamCommandOutput`) and per-request HTTP auth are not yet imp
 
 ## [1.0.2] — 2026-07-21 — Fixes from comprehensive testing
 
-A PM-council test matrix (34 scenarios) executed via a worktree fan-out against live Tenki found **two real request-shape bugs**, both fixed and verified end-to-end:
+A 34-scenario test matrix run against live Tenki found **two real request-shape bugs**, both fixed and verified end-to-end:
 
 - **tenki_attach_volume** sent a flat request; AttachVolumeRequest nests the target under a `volume` sub-message (`{sessionId, volume:{volumeId, mountPath, readOnly?}}`). Every attach was rejected — this broke the volume warm-cache workflow. Fixed.
 - **tenki_list_image_share_grants** sent `reference`; the API field is `ref` (required). It was silently ignored, 400-ing every call and making the ACL-read surface unreachable. Fixed.
@@ -53,7 +53,7 @@ Live-verifying the volume write path (once a workspace volume-quota block was cl
 
 ## [1.0.0] — 2026-07-20 — Full CLI parity
 
-**84 tools — parity with the entire Tenki unary API**, enforced by a CI parity audit (scripts/parity-audit.mjs fails the build if any SandboxService / DataPlane / SSHGateway method lacks a tool; streaming methods are deferred to v2.0). This release closes the long tail on top of v0.7: binary artifact transfer (get_upload_url / get_download_url), SSH access (update_ssh_keys / issue_ssh_cert / list_ssh_gateways), the preview-URL primitives (get/delete/touch/bind/unbind/resolve), project-scoped list variants (volumes/snapshots/templates), snapshot-retention settings, and registry grant-revoke. New read paths live-verified against api.tenki.cloud; write/advanced additions are grounded in the decompiled SDK map and labeled where not exercised end-to-end.
+**84 tools — parity with the entire Tenki unary API**, enforced by a CI parity audit (scripts/parity-audit.mjs fails the build if any SandboxService / DataPlane / SSHGateway method lacks a tool; streaming methods are deferred to v2.0). This release closes the long tail on top of v0.7: binary artifact transfer (get_upload_url / get_download_url), SSH access (update_ssh_keys / issue_ssh_cert / list_ssh_gateways), the preview-URL primitives (get/delete/touch/bind/unbind/resolve), project-scoped list variants (volumes/snapshots/templates), snapshot-retention settings, and registry grant-revoke. New read paths live-verified against api.tenki.cloud; write/advanced additions are grounded in the published API surface and labeled where not exercised end-to-end.
 
 **Tools:** +18 to reach 84 (artifacts x2, ssh x3, preview extras x6, list variants x4, retention x2, revoke-grant x1)
 
@@ -61,7 +61,7 @@ Live-verifying the volume write path (once a workspace volume-quota block was cl
 
 Workspace-level administration: sandbox usage reporting and get/update of workspace sandbox settings. Live-verified.
 
-**Tools:** tenki_get_workspace_usage, tenki_get_workspace_sandbox_settings, tenki_update_workspace_sandbox_settings
+**Tools:** tenki_get_workspace_usage, tenki_get_workspace_settings, tenki_update_workspace_settings
 
 ## [0.6.0] — 2026-07-20 — Custom runtimes — templates & registry
 

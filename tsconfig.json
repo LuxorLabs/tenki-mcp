@@ -10,6 +10,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "sourceMap": true,
+    "inlineSources": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true
   },
