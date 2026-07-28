@@ -47,6 +47,22 @@ try {
 	check("every tool has a non-empty description", tools.every((t) => typeof t.description === "string" && t.description.length > 0));
 	check("every tool has an object inputSchema", tools.every((t) => t.inputSchema?.type === "object"));
 
+	// 2b) structured output: tenki_exec (registered via registerTool) declares an
+	// outputSchema AND still carries the guard's annotations — proving the modern
+	// registration path cannot bypass the least-privilege guard.
+	const execTool = tools.find((t) => t.name === "tenki_exec");
+	check("tenki_exec advertises an object outputSchema", execTool?.outputSchema?.type === "object");
+	check(
+		"tenki_exec outputSchema declares ok/exitCode/captureError",
+		["ok", "exitCode", "captureError"].every((k) => k in (execTool?.outputSchema?.properties ?? {})),
+	);
+	check(
+		"tenki_exec (registerTool path) still carries guard annotations",
+		execTool?.annotations?.readOnlyHint === false && execTool?.annotations?.openWorldHint === true,
+		JSON.stringify(execTool?.annotations),
+	);
+	check("exactly 1 tool declares an outputSchema (update when migrating more)", tools.filter((t) => t.outputSchema).length === 1);
+
 	// 3) pre-network validation: an out-of-range arg is rejected by zod BEFORE any API call
 	let rejected = false;
 	try {

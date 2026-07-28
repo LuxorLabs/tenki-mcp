@@ -96,37 +96,73 @@ function auditKeys(args: unknown): string {
 	return keys.length ? ` args=[${keys.join(",")}]` : "";
 }
 
+/** MCP annotations derived from a tool's classification. */
+function annotationsFor(cls: Cls) {
+	return {
+		readOnlyHint: cls === "read",
+		destructiveHint: cls === "destructive",
+		idempotentHint: cls === "read",
+		openWorldHint: true, // every tool reaches the external Tenki API
+	};
+}
+
+/** Wrap a handler so TENKI_MCP_AUDIT=1 logs the call name + argument keys. */
+function withAudit(name: string, handler: (...a: unknown[]) => unknown, audit: boolean) {
+	if (!audit) return handler;
+	return async (args: unknown, extra: unknown) => {
+		try {
+			console.error(`[tenki-mcp audit] ${name}${auditKeys(args)}`);
+		} catch {
+			/* never let logging break a call */
+		}
+		return (handler as (a: unknown, e: unknown) => unknown)(args, extra);
+	};
+}
+
 /**
- * Wrap a server so every `.tool(name, description, schema, handler)` from a module
- * is annotated + subject to the least-privilege env controls above. Non-`tool`
- * access passes through to the real server unchanged.
+ * Wrap a server so every tool registration from a module is annotated + subject
+ * to the least-privilege env controls above. Both registration APIs are guarded:
+ * the legacy `.tool(name, description, schema, handler)` form and the modern
+ * `.registerTool(name, config, handler)` form (the only one that accepts an
+ * outputSchema) — so neither path can bypass annotations, read-only mode, or
+ * the denylist. Other access passes through to the real server unchanged.
  */
 function guard(server: McpServer, opts: GuardOpts): McpServer {
 	return new Proxy(server, {
 		get(target, prop, receiver) {
-			if (prop !== "tool") return Reflect.get(target, prop, receiver);
-			return (name: string, description: string, schema: unknown, handler: (...a: unknown[]) => unknown) => {
-				const cls = classifyTool(name);
-				if (opts.disabled.has(name)) return; // explicit denylist
-				if (opts.readonly && cls !== "read") return; // read-only posture: skip anything that mutates/spends
-				const annotations = {
-					readOnlyHint: cls === "read",
-					destructiveHint: cls === "destructive",
-					idempotentHint: cls === "read",
-					openWorldHint: true, // every tool reaches the external Tenki API
+			if (prop === "tool") {
+				return (name: string, description: string, schema: unknown, handler: (...a: unknown[]) => unknown) => {
+					const cls = classifyTool(name);
+					if (opts.disabled.has(name)) return; // explicit denylist
+					if (opts.readonly && cls !== "read") return; // read-only posture: skip anything that mutates/spends
+					return (target.tool as (...a: unknown[]) => unknown)(
+						name,
+						description,
+						schema,
+						annotationsFor(cls),
+						withAudit(name, handler, opts.audit),
+					);
 				};
-				const cb = opts.audit
-					? async (args: unknown, extra: unknown) => {
-							try {
-								console.error(`[tenki-mcp audit] ${name}${auditKeys(args)}`);
-							} catch {
-								/* never let logging break a call */
-							}
-							return (handler as (a: unknown, e: unknown) => unknown)(args, extra);
-						}
-					: handler;
-				return (target.tool as (...a: unknown[]) => unknown)(name, description, schema, annotations, cb);
-			};
+			}
+			if (prop === "registerTool") {
+				return (name: string, config: Record<string, unknown>, handler: (...a: unknown[]) => unknown) => {
+					const cls = classifyTool(name);
+					if (opts.disabled.has(name)) return; // explicit denylist
+					if (opts.readonly && cls !== "read") return; // read-only posture: skip anything that mutates/spends
+					// Name-derived classification stays authoritative for the four hints so
+					// a module cannot soften them; other annotation fields pass through.
+					const annotations = {
+						...(config.annotations as Record<string, unknown> | undefined),
+						...annotationsFor(cls),
+					};
+					return (target.registerTool as (...a: unknown[]) => unknown)(
+						name,
+						{ ...config, annotations },
+						withAudit(name, handler, opts.audit),
+					);
+				};
+			}
+			return Reflect.get(target, prop, receiver);
 		},
 	}) as McpServer;
 }

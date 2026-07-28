@@ -234,7 +234,9 @@ export class TenkiClient {
 	 * We wrap the command in `sh -c '<cmd> > out 2> err'`, then read the capture
 	 * files back over the data plane, so output is available through a plain-HTTP
 	 * client. Capture-read failures degrade gracefully into `captureError` rather
-	 * than losing the run.
+	 * than losing the run — but the result is marked NOT ok, because empty
+	 * stdout/stderr next to a zero exit code would otherwise read as a clean,
+	 * silent success.
 	 */
 	async execCaptured(
 		sessionId: string,
@@ -280,7 +282,7 @@ export class TenkiClient {
 			stdout,
 			stderr,
 			exitCode,
-			ok: exitCode === 0,
+			ok: exitCode === 0 && !captureError,
 			...(captureError ? { captureError } : {}),
 		};
 	}

@@ -53,9 +53,11 @@ try {
 	check("read-only mode DROPS get_upload_url (write capability)", !ro.some((t) => t.name === "tenki_get_upload_url"));
 	check("read-only mode KEEPS read_file (pure read)", ro.some((t) => t.name === "tenki_read_file"));
 
-	// 3) TENKI_MCP_DISABLED_TOOLS: named denylist
-	const den = await toolsWith({ TENKI_MCP_DISABLED_TOOLS: "tenki_run_code,tenki_terminate_sandbox" });
-	check("denylist removes exactly the named tools", den.length === def.length - 2 && !den.some((t) => ["tenki_run_code", "tenki_terminate_sandbox"].includes(t.name)), `${den.length}`);
+	// 3) TENKI_MCP_DISABLED_TOOLS: named denylist. tenki_exec is included
+	// deliberately — it registers via registerTool, so this also proves the
+	// modern registration path honors the denylist.
+	const den = await toolsWith({ TENKI_MCP_DISABLED_TOOLS: "tenki_run_code,tenki_terminate_sandbox,tenki_exec" });
+	check("denylist removes exactly the named tools", den.length === def.length - 3 && !den.some((t) => ["tenki_run_code", "tenki_terminate_sandbox", "tenki_exec"].includes(t.name)), `${den.length}`);
 } catch (e) {
 	console.error("  ✗ " + (e?.message ?? e));
 	fail++;

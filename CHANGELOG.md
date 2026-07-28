@@ -4,6 +4,13 @@ All notable changes to tenki-mcp. This project follows semantic versioning.
 
 ## [Unreleased]
 
+### Structured tool output (first tool: `tenki_exec`)
+
+- **`tenki_exec` now declares an `outputSchema` and returns `structuredContent`** alongside a plain-text rendering, so MCP clients can consume `stdout`/`stderr`/`exitCode`/`ok` as typed JSON instead of re-parsing a stringified blob. The text block carries the full output (headed by `exit <code>` and byte-count markers) for clients that don't support structured content. The SDK validates every successful result against the schema.
+- **Registration guard extended to `registerTool`** — the modern SDK registration API (required for `outputSchema`) now passes through the same least-privilege guard as the legacy `.tool()` form: name-derived annotations, `TENKI_MCP_READONLY`, `TENKI_MCP_DISABLED_TOOLS`, and `TENKI_MCP_AUDIT` all apply. Previously a module using `registerTool` would have silently bypassed all four.
+- **Behavior change:** `tenki_exec` / `tenki_run_code` results now report `ok: false` when the command ran but its output could not be read back (`captureError` set). Previously a capture failure with exit code 0 reported `ok: true` with empty stdout/stderr, which read as a clean silent success.
+- Offline regression checks: `tenki_exec` advertises the schema, still carries guard annotations via the `registerTool` path, and exactly one tool declares an `outputSchema` (bump the count when migrating more tools).
+
 ### Fixed
 
 - **Sandbox creation was broken for workspace-scoped API keys.** `resolveOwner` forwarded WhoAmI's `ownerType` verbatim into `CreateSession`, but the API validates `owner_type ∈ {SERVICE, USER}` and now returns `WORKSPACE` for workspace-scoped keys → every `tenki_create_sandbox`/`tenki_run_code` failed with `400 invalid_argument`. Fix: send the same placeholder the first-party SDKs hardcode (`"SERVICE"`/`"self"`) when WhoAmI returns a type CreateSession rejects — the server derives the real owner from the authenticated identity regardless. Verified live: create → exec (structured) → terminate, 12/12 checks.
