@@ -21,9 +21,15 @@ export TENKI_API_KEY=tk_your_key_here
 node dist/index.js         # speaks MCP over stdio
 ```
 
-### Use it in Claude Desktop / Cursor
+### Use it in Claude Code
 
-Add to your MCP client config (e.g. `claude_desktop_config.json`):
+```bash
+claude mcp add tenki --env TENKI_API_KEY=tk_your_key_here -- node /absolute/path/to/tenki-mcp/dist/index.js
+```
+
+### Use it in Claude Desktop
+
+Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -37,7 +43,38 @@ Add to your MCP client config (e.g. `claude_desktop_config.json`):
 }
 ```
 
-Once published to npm this becomes `"command": "npx", "args": ["-y", "tenki-mcp"]`.
+### Use it in Cursor
+
+Add the same block to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "tenki": {
+      "command": "node",
+      "args": ["/absolute/path/to/tenki-mcp/dist/index.js"],
+      "env": { "TENKI_API_KEY": "tk_your_key_here" }
+    }
+  }
+}
+```
+
+Once published to npm, `node /absolute/path/to/tenki-mcp/dist/index.js` becomes `npx -y tenki-mcp` in all three.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `TENKI_API_KEY` | — | API key (`tk_…`). One of this or `TENKI_AUTH_TOKEN` is required. |
+| `TENKI_AUTH_TOKEN` | — | Session token (`ory_st_…` or cookie value). **Takes precedence over `TENKI_API_KEY`** when both are set. |
+| `TENKI_API_ENDPOINT` | `https://api.tenki.cloud` | Control-plane base URL (`TENKI_API_URL` is an alias). |
+| `TENKI_MCP_READONLY` | off | `1` registers only read tools (no create/run/delete/spend). |
+| `TENKI_MCP_DISABLED_TOOLS` | — | Comma-separated tool names to skip registering. |
+| `TENKI_MCP_AUDIT` | off | `1` logs each tool call name + arg keys to stderr. |
+| `TENKI_MCP_TRANSPORT` | `stdio` | `http` serves Streamable HTTP instead (see below). |
+| `PORT` | `3000` | HTTP transport port. |
+| `TENKI_MCP_HTTP_HOST` | `127.0.0.1` | HTTP bind host; non-loopback requires `TENKI_MCP_HTTP_TOKEN`. |
+| `TENKI_MCP_HTTP_TOKEN` | — | Bearer token required by the HTTP endpoint. |
 
 ## Tools
 
@@ -51,7 +88,7 @@ Once published to npm this becomes `"command": "npx", "args": ["-y", "tenki-mcp"
 | **Session admin** | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes` · `tenki_list_project_sandboxes` |
 | **Exec** | `tenki_exec` (stdout/stderr/exit inline) |
 | **Files** | `tenki_read_file` · `tenki_write_file` · `tenki_list_files` · `tenki_stat_path` · `tenki_make_dir` · `tenki_remove_path` · `tenki_move_path` |
-| **Git** | `tenki_git` (clone/checkout/diff/log/status/add/commit/pull/push/fetchPR) |
+| **Git** | `tenki_git` (clone/checkout/diff/log — the API supports exactly these four; run other git commands via `tenki_exec`) |
 | **Ports & previews** | expose · list-exposed · unexpose · create-preview-url · open-preview · list/get/delete-preview-url · touch-preview · bind/unbind-preview-url · resolve-preview-token |
 | **Artifacts** (binary transfer) | `tenki_get_upload_url` · `tenki_get_download_url` (signed URLs for binary PUT/GET) |
 | **SSH** | `tenki_update_ssh_keys` · `tenki_issue_ssh_cert` · `tenki_list_ssh_gateways` |
@@ -65,7 +102,7 @@ Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 
 ## Auth
 
-Set one of `TENKI_API_KEY` or `TENKI_AUTH_TOKEN`. The header is chosen by token prefix: `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `TENKI_API_ENDPOINT` (default `https://api.tenki.cloud`).
+Set one of `TENKI_API_KEY` or `TENKI_AUTH_TOKEN` — when both are set, `TENKI_AUTH_TOKEN` wins. The header is chosen by token prefix: `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `TENKI_API_ENDPOINT` (default `https://api.tenki.cloud`).
 
 ## Host it over HTTP (v2.0-alpha)
 

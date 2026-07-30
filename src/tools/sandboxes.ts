@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, envSchema } from "./common.js";
+import { ok, envSchema, sessionIdSchema } from "./common.js";
 
 /** Sandbox (session) lifecycle. */
 export function registerSandboxes(server: McpServer, client: TenkiClient): void {
@@ -63,7 +63,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 	server.tool(
 		"tenki_get_sandbox",
 		"Fetch a sandbox's current state and metadata.",
-		{ session_id: z.string() },
+		{ session_id: sessionIdSchema },
 		async ({ session_id }) => ok(await client.control("GetSession", { sessionId: session_id })),
 	);
 
@@ -88,21 +88,21 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 	server.tool(
 		"tenki_terminate_sandbox",
 		"Terminate (destroy) a sandbox. The microVM and its filesystem are gone after this.",
-		{ session_id: z.string() },
+		{ session_id: sessionIdSchema },
 		async ({ session_id }) => ok(await client.control("TerminateSession", { sessionId: session_id })),
 	);
 
 	server.tool(
 		"tenki_pause_sandbox",
 		"Pause a sandbox (snapshot + suspend) so it can be resumed later.",
-		{ session_id: z.string() },
+		{ session_id: sessionIdSchema },
 		async ({ session_id }) => ok(await client.control("PauseSession", { sessionId: session_id })),
 	);
 
 	server.tool(
 		"tenki_resume_sandbox",
 		"Resume a previously paused sandbox.",
-		{ session_id: z.string() },
+		{ session_id: sessionIdSchema },
 		async ({ session_id }) => ok(await client.control("ResumeSession", { sessionId: session_id })),
 	);
 }

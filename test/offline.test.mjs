@@ -73,6 +73,27 @@ try {
 	}
 	check("out-of-range tool arg rejected pre-network (cpu_cores 999)", rejected);
 
+	// 3b) shared schemas reject bad input pre-network: port out of range, unsupported git op
+	{
+		let portRejected = false;
+		try {
+			const r = await client.callTool({ name: "tenki_expose_port", arguments: { session_id: "s", port: 99999 } });
+			portRejected = r.isError === true;
+		} catch (e) {
+			portRejected = /-32602|invalid|validation/i.test(e?.message ?? "");
+		}
+		check("out-of-range port rejected pre-network (99999)", portRejected);
+
+		let gitRejected = false;
+		try {
+			const r = await client.callTool({ name: "tenki_git", arguments: { session_id: "s", operation: "push" } });
+			gitRejected = r.isError === true;
+		} catch (e) {
+			gitRejected = /-32602|invalid|validation/i.test(e?.message ?? "");
+		}
+		check("unsupported git operation rejected pre-network ('push' — API supports clone/checkout/diff/log)", gitRejected);
+	}
+
 	// 4) unknown tool → clean error (thrown JSON-RPC error OR isError result), not a crash
 	let unknownErr = false;
 	try {

@@ -4,6 +4,12 @@ All notable changes to tenki-mcp. This project follows semantic versioning.
 
 ## [Unreleased]
 
+### Tool-schema DX (git enum, shared schemas, README)
+
+- **`tenki_git` now validates `operation` as an enum of what the API actually supports: `clone`, `checkout`, `diff`, `log`.** The tool previously advertised ten operations, but six of them (status/add/commit/pull/push/fetchPR) are rejected by the API's own validation (`GitOperationRequest` allows exactly four) — a model following the old description was guaranteed a server error. Per-operation arg keys are now documented in the tool description, grounded in the engine's arg builder: clone `{repo, branch?, depth?, directory?}`, checkout `{ref, create?}`, diff `{range? | base?+head?, path?}`, log `{max_count?, range?, path?}`. Other git commands: use `tenki_exec` with `git ...`.
+- **Shared input schemas** in `common.ts`: `sessionIdSchema` (described, non-empty — previously bare and undescribed in 8 of 14 modules), `portSchema` (1-65535 — `tenki_expose_port` previously accepted port 99999 and learned the constraint from a server error), `slugSchema` (3-63 chars, `[a-z0-9-]`) — reused across ports/previews/files/exec/ssh/snapshots/artifacts/sandboxes/volumes/sessions-admin.
+- **README**: install forms for Claude Code (`claude mcp add`), Claude Desktop, and Cursor; a consolidated environment-variable table; auth precedence documented (`TENKI_AUTH_TOKEN` wins over `TENKI_API_KEY`); the Tools table no longer lists unsupported git operations.
+
 ### Network-layer hardening (timeouts, retry policy, credential cache)
 
 - **Every fetch now carries a timeout** — a hung control- or data-plane connection fails the tool call with a clear `timed out after Nms` error instead of blocking it forever. Unary calls default to 30s; `ExecuteCommand` follows the command's own timeout + 30s margin (630s when the command has none). Tunable via `TenkiClient` options.

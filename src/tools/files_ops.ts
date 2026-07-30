@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok } from "./common.js";
+import { ok, sessionIdSchema } from "./common.js";
 
 /**
  * Filesystem metadata + mutation ops against a sandbox's data plane.
@@ -18,7 +18,7 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"tenki_stat_path",
 		"Get metadata (size, mode, type, timestamps) for a file or directory in a sandbox. Use to check whether a path exists or inspect it before reading/removing.",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			path: z.string().describe("Absolute path under /home/tenki, e.g. /home/tenki/output.txt"),
 		},
 		async ({ session_id, path }) => ok(await client.data(session_id, "Stat", { path })),
@@ -28,7 +28,7 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"tenki_make_dir",
 		"Create a directory in a sandbox. Set recursive to also create any missing parent directories (mkdir -p).",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			path: z.string().describe("Directory path under /home/tenki, e.g. /home/tenki/project/out"),
 			recursive: z.boolean().optional().describe("Create parent directories as needed (default false)."),
 		},
@@ -45,7 +45,7 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"tenki_remove_path",
 		"Delete a file or directory in a sandbox. Set recursive to remove a non-empty directory and its contents (rm -r).",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			path: z.string().describe("Path to delete under /home/tenki."),
 			recursive: z.boolean().optional().describe("Remove a directory and its contents (default false)."),
 		},
@@ -62,7 +62,7 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"tenki_move_path",
 		"Move or rename a file or directory within a sandbox. Both paths are under /home/tenki.",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			from: z.string().describe("Source path under /home/tenki, e.g. /home/tenki/old.txt"),
 			to: z.string().describe("Destination path under /home/tenki, e.g. /home/tenki/new.txt"),
 		},

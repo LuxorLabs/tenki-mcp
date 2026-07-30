@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok } from "./common.js";
+import { ok, sessionIdSchema } from "./common.js";
 
 /**
  * Extended sandbox (session) admin ops on the control plane: wall-clock lifetime
@@ -15,7 +15,7 @@ export function registerSessionsAdmin(server: McpServer, client: TenkiClient): v
 		"tenki_extend_sandbox",
 		"Extend a running sandbox's wall-clock lifetime by N seconds so it isn't auto-terminated at its max-duration cap.",
 		{
-			session_id: z.string().describe("The sandbox/session ID to extend."),
+			session_id: sessionIdSchema.describe("The sandbox/session ID to extend."),
 			additional_duration_seconds: z
 				.number()
 				.int()
@@ -35,7 +35,7 @@ export function registerSessionsAdmin(server: McpServer, client: TenkiClient): v
 		"tenki_update_sandbox",
 		"Update mutable fields on an existing sandbox — its name, tags, idle timeout, or max duration.",
 		{
-			session_id: z.string().describe("The sandbox/session ID to update."),
+			session_id: sessionIdSchema.describe("The sandbox/session ID to update."),
 			name: z.string().optional().describe("New human-readable name."),
 			tags: z.array(z.string()).optional().describe("Replacement tag list (send [] to clear all tags)."),
 			idle_timeout_minutes: z
@@ -75,7 +75,7 @@ export function registerSessionsAdmin(server: McpServer, client: TenkiClient): v
 	server.tool(
 		"tenki_report_sandbox_activity",
 		"Report client-side activity on a sandbox to reset its idle timer and keep it from being reaped as idle (a keep-alive heartbeat).",
-		{ session_id: z.string().describe("The sandbox/session ID to mark as active.") },
+		{ session_id: sessionIdSchema.describe("The sandbox/session ID to mark as active.") },
 		async ({ session_id }) => ok(await client.control("ReportSessionActivity", { sessionId: session_id })),
 	);
 

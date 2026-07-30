@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok } from "./common.js";
+import { ok, sessionIdSchema } from "./common.js";
 
 /**
  * Snapshots — capture a sandbox's disk + memory as a reusable image.
@@ -17,7 +17,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"tenki_create_snapshot",
 		"Capture a running sandbox's disk and memory as a reusable snapshot (attached volumes are NOT captured); boot a new sandbox from it later with tenki_create_sandbox + snapshot_id.",
 		{
-			session_id: z.string().describe("The sandbox session to snapshot."),
+			session_id: sessionIdSchema.describe("The sandbox session to snapshot."),
 			name: z.string().optional().describe("Human-readable name for the snapshot."),
 			expires_at: z
 				.string()
@@ -66,7 +66,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"tenki_list_session_snapshots",
 		"List the snapshots captured from a specific sandbox session.",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			page_size: z.number().int().positive().optional(),
 			page_token: z.string().optional(),
 		},
