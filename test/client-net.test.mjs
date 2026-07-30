@@ -143,5 +143,51 @@ const stop = (srv) => { srv.closeAllConnections?.(); srv.close(); };
 	stop(srv);
 }
 
+// 8) a transport failure (timeout) on an idempotent method IS retried
+{
+	let calls = 0;
+	const { srv, url } = await startStub((req, res) => {
+		calls++;
+		if (calls === 1) return; // hold the first request open → client times out
+		json(res, 200, { session: { id: "s" } });
+	});
+	const c = new TenkiClient("tk_test", url, { timeoutMs: 300 });
+	const out = await c.control("GetSession", { sessionId: "s" });
+	check("timeout on GetSession is retried to success", calls === 2 && !!out.session, `calls=${calls}`);
+	stop(srv);
+}
+
+// 9) a transport failure on CreateSession is NOT retried — the request may have applied
+{
+	let calls = 0;
+	const { srv, url } = await startStub(() => { calls++; /* never respond */ });
+	const c = new TenkiClient("tk_test", url, { timeoutMs: 300 });
+	let msg = "";
+	try { await c.control("CreateSession", {}); } catch (e) { msg = e.message; }
+	check("timeout on CreateSession is NOT retried", calls === 1 && /timed out/.test(msg), `calls=${calls} msg=${msg}`);
+	stop(srv);
+}
+
+// 10) a credential with less remaining life than the skew is still cached (floored TTL)
+{
+	let creds = 0;
+	const { srv, url } = await startStub((req, res) => {
+		if (req.url.includes("CreateSessionCredential")) {
+			creds++;
+			// expires in 10s — less than the 30s skew; naive skew would past-date it
+			return json(res, 200, {
+				credential: { credential: "c", expiresAt: new Date(Date.now() + 10_000).toISOString() },
+				dataPlaneEndpoint: url,
+			});
+		}
+		json(res, 200, { response: {} });
+	});
+	const c = new TenkiClient("tk_test", url);
+	await c.data("s", "Stat", { path: "/" });
+	await c.data("s", "Stat", { path: "/" });
+	check("short-lived credential (< skew) is still cached, not re-minted per call", creds === 1, `creds=${creds}`);
+	stop(srv);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

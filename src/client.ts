@@ -40,6 +40,7 @@ const EXEC_TIMEOUT_MARGIN_MS = 30_000; // headroom over a command's own timeout
 // and a known expiry is refreshed early so an in-flight call cannot straddle it.
 const DEFAULT_CRED_TTL_MS = 60_000;
 const CRED_EXPIRY_SKEW_MS = 30_000;
+const MIN_CRED_TTL_MS = 5_000; // floor for the skewed expiry of a short-lived credential
 
 /** Home directory of the sandbox's `tenki` user; run-code scripts and capture files live here. */
 const SANDBOX_HOME = "/home/tenki";
@@ -165,8 +166,9 @@ export class TenkiClient {
 	/**
 	 * Unary control-plane call. Every attempt carries a timeout. Rate-limit
 	 * rejections retry with jittered backoff (honoring Retry-After); transient
-	 * `unavailable` errors retry only for idempotent methods, because a
-	 * non-idempotent call (CreateSession) may have partially applied.
+	 * `unavailable` errors AND transport-level failures (timeout, connection
+	 * reset, DNS) retry only for idempotent methods, because a non-idempotent
+	 * call (CreateSession) may have partially applied.
 	 * `service` defaults to SandboxService; pass another fully-qualified ConnectRPC
 	 * service (e.g. the SSH gateway service) for methods hosted elsewhere.
 	 */
@@ -174,16 +176,27 @@ export class TenkiClient {
 		const url = `${this.baseUrl}/${service}/${method}`;
 		const timeoutMs = this.timeoutFor(method, body ?? {});
 		for (let attempt = 0; ; attempt++) {
-			const res = await this.fetchWithTimeout(
-				url,
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json", "Connect-Protocol-Version": "1", ...authHeaders(this.token) },
-					body: JSON.stringify(body ?? {}),
-				},
-				timeoutMs,
-				method,
-			);
+			let res: Response;
+			try {
+				res = await this.fetchWithTimeout(
+					url,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json", "Connect-Protocol-Version": "1", ...authHeaders(this.token) },
+						body: JSON.stringify(body ?? {}),
+					},
+					timeoutMs,
+					method,
+				);
+			} catch (e) {
+				// Transport failure: the request may or may not have reached the
+				// server, so only idempotent methods are safe to retry.
+				if (attempt < MAX_RETRIES && IDEMPOTENT_METHOD.test(method)) {
+					await sleep(this.backoffMs(attempt, null));
+					continue;
+				}
+				throw e;
+			}
 			if (res.ok) return (await res.json()) as Record<string, any>;
 
 			const text = await res.text();
@@ -219,7 +232,10 @@ export class TenkiClient {
 		const raw = cred.expiresAt ?? cred.expires_at;
 		if (typeof raw === "string") {
 			const p = Date.parse(raw);
-			if (!Number.isNaN(p)) expiresAt = p - CRED_EXPIRY_SKEW_MS;
+			// Floor the skewed expiry so a short-lived credential (< skew) is still
+			// cached briefly instead of the cache being disabled outright; a cert
+			// that expires server-side anyway is recovered by the 401 re-mint path.
+			if (!Number.isNaN(p)) expiresAt = Math.max(p - CRED_EXPIRY_SKEW_MS, Date.now() + MIN_CRED_TTL_MS);
 		}
 		const entry: CachedCredential = { endpoint: endpoint ?? "", token, expiresAt };
 		this.credCache.set(sessionId, entry);
