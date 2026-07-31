@@ -69,13 +69,17 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		async ({ session_id, from, to }) => {
 			// The data plane has no Move RPC (ReadFile/WriteFile/Stat/Mkdir/Remove/List only),
 			// so relocate with an exec-backed `mv`, mirroring the live-verified n8n node.
+			// `ok` keys off the exit code, NOT result.ok: the capture files are an
+			// internal detail here — whether mv's (empty) output could be read back
+			// says nothing about whether the file moved.
 			const result = await client.execCaptured(session_id, "mv", { args: [from, to] });
 			return ok({
 				from,
 				to,
-				ok: result.ok,
+				ok: result.exitCode === 0,
 				exitCode: result.exitCode,
 				...(result.stderr ? { stderr: result.stderr } : {}),
+				...(result.captureError ? { captureError: result.captureError } : {}),
 			});
 		},
 	);

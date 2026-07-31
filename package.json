@@ -22,7 +22,7 @@
     "prepack": "npm run build",
     "prepublishOnly": "npm run build",
     "pretest": "npm run build",
-    "test": "node test/offline.test.mjs && node test/http-input.test.mjs && node test/security.test.mjs && node test/client-net.test.mjs",
+    "test": "node test/offline.test.mjs && node test/exec-output.test.mjs && node test/http-input.test.mjs && node test/security.test.mjs && node test/client-net.test.mjs",
     "test:all": "npm run build && node test/run.mjs",
     "test:offline": "npm run build && node test/offline.test.mjs"
   },

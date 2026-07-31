@@ -23,18 +23,33 @@ const execOutputSchema = {
 };
 
 /**
- * Sandbox output is untrusted (SECURITY.md). Neutralize terminal control
- * characters — every C0 control except \n and \t, plus DEL — into visible
- * \xNN escapes so a terminal-based MCP client rendering the text block can't
- * be driven by embedded ANSI sequences (screen clearing, cursor movement,
- * CR line-overwrite spoofing). The previous JSON.stringify rendering escaped
- * these implicitly; a raw text rendering must do it explicitly.
- * structuredContent keeps the raw strings — JSON encoding neutralizes them on
- * the wire, and typed consumers need unmodified data.
+ * Field drift between execOutputSchema and ExecResult must fail the build, not
+ * the tool call — at runtime the SDK rejects a mismatched result outright and
+ * the command's output is lost.
+ */
+const execOutput = z.object(execOutputSchema);
+type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const _execSchemaLockstep: MutuallyAssignable<z.infer<typeof execOutput>, ExecResult> = true;
+void _execSchemaLockstep;
+
+/**
+ * Sandbox output is untrusted (SECURITY.md). Neutralize characters that can
+ * misrepresent output in a terminal or transcript — C0 controls except \n and
+ * \t (ANSI sequences, CR line-overwrite spoofing), DEL, C1 controls (0x80–0x9F
+ * are single-character equivalents: U+009B is CSI), bidi controls
+ * (U+202A–U+202E, U+2066–U+2069 reorder displayed text), and zero-width/
+ * invisible marks (U+200B–U+200F, U+FEFF) — into visible \xNN / \uNNNN
+ * escapes. The previous JSON.stringify rendering escaped controls implicitly;
+ * a raw text rendering must do it explicitly. structuredContent keeps the raw
+ * strings — JSON encoding neutralizes them on the wire, and typed consumers
+ * need unmodified data.
  */
 function sanitizeForTerminal(s: string): string {
 	// eslint-disable-next-line no-control-regex
-	return s.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
+	return s.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, (c) => {
+		const code = c.charCodeAt(0);
+		return code <= 0xff ? `\\x${code.toString(16).padStart(2, "0")}` : `\\u${code.toString(16).padStart(4, "0")}`;
+	});
 }
 
 /**
@@ -49,7 +64,7 @@ function execText(r: ExecResult): string {
 		: "";
 	const stdout = sanitizeForTerminal(r.stdout);
 	const stderr = sanitizeForTerminal(r.stderr);
-	return `${head}${capture}\n--- stdout (${r.stdout.length} chars) ---\n${stdout}\n--- stderr (${r.stderr.length} chars) ---\n${stderr}`;
+	return `${head}${capture}\n--- stdout (${r.stdout.length} chars, control chars escaped) ---\n${stdout}\n--- stderr (${r.stderr.length} chars, control chars escaped) ---\n${stderr}`;
 }
 
 /** Command execution inside an existing sandbox. */
@@ -72,7 +87,14 @@ export function registerExec(server: McpServer, client: TenkiClient): void {
 			const result = await client.execCaptured(session_id, command, { args, cwd, env, timeoutSeconds: timeout_seconds });
 			return {
 				structuredContent: { ...result },
-				content: [{ type: "text" as const, text: execText(result) }],
+				// Two text blocks: serialized JSON first (the MCP spec's
+				// backwards-compatibility contract for structured content — existing
+				// text-only consumers, our own test harness included, parse the first
+				// text block as JSON), then the human-readable rendering.
+				content: [
+					{ type: "text" as const, text: JSON.stringify(result, null, 2) },
+					{ type: "text" as const, text: execText(result) },
+				],
 			};
 		},
 	);

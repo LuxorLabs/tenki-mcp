@@ -306,7 +306,10 @@ export class TenkiClient {
 		const proj = Array.isArray(ws?.projects) ? ws.projects[0] : undefined;
 		let ownerType = resp.ownerType as string | undefined;
 		let ownerId = resp.ownerId as string | undefined;
-		if (ownerType !== "USER" && ownerType !== "SERVICE") {
+		// Substitute the placeholder only when WhoAmI returned a type CreateSession
+		// rejects. When ownerType is absent entirely, leave it absent — callers omit
+		// the owner fields and the server derives the owner from the identity.
+		if (ownerType && ownerType !== "USER" && ownerType !== "SERVICE") {
 			ownerType = "SERVICE";
 			ownerId = "self";
 		}
@@ -381,8 +384,11 @@ export class TenkiClient {
 		const resp = await this.control("ExecuteCommand", body);
 		const execution = (resp.execution as Record<string, any>) ?? resp;
 		// proto3 omits zero-valued fields: an absent exitCode means 0 (success).
-		const exitCode =
-			typeof execution.exitCode === "number" ? execution.exitCode : Number(execution.exitCode ?? 0);
+		// A non-numeric shape coerces to NaN, which the exec outputSchema rejects,
+		// failing the whole call and discarding the run's output — normalize an
+		// unparseable code to -1 so the user still gets their stdout/stderr.
+		const rawExit = typeof execution.exitCode === "number" ? execution.exitCode : Number(execution.exitCode ?? 0);
+		const exitCode = Number.isFinite(rawExit) ? Math.trunc(rawExit) : -1;
 
 		let stdout = "";
 		let stderr = "";

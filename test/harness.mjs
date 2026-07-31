@@ -75,7 +75,9 @@ export class Harness {
 	}
 
 	/**
-	 * Call a tool and return its parsed JSON result. Throws on isError.
+	 * Call a tool and return its parsed result. Throws on isError.
+	 * Tools with an outputSchema return typed structuredContent directly; for the
+	 * rest, the first text block is JSON-parsed (raw string fallback).
 	 * Uses a generous 120s timeout: some ops (pause, snapshot, template build)
 	 * exceed the MCP client's 60s default — a real integration note for hosts.
 	 */
@@ -83,6 +85,7 @@ export class Harness {
 		const res = await this.client.callTool({ name, arguments: args }, CallToolResultSchema, { timeout: 120000 });
 		const text = res.content?.find((c) => c.type === "text")?.text ?? "";
 		if (res.isError) throw new Error(`${name}: ${text.slice(0, 300)}`);
+		if (res.structuredContent !== undefined) return res.structuredContent;
 		try {
 			return JSON.parse(text);
 		} catch {

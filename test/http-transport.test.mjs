@@ -104,7 +104,9 @@ try {
 	const j = JSON.parse(res.content?.find((c) => c.type === "text")?.text ?? "{}");
 	check(
 		"tools/call tenki_whoami over HTTP → authenticated",
-		["USER", "SERVICE", "WORKSPACE"].includes(j.ownerType),
+		// Any non-empty owner type counts as authenticated — enumerating the
+		// API's owner types goes stale each time it grows one.
+		typeof j.ownerType === "string" && j.ownerType.length > 0,
 		JSON.stringify(j).slice(0, 60),
 	);
 
