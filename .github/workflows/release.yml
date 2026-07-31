@@ -7,7 +7,7 @@ name: Release
 # after it.
 #
 #   # bump package.json, server.json (version AND packages[0].version), src/server.ts
-#   git commit -am "tenki-mcp 2.0.0-alpha.3" && git tag v2.0.0-alpha.3
+#   git commit -am "tenki-mcp 2.0.0-beta.1" && git tag v2.0.0-beta.1
 #   git push origin main --follow-tags
 #
 # FIRST PUBLISH ONLY: npm trusted publishing is configured per-package and the
@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: tenki-standard-small-2c-4g
     # A GitHub environment turns each publish into a one-click human approval once
     # you add required reviewers to it. If you set an Environment in the npm
     # trusted-publisher config, it must match this name exactly.
