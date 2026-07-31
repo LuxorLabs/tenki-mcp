@@ -111,7 +111,10 @@ function withAudit(name: string, handler: (...a: unknown[]) => unknown, audit: b
 	if (!audit) return handler;
 	return async (args: unknown, extra: unknown) => {
 		try {
-			console.error(`[tenki-mcp audit] ${name}${auditKeys(args)}`);
+			// A tool registered WITHOUT an input schema is invoked as (extra) —
+			// one argument — so the first param would be the request context, not
+			// tool args. Log arg keys only for the two-argument (args, extra) shape.
+			console.error(`[tenki-mcp audit] ${name}${extra === undefined ? "" : auditKeys(args)}`);
 		} catch {
 			/* never let logging break a call */
 		}

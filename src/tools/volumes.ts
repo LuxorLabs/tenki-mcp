@@ -15,7 +15,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, sessionIdSchema } from "./common.js";
+import { ok, pathSchema, sessionIdSchema } from "./common.js";
 
 /** Volume size bounds the control plane accepts: 1 MiB … 100 GiB, in bytes. */
 const MIN_VOLUME_BYTES = 1_048_576; // 1 MiB
@@ -123,7 +123,7 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 		{
 			session_id: sessionIdSchema.describe("The sandbox session to attach the volume to."),
 			volume_id: z.string().describe("The volume id to attach."),
-			mount_path: z.string().describe("Absolute path inside the sandbox to mount at, e.g. /mnt/data."),
+			mount_path: pathSchema.describe("Absolute path inside the sandbox to mount at, e.g. /mnt/data."),
 			read_only: z.boolean().optional().describe("Mount the volume read-only (default false = read-write)."),
 		},
 		async ({ session_id, volume_id, mount_path, read_only }) =>

@@ -112,6 +112,10 @@ try {
 			"whitespace-only session id rejected pre-network",
 			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /at least 1 character/i),
 		);
+		check(
+			"empty path rejected pre-network (tenki_read_file)",
+			await rejectsPreNetwork("tenki_read_file", { session_id: "s", path: "  " }, /at least 1 character/i),
+		);
 	}
 
 	// 4) unknown tool → clean error (thrown JSON-RPC error OR isError result), not a crash

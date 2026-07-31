@@ -20,6 +20,15 @@ export const sessionIdSchema = z
 /** Shared TCP-port schema. */
 export const portSchema = z.number().int().min(1).max(65535).describe("TCP port inside the sandbox (1-65535).");
 
+/** Shared sandbox-path schema — trimmed and non-empty, so an empty or
+ * whitespace-only path is rejected client-side instead of by a server error.
+ * Call sites override the description with their own examples. */
+export const pathSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.describe("Absolute path inside the sandbox, under /home/tenki.");
+
 /**
  * Preview-slug schema, matching the server's validatePreviewSlug: 3-63 chars,
  * lowercase/digits/hyphens, no leading/trailing hyphen. ExposePort routes a

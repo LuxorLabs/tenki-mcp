@@ -15,7 +15,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, sessionIdSchema } from "./common.js";
+import { ok, pathSchema, sessionIdSchema } from "./common.js";
 
 export function registerArtifacts(server: McpServer, client: TenkiClient): void {
 	server.tool(
@@ -23,7 +23,7 @@ export function registerArtifacts(server: McpServer, client: TenkiClient): void 
 		"Get a short-lived signed URL to upload (HTTP PUT) a binary file to a path inside a sandbox. Use for non-text payloads too large or binary for tenki_write_file.",
 		{
 			session_id: sessionIdSchema,
-			path: z.string().describe("Destination path in the sandbox, e.g. /home/tenki/data.bin"),
+			path: pathSchema.describe("Destination path in the sandbox, e.g. /home/tenki/data.bin"),
 			content_type: z.string().optional().describe("MIME type of the upload, e.g. application/octet-stream."),
 		},
 		async ({ session_id, path, content_type }) =>

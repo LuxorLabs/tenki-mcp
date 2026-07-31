@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, sessionIdSchema } from "./common.js";
+import { ok, pathSchema, sessionIdSchema } from "./common.js";
 
 /**
  * Filesystem metadata + mutation ops against a sandbox's data plane.
@@ -19,7 +19,7 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"Get metadata (size, mode, type, timestamps) for a file or directory in a sandbox. Use to check whether a path exists or inspect it before reading/removing.",
 		{
 			session_id: sessionIdSchema,
-			path: z.string().describe("Absolute path under /home/tenki, e.g. /home/tenki/output.txt"),
+			path: pathSchema.describe("Absolute path under /home/tenki, e.g. /home/tenki/output.txt"),
 		},
 		async ({ session_id, path }) => ok(await client.data(session_id, "Stat", { path })),
 	);
@@ -29,7 +29,7 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"Create a directory in a sandbox. Set recursive to also create any missing parent directories (mkdir -p).",
 		{
 			session_id: sessionIdSchema,
-			path: z.string().describe("Directory path under /home/tenki, e.g. /home/tenki/project/out"),
+			path: pathSchema.describe("Directory path under /home/tenki, e.g. /home/tenki/project/out"),
 			recursive: z.boolean().optional().describe("Create parent directories as needed (default false)."),
 		},
 		async ({ session_id, path, recursive }) =>
@@ -46,7 +46,7 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"Delete a file or directory in a sandbox. Set recursive to remove a non-empty directory and its contents (rm -r).",
 		{
 			session_id: sessionIdSchema,
-			path: z.string().describe("Path to delete under /home/tenki."),
+			path: pathSchema.describe("Path to delete under /home/tenki."),
 			recursive: z.boolean().optional().describe("Remove a directory and its contents (default false)."),
 		},
 		async ({ session_id, path, recursive }) =>
@@ -63,8 +63,8 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 		"Move or rename a file or directory within a sandbox. Both paths are under /home/tenki.",
 		{
 			session_id: sessionIdSchema,
-			from: z.string().describe("Source path under /home/tenki, e.g. /home/tenki/old.txt"),
-			to: z.string().describe("Destination path under /home/tenki, e.g. /home/tenki/new.txt"),
+			from: pathSchema.describe("Source path under /home/tenki, e.g. /home/tenki/old.txt"),
+			to: pathSchema.describe("Destination path under /home/tenki, e.g. /home/tenki/new.txt"),
 		},
 		async ({ session_id, from, to }) => {
 			// The data plane has no Move RPC (ReadFile/WriteFile/Stat/Mkdir/Remove/List only),
