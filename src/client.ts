@@ -21,12 +21,24 @@ const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_CAP_MS = 8000;
 // Rate-limit rejections happen before the server does any work, so they are
-// safe to retry for EVERY method.
+// safe to retry for EVERY method. (For ExecuteCommand this assumes the 429 is
+// the API's own limiter rejecting the call before it ran — true for a
+// ConnectRPC-shaped 429; an intermediary that already forwarded the request
+// would re-run the command.)
 const RATE_LIMIT_CODES = new Set(["rate_limited", "ratelimited", "resource_exhausted", "resourceexhausted"]);
-// `unavailable` can arrive after the server partially applied a call, so it is
-// retried only for idempotent (read-shaped) methods — retrying a half-applied
-// CreateSession would boot and bill a second sandbox.
-const IDEMPOTENT_METHOD = /^(Get|List|WhoAmI|Resolve|Wait|Stat)/;
+// Methods that must never double-apply: retrying one that half-applied could
+// boot and bill a second sandbox, publish twice, or re-run a command. The
+// policy is a deny-list shaped by that risk — everything else (reads, and
+// teardown like Terminate*/Delete*/Detach*, where a repeat lands in the same
+// state, worst case a harmless "not found") retries transient failures.
+// Skipping a teardown retry is the expensive mistake: runCode's finally
+// swallows terminate errors, so a transient blip would silently leave a
+// billing sandbox running.
+const NON_IDEMPOTENT_METHOD = /^(Create|Build|Publish|Resume|Extend|ExecuteCommand)/;
+// Data-plane methods safe to retry: read-shaped only. A retried Remove that
+// had actually applied would surface a spurious "not found" for an op that
+// succeeded.
+const DATA_RETRYABLE_METHOD = /^(Read|Stat|List|Get)/;
 const RETRY_AFTER_CAP_MS = 30_000;
 
 // Every fetch carries a timeout so a hung connection fails the tool call with a
@@ -38,7 +50,9 @@ const EXEC_TIMEOUT_MARGIN_MS = 30_000; // headroom over a command's own timeout
 // Session-credential cache lifetime handling: a credential whose expiry the API
 // omits (or that we cannot parse) is assumed valid only briefly — never forever —
 // and a known expiry is refreshed early so an in-flight call cannot straddle it.
-const DEFAULT_CRED_TTL_MS = 60_000;
+// The assumed lifetime can be generous because a stale certificate is recovered
+// by the 401 invalidate-and-re-mint path rather than by cache expiry alone.
+const DEFAULT_CRED_TTL_MS = 300_000;
 const CRED_EXPIRY_SKEW_MS = 30_000;
 const MIN_CRED_TTL_MS = 5_000; // floor for the skewed expiry of a short-lived credential
 
@@ -69,7 +83,7 @@ export interface TenkiClientOptions {
 	timeoutMs?: number;
 	/** Timeout for ExecuteCommand when the command itself has no timeout (default 630s). */
 	execTimeoutMs?: number;
-	/** Assumed session-credential lifetime when the API returns no parseable expiry (default 60s). */
+	/** Assumed session-credential lifetime when the API returns no parseable expiry (default 5min). */
 	credTtlMs?: number;
 }
 
@@ -115,6 +129,7 @@ function interpreterFor(language: Language): { file: string; command: string; ar
 export class TenkiClient {
 	private readonly baseUrl: string;
 	private readonly credCache = new Map<string, CachedCredential>();
+	private readonly credInflight = new Map<string, Promise<CachedCredential>>();
 	private readonly timeoutMs: number;
 	private readonly execTimeoutMs: number;
 	private readonly credTtlMs: number;
@@ -136,23 +151,41 @@ export class TenkiClient {
 		return Number.isFinite(t) && t > 0 ? t * 1000 + EXEC_TIMEOUT_MARGIN_MS : this.execTimeoutMs;
 	}
 
-	/** fetch with a hard timeout and a readable error instead of a bare AbortError. */
-	private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number, what: string): Promise<Response> {
+	/**
+	 * fetch + full body read under ONE timeout, with a readable error instead of
+	 * a bare AbortError. Reading the body inside the guarded section matters: a
+	 * response whose headers arrive but whose body stalls must fail with the
+	 * same friendly, retryable timeout as a connection that never responds.
+	 */
+	private async fetchTextWithTimeout(
+		url: string,
+		init: RequestInit,
+		timeoutMs: number,
+		what: string,
+	): Promise<{ ok: boolean; status: number; headers: Headers; text: string }> {
+		const budget = Math.max(1, Math.floor(timeoutMs));
 		try {
-			return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+			const res = await fetch(url, { ...init, signal: AbortSignal.timeout(budget) });
+			const text = await res.text();
+			return { ok: res.ok, status: res.status, headers: res.headers, text };
 		} catch (e) {
 			const name = (e as Error)?.name;
 			if (name === "TimeoutError" || name === "AbortError") {
-				throw new Error(`Tenki ${what} timed out after ${timeoutMs}ms with no response.`);
+				throw new Error(`Tenki ${what} timed out after ${budget}ms with no response.`);
 			}
 			throw e;
 		}
 	}
 
-	/** Retry policy: rate limits always; `unavailable` only for idempotent methods. */
+	/**
+	 * Retry policy: rate limits always; `unavailable` and gateway-shaped
+	 * 502/503/504 (load balancers and CDNs return these with an HTML or empty
+	 * body, no ConnectRPC code) for every method that cannot double-apply.
+	 */
 	private shouldRetry(method: string, status: number, code: string): boolean {
 		if (status === 429 || RATE_LIMIT_CODES.has(code)) return true;
-		return code === "unavailable" && IDEMPOTENT_METHOD.test(method);
+		const transient = code === "unavailable" || status === 502 || status === 503 || status === 504;
+		return transient && !NON_IDEMPOTENT_METHOD.test(method);
 	}
 
 	/** Exponential backoff with half-jitter; a Retry-After header (seconds) wins, capped. */
@@ -164,49 +197,56 @@ export class TenkiClient {
 	}
 
 	/**
-	 * Unary control-plane call. Every attempt carries a timeout. Rate-limit
+	 * Unary control-plane call. The WHOLE call — every attempt plus every
+	 * backoff sleep — draws from one shared deadline (the method's timeout), so
+	 * retries can never stack past it: an MCP client's own 60s default would
+	 * otherwise give up before our per-attempt timeouts did. Rate-limit
 	 * rejections retry with jittered backoff (honoring Retry-After); transient
-	 * `unavailable` errors AND transport-level failures (timeout, connection
-	 * reset, DNS) retry only for idempotent methods, because a non-idempotent
-	 * call (CreateSession) may have partially applied.
+	 * `unavailable`/gateway errors AND transport-level failures (timeout,
+	 * connection reset, DNS) retry for every method that cannot double-apply.
 	 * `service` defaults to SandboxService; pass another fully-qualified ConnectRPC
 	 * service (e.g. the SSH gateway service) for methods hosted elsewhere.
 	 */
 	async control(method: string, body: Record<string, unknown> = {}, service: string = CONTROL_SERVICE): Promise<Record<string, any>> {
 		const url = `${this.baseUrl}/${service}/${method}`;
-		const timeoutMs = this.timeoutFor(method, body ?? {});
+		const deadline = Date.now() + this.timeoutFor(method, body ?? {});
 		for (let attempt = 0; ; attempt++) {
-			let res: Response;
+			let res: { ok: boolean; status: number; headers: Headers; text: string };
 			try {
-				res = await this.fetchWithTimeout(
+				res = await this.fetchTextWithTimeout(
 					url,
 					{
 						method: "POST",
 						headers: { "Content-Type": "application/json", "Connect-Protocol-Version": "1", ...authHeaders(this.token) },
 						body: JSON.stringify(body ?? {}),
 					},
-					timeoutMs,
+					deadline - Date.now(),
 					method,
 				);
 			} catch (e) {
 				// Transport failure: the request may or may not have reached the
-				// server, so only idempotent methods are safe to retry.
-				if (attempt < MAX_RETRIES && IDEMPOTENT_METHOD.test(method)) {
-					await sleep(this.backoffMs(attempt, null));
-					continue;
+				// server, so only methods that cannot double-apply are retried.
+				if (attempt < MAX_RETRIES && !NON_IDEMPOTENT_METHOD.test(method)) {
+					const wait = this.backoffMs(attempt, null);
+					if (Date.now() + wait < deadline) {
+						await sleep(wait);
+						continue;
+					}
 				}
 				throw e;
 			}
-			if (res.ok) return (await res.json()) as Record<string, any>;
+			if (res.ok) return JSON.parse(res.text) as Record<string, any>;
 
-			const text = await res.text();
-			const parsed = safeJson(text);
+			const parsed = safeJson(res.text);
 			const code = typeof parsed?.code === "string" ? parsed.code.toLowerCase() : "";
 			if (attempt < MAX_RETRIES && this.shouldRetry(method, res.status, code)) {
-				await sleep(this.backoffMs(attempt, res.headers.get("retry-after")));
-				continue;
+				const wait = this.backoffMs(attempt, res.headers.get("retry-after"));
+				if (Date.now() + wait < deadline) {
+					await sleep(wait);
+					continue;
+				}
 			}
-			const msg = (parsed?.message as string) || text || res.statusText;
+			const msg = (parsed?.message as string) || res.text || `HTTP ${res.status}`;
 			throw new Error(`Tenki ${method} failed (${res.status}${code ? ` ${code}` : ""}): ${msg}`);
 		}
 	}
@@ -215,12 +255,22 @@ export class TenkiClient {
 	 * Mint (and cache per session) the data-plane endpoint + session certificate.
 	 * A credential with no parseable expiry is cached for credTtlMs — never
 	 * forever — and a known expiry is shortened by a skew so an in-flight call
-	 * can't straddle the real expiry.
+	 * can't straddle the real expiry. Minting is single-flight: concurrent data
+	 * calls on a cold cache share one mint instead of each paying a
+	 * control-plane round trip for its own certificate.
 	 */
 	private async credentialFor(sessionId: string): Promise<CachedCredential> {
 		const cached = this.credCache.get(sessionId);
 		if (cached && cached.expiresAt > Date.now()) return cached;
 
+		const inflight = this.credInflight.get(sessionId);
+		if (inflight) return inflight;
+		const mint = this.mintCredential(sessionId).finally(() => this.credInflight.delete(sessionId));
+		this.credInflight.set(sessionId, mint);
+		return mint;
+	}
+
+	private async mintCredential(sessionId: string): Promise<CachedCredential> {
 		const resp = await this.control("CreateSessionCredential", { sessionId });
 		const cred = (resp.credential as Record<string, any>) ?? resp;
 		const token = (cred.credential ?? cred.token) as string;
@@ -232,10 +282,14 @@ export class TenkiClient {
 		const raw = cred.expiresAt ?? cred.expires_at;
 		if (typeof raw === "string") {
 			const p = Date.parse(raw);
-			// Floor the skewed expiry so a short-lived credential (< skew) is still
-			// cached briefly instead of the cache being disabled outright; a cert
-			// that expires server-side anyway is recovered by the 401 re-mint path.
-			if (!Number.isNaN(p)) expiresAt = Math.max(p - CRED_EXPIRY_SKEW_MS, Date.now() + MIN_CRED_TTL_MS);
+			if (!Number.isNaN(p)) {
+				// Floor the skewed expiry so a short-lived credential (< skew) is
+				// still cached briefly instead of the cache being disabled outright.
+				// An ALREADY-expired credential is not cached at all (expiresAt 0):
+				// flooring it would serve a known-dead cert from cache, turning
+				// every data call into a guaranteed 401 → re-mint round trip.
+				expiresAt = p > Date.now() ? Math.max(p - CRED_EXPIRY_SKEW_MS, Date.now() + MIN_CRED_TTL_MS) : 0;
+			}
 		}
 		const entry: CachedCredential = { endpoint: endpoint ?? "", token, expiresAt };
 		this.credCache.set(sessionId, entry);
@@ -244,48 +298,74 @@ export class TenkiClient {
 
 	/**
 	 * Unary data-plane call. The inner request is wrapped as
-	 * `{ request: { sessionId, ...request } }`. An auth failure invalidates the
-	 * cached session certificate (it may have expired server-side regardless of
-	 * what its stated expiry said) and retries once with a fresh one.
+	 * `{ request: { sessionId, ...request } }`. This is the path behind every
+	 * file tool AND how tenki_exec reads back its own output, so it gets the
+	 * same treatment as the control plane: one shared deadline, rate limits
+	 * retried for every method, transient/gateway/transport failures retried
+	 * for read-shaped methods. A stale-certificate failure (401/unauthenticated
+	 * — the cert may have expired server-side regardless of its stated expiry)
+	 * invalidates the cache and re-mints once; permission_denied is NOT an auth
+	 * failure — a denied path is a normal user error a fresh cert can never
+	 * fix, so re-minting would waste a control-plane round trip per denied call.
 	 */
-	async data(
-		sessionId: string,
-		method: string,
-		request: Record<string, unknown> = {},
-		retriedAuth = false,
-	): Promise<Record<string, any>> {
-		const cred = await this.credentialFor(sessionId);
-		if (!cred.endpoint) {
-			throw new Error(`Could not resolve the data-plane endpoint for session ${sessionId}.`);
-		}
-		const url = `${cred.endpoint.replace(/\/+$/, "")}/${DATA_SERVICE}/${method}`;
-		const res = await this.fetchWithTimeout(
-			url,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Connect-Protocol-Version": "1",
-					"x-tenki-session-cert": cred.token,
-				},
-				body: JSON.stringify({ request: { sessionId, ...request } }),
-			},
-			this.timeoutMs,
-			`data ${method}`,
-		);
-		if (!res.ok) {
-			const text = await res.text();
-			const parsed = safeJson(text);
-			const code = typeof parsed?.code === "string" ? parsed.code.toLowerCase() : "";
-			const authFailure = res.status === 401 || res.status === 403 || code === "unauthenticated" || code === "permission_denied";
-			if (authFailure && !retriedAuth) {
-				this.credCache.delete(sessionId);
-				return this.data(sessionId, method, request, true);
+	async data(sessionId: string, method: string, request: Record<string, unknown> = {}): Promise<Record<string, any>> {
+		const deadline = Date.now() + this.timeoutMs;
+		let remintedAuth = false;
+		for (let attempt = 0; ; ) {
+			const cred = await this.credentialFor(sessionId);
+			if (!cred.endpoint) {
+				throw new Error(`Could not resolve the data-plane endpoint for session ${sessionId}.`);
 			}
-			throw new Error(`Tenki data ${method} failed (${res.status}): ${(parsed?.message as string) || text}`);
+			const url = `${cred.endpoint.replace(/\/+$/, "")}/${DATA_SERVICE}/${method}`;
+			let res: { ok: boolean; status: number; headers: Headers; text: string };
+			try {
+				res = await this.fetchTextWithTimeout(
+					url,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"Connect-Protocol-Version": "1",
+							"x-tenki-session-cert": cred.token,
+						},
+						body: JSON.stringify({ request: { sessionId, ...request } }),
+					},
+					deadline - Date.now(),
+					`data ${method}`,
+				);
+			} catch (e) {
+				if (attempt < MAX_RETRIES && DATA_RETRYABLE_METHOD.test(method)) {
+					const wait = this.backoffMs(attempt++, null);
+					if (Date.now() + wait < deadline) {
+						await sleep(wait);
+						continue;
+					}
+				}
+				throw e;
+			}
+			if (res.ok) {
+				const wrapped = JSON.parse(res.text) as Record<string, any>;
+				return (wrapped.response as Record<string, any>) ?? wrapped;
+			}
+			const parsed = safeJson(res.text);
+			const code = typeof parsed?.code === "string" ? parsed.code.toLowerCase() : "";
+			if ((res.status === 401 || code === "unauthenticated") && !remintedAuth) {
+				remintedAuth = true;
+				this.credCache.delete(sessionId);
+				continue; // re-mint doesn't consume a retry attempt
+			}
+			const transient = code === "unavailable" || res.status === 502 || res.status === 503 || res.status === 504;
+			const retryable =
+				res.status === 429 || RATE_LIMIT_CODES.has(code) || (transient && DATA_RETRYABLE_METHOD.test(method));
+			if (attempt < MAX_RETRIES && retryable) {
+				const wait = this.backoffMs(attempt++, res.headers.get("retry-after"));
+				if (Date.now() + wait < deadline) {
+					await sleep(wait);
+					continue;
+				}
+			}
+			throw new Error(`Tenki data ${method} failed (${res.status}): ${(parsed?.message as string) || res.text}`);
 		}
-		const wrapped = (await res.json()) as Record<string, any>;
-		return (wrapped.response as Record<string, any>) ?? wrapped;
 	}
 
 	/**
