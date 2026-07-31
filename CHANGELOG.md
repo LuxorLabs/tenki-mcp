@@ -4,6 +4,8 @@ All notable changes to tenki-mcp. This project follows semantic versioning.
 
 ## [2.0.0-beta.1] — 2026-08-01 — First npm release: typed git, network hardening, structured output
 
+Published as **`@tenkicloud/mcp`**, matching the `@tenkicloud/sandbox` SDK. Install with `npx -y @tenkicloud/mcp`; the command it provides is still `tenki-mcp`.
+
 ### Fixed by an end-to-end sweep of all 85 tools against the live API
 
 - **`tenki_create_snapshot` and `tenki_pause_sandbox` reported failure on operations that succeeded.** Both RPCs block until the underlying storage work finishes — measured at 59s and 41s — so the 30s default HTTP budget introduced with the timeout work cut them off. The caller got `timed out after 30000ms` while the snapshot (or a multi-GB pause snapshot) had in fact been created, leaving an orphaned resource whose id it never saw, and an agent that retried burned quota. Both now use a 600s budget, tunable with `TENKI_MCP_SLOW_TIMEOUT_MS` (`TENKI_MCP_TIMEOUT_MS` tunes the ordinary 30s one). Async methods that return a handle in under a second — `BuildTemplate`, `PublishRegistryImage` — deliberately keep the short budget.

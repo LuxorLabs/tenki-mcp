@@ -1,4 +1,4 @@
-# tenki-mcp
+# tenki-mcp — `@tenkicloud/mcp`
 
 **A [Model Context Protocol](https://modelcontextprotocol.io) server for [Tenki Cloud](https://tenki.cloud).** Give any agent — Claude, Codex, Cursor — a disposable microVM it can create, run code in, read and write files, run git, and expose to the web. Sandboxes boot in ~2 seconds and are billed per second.
 
@@ -14,17 +14,16 @@ Part of making Tenki the execution layer coding agents reach for: the agent writ
 ## Quickstart
 
 ```bash
-git clone https://github.com/LuxorLabs/tenki-mcp.git && cd tenki-mcp
-npm install
-npm run build
 export TENKI_API_KEY=tk_your_key_here
-node dist/index.js         # speaks MCP over stdio
+npx -y @tenkicloud/mcp     # speaks MCP over stdio
 ```
+
+Nothing to clone or build. The package installs one command, `tenki-mcp`.
 
 ### Use it in Claude Code
 
 ```bash
-claude mcp add tenki --env TENKI_API_KEY=tk_your_key_here -- node /absolute/path/to/tenki-mcp/dist/index.js
+claude mcp add tenki --env TENKI_API_KEY=tk_your_key_here -- npx -y @tenkicloud/mcp
 ```
 
 ### Use it in Claude Desktop
@@ -35,8 +34,8 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "tenki": {
-      "command": "node",
-      "args": ["/absolute/path/to/tenki-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@tenkicloud/mcp"],
       "env": { "TENKI_API_KEY": "tk_your_key_here" }
     }
   }
@@ -51,15 +50,27 @@ Add the same block to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (glob
 {
   "mcpServers": {
     "tenki": {
-      "command": "node",
-      "args": ["/absolute/path/to/tenki-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@tenkicloud/mcp"],
       "env": { "TENKI_API_KEY": "tk_your_key_here" }
     }
   }
 }
 ```
 
-Once published to npm, `node /absolute/path/to/tenki-mcp/dist/index.js` becomes `npx -y tenki-mcp` in all three.
+No key yet? Start the server without one and ask the agent to check `tenki_auth_status` — it reports what to set and where. See [Auth](#auth).
+
+### Run it from a clone instead
+
+For development, or to run an unreleased change:
+
+```bash
+git clone https://github.com/LuxorLabs/tenki-mcp.git && cd tenki-mcp
+npm install && npm run build
+TENKI_API_KEY=tk_your_key_here node dist/index.js
+```
+
+Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` command in any of the configs above. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development loop.
 
 ### Environment variables
 
@@ -112,7 +123,7 @@ Set one of `TENKI_API_KEY` or `TENKI_AUTH_TOKEN` — when both are set, `TENKI_A
 Besides stdio, the server speaks **Streamable HTTP** so it can be hosted for remote MCP clients:
 
 ```bash
-TENKI_MCP_TRANSPORT=http PORT=3000 TENKI_API_KEY=… node dist/index.js
+TENKI_MCP_TRANSPORT=http PORT=3000 TENKI_API_KEY=… npx -y @tenkicloud/mcp
 # → tenki-mcp running on http://127.0.0.1:3000/mcp (Streamable HTTP) [loopback only, no auth]
 ```
 
@@ -125,7 +136,7 @@ TENKI_MCP_TRANSPORT=http PORT=3000 TENKI_API_KEY=… node dist/index.js
 ```bash
 # expose to a network safely:
 TENKI_MCP_TRANSPORT=http TENKI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
-  TENKI_MCP_HTTP_TOKEN=$(openssl rand -hex 32) TENKI_API_KEY=… node dist/index.js
+  TENKI_MCP_HTTP_TOKEN=$(openssl rand -hex 32) TENKI_API_KEY=… npx -y @tenkicloud/mcp
 ```
 
 Point an HTTP-capable MCP client at `/mcp`. v2.0-beta uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is not yet implemented. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
