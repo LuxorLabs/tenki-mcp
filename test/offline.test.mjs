@@ -115,7 +115,7 @@ try {
 		);
 		check(
 			"whitespace-only session id rejected pre-network",
-			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /must not be empty or whitespace-only/i),
+			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /at least 1 character/i),
 		);
 		check(
 			"empty path rejected pre-network (tenki_read_file)",

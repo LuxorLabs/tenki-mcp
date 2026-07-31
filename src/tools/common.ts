@@ -9,12 +9,14 @@ export const ok = (value: unknown) => ({
 export const envSchema = z.record(z.string()).optional().describe("Environment variables as a key→value object.");
 
 /** Shared session-id schema — every per-sandbox tool takes one of these.
- * Rejects empty/whitespace-only ids client-side WITHOUT transforming the
- * value — zod's .trim() is a transform, and arguments must reach the API
- * verbatim. */
+ * Trimmed, unlike pathSchema below: a session id is a UUID, so surrounding
+ * whitespace is always an accident (and the API's uuid validation would
+ * reject it), which makes trimming a safe correction rather than the silent
+ * retargeting it would be for a filename. */
 export const sessionIdSchema = z
 	.string()
-	.refine((s) => s.trim().length > 0, "session id must not be empty or whitespace-only")
+	.trim()
+	.min(1)
 	.describe("Sandbox session id (UUID), from tenki_create_sandbox or tenki_list_sandboxes.");
 
 /** Shared TCP-port schema. */

@@ -132,7 +132,8 @@ const baseResult = {
 	await client.callTool({ name: "tenki_stat_path", arguments: { session_id: "s1", path: spacey } });
 	check("stat_path passes a spacey path verbatim", seen.Stat === spacey, JSON.stringify(seen.Stat));
 	const mv = await client.callTool({ name: "tenki_move_path", arguments: { session_id: "s1", from: spacey, to: "/home/tenki/b" } });
-	check("move_path passes a spacey source verbatim", mv.isError !== true && Array.isArray(seen.mvArgs) && seen.mvArgs[0] === spacey, JSON.stringify(seen.mvArgs));
+	check("move_path passes a spacey source verbatim", mv.isError !== true && Array.isArray(seen.mvArgs) && seen.mvArgs.includes(spacey), JSON.stringify(seen.mvArgs));
+	check("move_path guards operands with -- (leading-hyphen paths aren't mv options)", seen.mvArgs?.[0] === "--", JSON.stringify(seen.mvArgs));
 	let blankRejected = false;
 	try {
 		const b = await client.callTool({ name: "tenki_read_file", arguments: { session_id: "s1", path: "   " } });
@@ -142,6 +143,30 @@ const baseResult = {
 	}
 	check("whitespace-only path still rejected pre-network", blankRejected);
 	await client.close();
+}
+
+// 7) the exec script guards `cd` with `--`. Without it a cwd like "-L" is read
+// as a cd OPTION: `cd '-L'` silently succeeds into $HOME (verified in a real
+// shell), so the command would run in the wrong directory instead of failing.
+{
+	let script = "";
+	class ScriptCapturingApi extends TenkiClient {
+		constructor() { super("tk_offline_dummy_key"); }
+		async control(method, body) {
+			// execCaptured also issues an ExecuteCommand to `rm` the capture files;
+			// only the `sh -c` invocation carries the script.
+			if (method === "ExecuteCommand") {
+				if (body?.command === "sh") script = body?.args?.[1] ?? "";
+				return { execution: { exitCode: 0 } };
+			}
+			return {};
+		}
+		async readTextFile() { return ""; }
+	}
+	await new ScriptCapturingApi().execCaptured("s1", "pwd", { cwd: "-L" });
+	check("exec cwd is guarded with `cd --`", /^cd -- '-L' && /.test(script), script.slice(0, 60));
+	await new ScriptCapturingApi().execCaptured("s1", "pwd", { cwd: "/home/tenki/dir with space " });
+	check("exec cwd keeps trailing whitespace verbatim inside quotes", script.includes("'/home/tenki/dir with space '"), script.slice(0, 80));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

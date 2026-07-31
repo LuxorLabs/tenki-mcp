@@ -456,7 +456,10 @@ export class TenkiClient {
 		const execLine = [command, ...(opts.args ?? [])].map(shellQuote).join(" ");
 		// .trim() only decides WHETHER a cd is emitted; the quoted value passes
 		// through verbatim — trailing/leading whitespace is legal in dir names.
-		const cd = opts.cwd && opts.cwd.trim() ? `cd ${shellQuote(opts.cwd)} && ` : "";
+		// `--` is required: quoting does not stop `cd` from reading a leading-hyphen
+		// value as an option, and `cd -L` silently succeeds into HOME instead of
+		// failing, so the command would then run in the wrong directory.
+		const cd = opts.cwd && opts.cwd.trim() ? `cd -- ${shellQuote(opts.cwd)} && ` : "";
 		const script = `${cd}${execLine} > ${outPath} 2> ${errPath}`;
 
 		const body: Record<string, unknown> = { sessionId, command: "sh", args: ["-c", script] };
