@@ -78,10 +78,11 @@ Once published to npm, `node /absolute/path/to/tenki-mcp/dist/index.js` becomes 
 
 ## Tools
 
-**84 tools** — full parity with the Tenki unary API (enforced by a CI [parity audit](scripts/parity-audit.mjs)), grouped by domain:
+**85 tools** — 84 with full parity to the Tenki unary API (enforced by a CI [parity audit](scripts/parity-audit.mjs)), plus `tenki_auth_status`. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
+| **Auth** | `tenki_auth_status` (which credential is configured, and does it work — the only tool available when none is) |
 | **Identity** | `tenki_whoami` |
 | **Run** | `tenki_run_code` (one-shot: boot → run shell/python/js → tear down) |
 | **Sandboxes** | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox` |
@@ -103,6 +104,8 @@ Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 ## Auth
 
 Set one of `TENKI_API_KEY` or `TENKI_AUTH_TOKEN` — when both are set, `TENKI_AUTH_TOKEN` wins. The header is chosen by token prefix: `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `TENKI_API_ENDPOINT` (default `https://api.tenki.cloud`).
+
+**Without a credential the server still starts**, registering only `tenki_auth_status` — so instead of an MCP client reporting an opaque "server failed to start", the agent can call that tool and get told what to set. Ask it "check tenki auth status" any time other tools return auth errors: it reports the credential kind (API key vs session token), the endpoint, and whether a live identity probe succeeded — never the token itself. It reports status only; get a credential with `tenki login` or from the dashboard.
 
 ## Host it over HTTP (v2.0-alpha)
 

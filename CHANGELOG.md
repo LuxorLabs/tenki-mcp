@@ -4,6 +4,12 @@ All notable changes to tenki-mcp. This project follows semantic versioning.
 
 ## [2.0.0-alpha.3] — 2026-08-01 — First npm release: typed git, network hardening, structured output
 
+### A missing credential no longer looks like a broken server
+
+- **New tool `tenki_auth_status`** (85 tools total) — reports whether a usable credential is configured, which kind (`api_key` for `tk_…`, `oauth_session_token` for `ory_st_…`, or `session_cookie`), which env var it came from, the endpoint targeted, and whether a live identity probe succeeded. Never returns the token. Structured output, annotated read-only, and available under `TENKI_MCP_READONLY` (it is how you diagnose a credential problem in that posture) — `TENKI_MCP_DISABLED_TOOLS` can still drop it.
+- **The server starts without a credential instead of exiting 1.** Exiting made MCP clients report an opaque "server failed to start" while swallowing the stderr line that explained why, leaving the user with a broken server and no cause. It now boots with `tenki_auth_status` as the only registered tool, so an agent can ask what is wrong and relay the fix; the reported `toolsRegistered` count makes that degraded mode explicit. Registering all 84 API tools in that state would only offer tools that cannot work.
+- Reporting status is the whole scope: nothing here logs in, opens a browser, or writes credentials. Get a credential with `tenki login` or from the dashboard.
+
 ### Tool-schema DX (git enum, shared schemas, README)
 
 - **`tenki_git` now validates `operation` as an enum of what the API actually supports: `clone`, `checkout`, `diff`, `log`.** The tool previously advertised ten operations, but six of them (status/add/commit/pull/push/fetchPR) are rejected by the API's own validation (`GitOperationRequest` allows exactly four) — a model following the old description was guaranteed a server error. Per-operation arg keys are now documented in the tool description, grounded in the engine's arg builder: clone `{repo, branch?, depth?, directory?}`, checkout `{ref, create?}`, diff `{range? | base?+head?, path?}`, log `{max_count?, range?, path?}`. Other git commands: use `tenki_exec` with `git ...`.

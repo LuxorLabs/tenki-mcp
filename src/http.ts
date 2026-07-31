@@ -119,7 +119,7 @@ function allowedHostsFor(server: http.Server, host: string, port: number): strin
 	return hosts.flatMap((h) => ports.map((p) => `${h}:${p}`));
 }
 
-export function startHttp(client: TenkiClient, port: number): http.Server {
+export function startHttp(client: TenkiClient | null, port: number): http.Server {
 	const host = process.env.TENKI_MCP_HTTP_HOST || "127.0.0.1";
 	const httpToken = process.env.TENKI_MCP_HTTP_TOKEN || "";
 	const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";

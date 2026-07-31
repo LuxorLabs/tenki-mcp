@@ -15,7 +15,7 @@ npm run build          # tsc → dist/
 There are two tiers:
 
 - **Offline suites — no token, run in CI.** These prove the server boots, advertises a
-  well-formed 84-tool surface, validates args pre-network, and enforces the security
+  well-formed 85-tool surface, validates args pre-network, and enforces the security
   controls. They make zero network calls.
 
   ```bash
