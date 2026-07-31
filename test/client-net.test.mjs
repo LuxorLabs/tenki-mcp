@@ -356,6 +356,22 @@ const stop = (srv) => { srv.closeAllConnections?.(); srv.close(); };
 	check("timeoutFor: ExecuteCommand timeout '0s' → exec default", c.timeoutFor("ExecuteCommand", { timeout: "0s" }) === 630_000);
 	check("timeoutFor: ExecuteCommand with no timeout → exec default", c.timeoutFor("ExecuteCommand", {}) === 630_000);
 	check("timeoutFor: unary method → unary default", c.timeoutFor("GetSession", {}) === 30_000);
+	// Slow storage/VM operations must NOT get the 30s unary budget: the RPC does not
+	// return until the operation finishes, and a client-side timeout leaves the
+	// resource created but its id unknown to the caller (measured e2e on both).
+	for (const m of ["CreateSnapshot", "PauseSession"]) {
+		check(`timeoutFor: ${m} → slow budget (600s), not 30s`, c.timeoutFor(m, {}) === 600_000, `${c.timeoutFor(m, {})}`);
+	}
+	check("timeoutFor: GetSnapshot (a read) stays on the unary default", c.timeoutFor("GetSnapshot", {}) === 30_000);
+	// Async methods return a handle in <1s; a long budget would only delay a hung call.
+	for (const m of ["BuildTemplate", "PublishRegistryImage", "ResumeSession", "ResizeVolume"]) {
+		check(`timeoutFor: ${m} (async/fast) stays on the unary default`, c.timeoutFor(m, {}) === 30_000, `${c.timeoutFor(m, {})}`);
+	}
+	{
+		const tuned = new TenkiClient("tk_test", "http://127.0.0.1:1", { timeoutMs: 1234, slowTimeoutMs: 5678 });
+		check("timeoutFor: slowTimeoutMs option is honored", tuned.timeoutFor("CreateSnapshot", {}) === 5678);
+		check("timeoutFor: timeoutMs option is honored", tuned.timeoutFor("GetSession", {}) === 1234);
+	}
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

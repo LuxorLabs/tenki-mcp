@@ -9,8 +9,10 @@ export const ok = (value: unknown) => ({
 export const envSchema = z.record(z.string()).optional().describe("Environment variables as a key→value object.");
 
 /** Shared session-id schema — every per-sandbox tool takes one of these.
- * Trimmed before the min-length check so a whitespace-only id is rejected
- * client-side like an empty one (the same user mistake one space over). */
+ * Trimmed, unlike pathSchema below: a session id is a UUID, so surrounding
+ * whitespace is always an accident (and the API's uuid validation would
+ * reject it), which makes trimming a safe correction rather than the silent
+ * retargeting it would be for a filename. */
 export const sessionIdSchema = z
 	.string()
 	.trim()
@@ -20,13 +22,14 @@ export const sessionIdSchema = z
 /** Shared TCP-port schema. */
 export const portSchema = z.number().int().min(1).max(65535).describe("TCP port inside the sandbox (1-65535).");
 
-/** Shared sandbox-path schema — trimmed and non-empty, so an empty or
- * whitespace-only path is rejected client-side instead of by a server error.
- * Call sites override the description with their own examples. */
+/** Shared sandbox-path schema — rejects an empty or whitespace-only path
+ * client-side instead of by a server error, WITHOUT transforming the value:
+ * leading/trailing whitespace is legal in POSIX filenames, and zod's .trim()
+ * (a transform, not a check) would silently retarget the operation to a
+ * different file. Call sites override the description with their own examples. */
 export const pathSchema = z
 	.string()
-	.trim()
-	.min(1)
+	.refine((s) => s.trim().length > 0, "path must not be empty or whitespace-only")
 	.describe("Absolute path inside the sandbox, under /home/tenki.");
 
 /**

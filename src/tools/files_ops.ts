@@ -72,7 +72,8 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 			// `ok` keys off the exit code, NOT result.ok: the capture files are an
 			// internal detail here — whether mv's (empty) output could be read back
 			// says nothing about whether the file moved.
-			const result = await client.execCaptured(session_id, "mv", { args: [from, to] });
+			// `--` so a path beginning with a hyphen is an operand, not an mv option.
+			const result = await client.execCaptured(session_id, "mv", { args: ["--", from, to] });
 			return ok({
 				from,
 				to,

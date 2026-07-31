@@ -47,6 +47,25 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_EXEC_TIMEOUT_MS = 630_000; // runCode's 600s hard cap + margin
 const EXEC_TIMEOUT_MARGIN_MS = 30_000; // headroom over a command's own timeout
 
+/**
+ * Methods whose RPC does not return until a long storage/VM operation finishes,
+ * so the 30s default is far too short. A timeout on these is worse than slow:
+ * the operation completes server-side anyway, so the caller is told it failed
+ * while a snapshot (or a paused VM holding a multi-GB pause snapshot) has in
+ * fact been created — an orphaned resource whose id the caller never sees.
+ *
+ * Deliberately limited to the two methods MEASURED to block: CreateSnapshot
+ * (47s observed here; 30s+ elsewhere, with the snapshot ready ~7s in) and
+ * PauseSession (41s observed; the pause itself finished ~7s in). Async methods
+ * that return a handle immediately are NOT listed even though they start long
+ * jobs — BuildTemplate returns PENDING in ~535ms and PublishRegistryImage in
+ * ~278ms, so giving them a 10-minute budget would only delay a genuinely hung
+ * call. Their orphan-on-timeout hazard is real but needs idempotency, not a
+ * bigger timeout.
+ */
+const SLOW_METHOD = /^(CreateSnapshot|PauseSession)$/;
+const DEFAULT_SLOW_TIMEOUT_MS = 600_000;
+
 // Session-credential cache lifetime handling: a credential whose expiry the API
 // omits (or that we cannot parse) is assumed valid only briefly — never forever —
 // and a known expiry is refreshed early so an in-flight call cannot straddle it.
@@ -83,6 +102,8 @@ export interface TenkiClientOptions {
 	timeoutMs?: number;
 	/** Timeout for ExecuteCommand when the command itself has no timeout (default 630s). */
 	execTimeoutMs?: number;
+	/** Timeout for long storage/VM operations — see SLOW_METHOD (default 600s). */
+	slowTimeoutMs?: number;
 	/** Assumed session-credential lifetime when the API returns no parseable expiry (default 5min). */
 	credTtlMs?: number;
 }
@@ -132,12 +153,14 @@ export class TenkiClient {
 	private readonly credInflight = new Map<string, Promise<CachedCredential>>();
 	private readonly timeoutMs: number;
 	private readonly execTimeoutMs: number;
+	private readonly slowTimeoutMs: number;
 	private readonly credTtlMs: number;
 
 	constructor(private readonly token: string, baseUrl: string = DEFAULT_BASE_URL, opts: TenkiClientOptions = {}) {
 		this.baseUrl = baseUrl.replace(/\/+$/, "");
 		this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 		this.execTimeoutMs = opts.execTimeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
+		this.slowTimeoutMs = opts.slowTimeoutMs ?? DEFAULT_SLOW_TIMEOUT_MS;
 		this.credTtlMs = opts.credTtlMs ?? DEFAULT_CRED_TTL_MS;
 	}
 
@@ -146,6 +169,7 @@ export class TenkiClient {
 	 * the command's own timeout (plus margin) instead of the unary default.
 	 */
 	private timeoutFor(method: string, body: Record<string, unknown>): number {
+		if (SLOW_METHOD.test(method)) return this.slowTimeoutMs;
 		if (method !== "ExecuteCommand") return this.timeoutMs;
 		const t = typeof body.timeout === "string" ? Number.parseInt(body.timeout, 10) : Number.NaN; // "30s"
 		return Number.isFinite(t) && t > 0 ? t * 1000 + EXEC_TIMEOUT_MARGIN_MS : this.execTimeoutMs;
@@ -454,7 +478,12 @@ export class TenkiClient {
 		const errPath = `${SANDBOX_HOME}/.mcp-exec-${suffix}.err`;
 
 		const execLine = [command, ...(opts.args ?? [])].map(shellQuote).join(" ");
-		const cd = opts.cwd && opts.cwd.trim() ? `cd ${shellQuote(opts.cwd.trim())} && ` : "";
+		// .trim() only decides WHETHER a cd is emitted; the quoted value passes
+		// through verbatim — trailing/leading whitespace is legal in dir names.
+		// `--` is required: quoting does not stop `cd` from reading a leading-hyphen
+		// value as an option, and `cd -L` silently succeeds into HOME instead of
+		// failing, so the command would then run in the wrong directory.
+		const cd = opts.cwd && opts.cwd.trim() ? `cd -- ${shellQuote(opts.cwd)} && ` : "";
 		const script = `${cd}${execLine} > ${outPath} 2> ${errPath}`;
 
 		const body: Record<string, unknown> = { sessionId, command: "sh", args: ["-c", script] };

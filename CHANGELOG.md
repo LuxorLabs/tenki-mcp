@@ -2,7 +2,23 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
-## [Unreleased]
+## [2.0.0-alpha.3] — 2026-08-01 — First npm release: typed git, network hardening, structured output
+
+### Fixed by an end-to-end sweep of all 85 tools against the live API
+
+- **`tenki_create_snapshot` and `tenki_pause_sandbox` reported failure on operations that succeeded.** Both RPCs block until the underlying storage work finishes — measured at 59s and 41s — so the 30s default HTTP budget introduced with the timeout work cut them off. The caller got `timed out after 30000ms` while the snapshot (or a multi-GB pause snapshot) had in fact been created, leaving an orphaned resource whose id it never saw, and an agent that retried burned quota. Both now use a 600s budget, tunable with `TENKI_MCP_SLOW_TIMEOUT_MS` (`TENKI_MCP_TIMEOUT_MS` tunes the ordinary 30s one). Async methods that return a handle in under a second — `BuildTemplate`, `PublishRegistryImage` — deliberately keep the short budget.
+- **`tenki_update_workspace_settings` and `tenki_update_snapshot_retention_settings` did nothing at all, and reported success.** Every field they sent (`defaultIdleTimeoutMinutes`, `defaultMaxDurationSeconds`, `snapshotRetentionDays`, `retentionDays`) is absent from the API; connect-go discards unknown fields, so the server returned 200 with the settings unchanged. They now send the real contract — `pauseRetention`/`snapshotRetention` as protobuf Durations with their `clear*` companions, plus the `max*` quotas — reject a call that would change nothing, and `clear_retention` makes "keep snapshots indefinitely" expressible for the first time. The retention pair is also documented as deprecated upstream in favour of the workspace-settings pair.
+- **`tenki_list_files` hid every dotfile.** The data plane omits dot-prefixed entries unless asked, so `.git`, `.env` and `.gitignore` were invisible and an agent would conclude they did not exist. It now sends `include_hidden` (default true, overridable) and always returns an `entries` array instead of a bare `{}` for an empty directory.
+- **`tenki_list_preview_urls` advertised a filter the API does not have.** `ListPreviewUrls` takes no session id, so the one this tool sent was silently dropped and every session's preview URLs came back as if filtered. The filter is now applied client-side and says so in the result; `page_size`, `page_token` and `workspace_id` — all real fields the tool never exposed — are now available, and the deprecated `project_id` is gone.
+- **`tenki_publish_image`'s documented example could never work:** its own description showed `myws/myimage:latest`, and the API rejects any tag or `@snapshot` on publish. The tagless form is now enforced client-side with an explanatory message.
+- **`tenki_unshare_image` silently revoked nothing** when called with neither `grant_id` nor `grantee_workspace_id`, returning the image object like a success. It now refuses, matching the guard `tenki_delete_image` already had.
+- **`tenki_open_preview` hands back an unreachable URL** for any port but the web terminal (7681): the API deliberately drops the regional host for other ports and returns a fallback that has no edge route, so the URL 404s. The description now says so and points at `tenki_expose_port`/`tenki_create_preview_url`. Platform-side issue; documented rather than worked around.
+
+### A missing credential no longer looks like a broken server
+
+- **New tool `tenki_auth_status`** (85 tools total) — reports whether a usable credential is configured, which kind (`api_key` for `tk_…`, `oauth_session_token` for `ory_st_…`, or `session_cookie`), which env var it came from, the endpoint targeted, and whether a live identity probe succeeded. Never returns the token. Structured output, annotated read-only, and available under `TENKI_MCP_READONLY` (it is how you diagnose a credential problem in that posture) — `TENKI_MCP_DISABLED_TOOLS` can still drop it.
+- **The server starts without a credential instead of exiting 1.** Exiting made MCP clients report an opaque "server failed to start" while swallowing the stderr line that explained why, leaving the user with a broken server and no cause. It now boots with `tenki_auth_status` as the only registered tool, so an agent can ask what is wrong and relay the fix; the reported `toolsRegistered` count makes that degraded mode explicit. Registering all 84 API tools in that state would only offer tools that cannot work.
+- Reporting status is the whole scope: nothing here logs in, opens a browser, or writes credentials. Get a credential with `tenki login` or from the dashboard.
 
 ### Tool-schema DX (git enum, shared schemas, README)
 
@@ -32,6 +48,9 @@ All notable changes to tenki-mcp. This project follows semantic versioning.
 
 ### Fixed
 
+- **Path validation no longer rewrites the path.** `pathSchema` used zod's `.trim()`, which is a *transform*: leading/trailing whitespace (legal in POSIX filenames) was silently stripped before sending, so `tenki_remove_path`/`tenki_move_path` on such a file operated on a *different* path than the one named. Paths now reach the API verbatim, with blank/whitespace-only values still rejected client-side. `tenki_exec`'s `cwd` had the same trim and is fixed too. (`sessionIdSchema` keeps trimming: a session id is a UUID, so surrounding whitespace is always an accident.)
+- **Importing the package no longer terminates the importing process.** `main` pointed at the CLI entrypoint, whose token check runs at module load and calls `process.exit(1)` — so `import "tenki-mcp"` killed the host process outright (and with a token set, would have booted a stdio server inside it). The package is now bin-only: `npx tenki-mcp` and every MCP client config are unaffected (they resolve `bin`), and importing raises a catchable module-not-found error instead.
+- **A path or working directory beginning with a hyphen is no longer read as a command option.** Shell-quoting doesn't prevent it: `cd '-L'` silently succeeds into `$HOME`, so `tenki_exec` with such a `cwd` ran the command in the wrong directory, and `mv '-file' …` failed outright. Both now pass `--` before their operands.
 - **Sandbox creation was broken for workspace-scoped API keys.** `resolveOwner` forwarded WhoAmI's `ownerType` verbatim into `CreateSession`, but the API validates `owner_type ∈ {SERVICE, USER}` and now returns `WORKSPACE` for workspace-scoped keys → every `tenki_create_sandbox`/`tenki_run_code` failed with `400 invalid_argument`. Fix: send the same placeholder the first-party SDKs hardcode (`"SERVICE"`/`"self"`) when WhoAmI returns a type CreateSession rejects — the server derives the real owner from the authenticated identity regardless. Verified live: create → exec (structured) → terminate, 12/12 checks.
 - `test/http-transport.test.mjs` no longer asserts `ownerType === "USER"` (stale against the same API change); it accepts any authenticated owner type.
 

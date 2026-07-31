@@ -32,8 +32,9 @@ import { registerRegistry } from "./tools/registry.js";
 import { registerWorkspace } from "./tools/workspace.js";
 import { registerArtifacts } from "./tools/artifacts.js";
 import { registerSsh } from "./tools/ssh.js";
+import { registerAuthStatus } from "./tools/auth_status.js";
 
-export const VERSION = "2.0.0-alpha.2";
+export const VERSION = "2.0.0-alpha.3";
 
 const modules = [
 	registerIdentity,
@@ -62,13 +63,18 @@ const DESTRUCTIVE = /^tenki_(terminate|delete|remove|unshare|revoke|detach|unexp
 // write/spend capability, so they must never be treated as read-only.
 // tenki_get_upload_url returns a signed URL for an arbitrary PUT into the sandbox.
 const WRITE_OVERRIDE = new Set(["tenki_get_upload_url"]);
+// Named exceptions that are pure reads but don't match the READ prefix below.
+// tenki_auth_status only inspects the ambient credential + probes WhoAmI, so it
+// must stay available under TENKI_MCP_READONLY (it is how an operator diagnoses
+// a credential problem in that posture).
+const READ_OVERRIDE = new Set(["tenki_auth_status"]);
 // Pure inspection, no state change / no spend → readOnlyHint.
 const READ = /^tenki_(get|list|whoami|resolve|stat|read)/;
 
 export function classifyTool(name: string): Cls {
 	if (DESTRUCTIVE.test(name)) return "destructive";
 	if (WRITE_OVERRIDE.has(name)) return "write";
-	if (READ.test(name)) return "read";
+	if (READ_OVERRIDE.has(name) || READ.test(name)) return "read";
 	return "write";
 }
 
@@ -76,6 +82,8 @@ interface GuardOpts {
 	readonly: boolean;
 	disabled: Set<string>;
 	audit: boolean;
+	/** Incremented for every tool the guard actually registers (skips excluded). */
+	registered?: { count: number };
 }
 
 function readGuardOpts(): GuardOpts {
@@ -154,6 +162,7 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 					const cls = classifyTool(name);
 					if (opts.disabled.has(name)) return noopToolHandle(); // explicit denylist
 					if (opts.readonly && cls !== "read") return noopToolHandle(); // read-only posture: skip anything that mutates/spends
+					if (opts.registered) opts.registered.count++;
 					return (target.tool as (...a: unknown[]) => unknown)(
 						name,
 						description,
@@ -170,6 +179,7 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 					if (opts.readonly && cls !== "read") return noopToolHandle(); // read-only posture: skip anything that mutates/spends
 					// Name-derived classification stays authoritative for the four hints so
 					// a module cannot soften them; other annotation fields pass through.
+					if (opts.registered) opts.registered.count++;
 					const annotations = {
 						...(config.annotations as Record<string, unknown> | undefined),
 						...annotationsFor(cls),
@@ -186,12 +196,26 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 	}) as McpServer;
 }
 
-/** Build a fresh MCP server instance with all tools registered against `client`. */
-export function createServer(client: TenkiClient): McpServer {
+/**
+ * Build a fresh MCP server instance with all tools registered against `client`.
+ *
+ * `client` is null when no credential was supplied. Rather than refusing to
+ * start — which MCP clients report as an opaque "server failed to start" —
+ * the server boots with ONLY tenki_auth_status registered, so an agent can
+ * discover and explain the missing credential. Registering the other tools in
+ * that state would offer 84 tools that can only fail.
+ */
+export function createServer(client: TenkiClient | null): McpServer {
 	const server = new McpServer({ name: "tenki", version: VERSION });
-	const opts = readGuardOpts();
+	const opts = { ...readGuardOpts(), registered: { count: 0 } };
 	const guarded = guard(server, opts);
-	for (const register of modules) register(guarded, client);
+	if (client) for (const register of modules) register(guarded, client);
+	// Registered last, through the same guard as everything else, so its
+	// toolsRegistered figure counts the tools above it (+1 for itself).
+	// READ_OVERRIDE keeps it available under TENKI_MCP_READONLY;
+	// TENKI_MCP_DISABLED_TOOLS can still drop it.
+	registerAuthStatus(guarded, client, opts.registered.count + 1);
+	if (!client) console.error("tenki-mcp: no credential — only tenki_auth_status registered. Set TENKI_API_KEY or TENKI_AUTH_TOKEN and restart.");
 	if (opts.readonly) console.error("tenki-mcp: TENKI_MCP_READONLY — only read-only tools registered.");
 	else if (opts.disabled.size) console.error(`tenki-mcp: disabled tools — ${[...opts.disabled].join(", ")}`);
 	return server;

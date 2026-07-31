@@ -62,7 +62,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Open (get) a live preview for a port ──────────────────────────────────────
 	server.tool(
 		"tenki_open_preview",
-		"Open (get) a live preview for a port in a sandbox and return its preview URL. The sandbox must have inbound networking enabled (allow_inbound).",
+		"Open a viewer-token-gated (AUTHENTICATED-mode) preview. USE tenki_expose_port OR tenki_create_preview_url INSTEAD for an ordinary web server: for any port other than the web terminal (7681) the API deliberately returns a non-regional fallback host that currently has no edge route, so the URL 404s (live-verified). The returned viewerToken does resolve via tenki_resolve_preview_token; only the URL is unreachable. Requires allow_inbound.",
 		{
 			session_id: sessionIdSchema.describe("The sandbox session serving the port."),
 			port: portSchema.describe("The TCP port inside the sandbox to open a preview for (1-65535)."),
@@ -88,19 +88,33 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── List the preview URLs bound to a sandbox / project ────────────────────────
 	server.tool(
 		"tenki_list_preview_urls",
-		"List preview URLs in a project (defaults to the key's first project), optionally filtered to one sandbox.",
+		"List the workspace's preview URLs, newest page first. Pass session_id to keep only the ones bound to that sandbox (filtered here, not server-side — so it applies to the page you fetched; raise page_size or follow next_page_token to widen it). Results are paginated: a nextPageToken in the response means more pages exist.",
 		{
-			session_id: sessionIdSchema.optional().describe("Optional: filter to preview URLs for this sandbox session."),
-			project_id: z.string().optional().describe("Project to list (defaults to the key's first project)."),
+			session_id: sessionIdSchema
+				.optional()
+				.describe("Keep only preview URLs bound to this sandbox. Applied client-side to the fetched page."),
+			workspace_id: z.string().optional().describe("Workspace to list (defaults to the key's first workspace)."),
+			page_size: z.number().int().min(1).max(100).optional().describe("Rows per page (server default 20, max 100)."),
+			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
-		async ({ session_id, project_id }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(
-				await client.control("ListPreviewUrls", {
-					...(projectId ? { projectId } : {}),
-					...(session_id ? { sessionId: session_id } : {}),
-				}),
-			);
+		async ({ session_id, workspace_id, page_size, page_token }) => {
+			// The RPC has no sessionId field (ListPreviewUrlsRequest: workspace_id,
+			// page_size, page_token, and a deprecated project_id), so a sessionId sent
+			// on the wire is silently discarded and every session's rows come back.
+			// Filter here instead of advertising a filter that does nothing.
+			const workspaceId = workspace_id ?? (await client.resolveOwner()).workspaceId;
+			const resp = await client.control("ListPreviewUrls", {
+				...(workspaceId ? { workspaceId } : {}),
+				...(page_size !== undefined ? { pageSize: page_size } : {}),
+				...(page_token ? { pageToken: page_token } : {}),
+			});
+			const rows: any[] = Array.isArray(resp.previewUrls) ? resp.previewUrls : [];
+			const filtered = session_id ? rows.filter((r) => r?.sessionId === session_id) : rows;
+			return ok({
+				previewUrls: filtered,
+				...(resp.nextPageToken ? { nextPageToken: resp.nextPageToken } : {}),
+				...(session_id ? { filteredClientSide: true, fetchedOnThisPage: rows.length } : {}),
+			});
 		},
 	);
 
