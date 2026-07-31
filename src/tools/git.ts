@@ -16,11 +16,10 @@ const GIT_OPERATIONS = ["clone", "checkout", "diff", "log"] as const;
 export function registerGit(server: McpServer, client: TenkiClient): void {
 	server.tool(
 		"tenki_git",
-		"Run a git operation in a sandbox. Only clone, checkout, diff, and log are supported by the API — for any other git command (status, add, commit, push, ...) use tenki_exec with `git ...`. Arg keys per operation: " +
-			"clone: repo (required, the URL), branch?, depth?, directory? — " +
-			"checkout: ref (required; branch/tag/commit), create? ('true' creates the branch, i.e. -b) — " +
-			"diff: range? (e.g. 'main..HEAD') or base?+head?, path? — " +
-			"log: max_count?, range?, path?.",
+		"Run a git operation in a sandbox. Only clone, checkout, diff, and log are supported by the API — for any other git command (status, add, commit, push, ...) use tenki_exec with `git ...`. " +
+			"clone arg keys: repo (required, the URL), branch?, depth?, directory?. " +
+			"CAVEAT (live-verified): checkout/diff/log run in the session's working directory (/home/tenki), which is not a repository and has no directory arg — so on a repo cloned into a subdirectory they fail with 'not a git repository'. Use tenki_exec with `git -C <directory> ...` instead (e.g. `git -C /home/tenki/hw log -n 2`). " +
+			"For reference, their arg keys are — checkout: ref (required), create? ('true' = -b); diff: range? or base?+head?, path?; log: max_count?, range?, path?.",
 		{
 			session_id: sessionIdSchema,
 			operation: z.enum(GIT_OPERATIONS).describe("One of: clone, checkout, diff, log (the API rejects anything else)."),
