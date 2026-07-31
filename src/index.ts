@@ -33,7 +33,17 @@ if (!token) {
 	);
 }
 const baseUrl = process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined;
-const client = token ? new TenkiClient(token, baseUrl) : null;
+/** Positive integer from env, or undefined so the client keeps its own default. */
+const envMs = (name: string): number | undefined => {
+	const n = Number.parseInt(process.env[name] ?? "", 10);
+	return Number.isFinite(n) && n > 0 ? n : undefined;
+};
+const client = token
+	? new TenkiClient(token, baseUrl, {
+			timeoutMs: envMs("TENKI_MCP_TIMEOUT_MS"),
+			slowTimeoutMs: envMs("TENKI_MCP_SLOW_TIMEOUT_MS"),
+		})
+	: null;
 
 async function main() {
 	if ((process.env.TENKI_MCP_TRANSPORT || "stdio").toLowerCase() === "http") {

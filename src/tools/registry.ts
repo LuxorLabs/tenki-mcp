@@ -28,7 +28,10 @@ export function registerRegistry(server: McpServer, client: TenkiClient): void {
 		"tenki_publish_image",
 		"Publish a custom sandbox image into the workspace registry from a snapshot or a template.",
 		{
-			reference: z.string().describe("Target image reference <workspace>/<artifact>[:tag], e.g. myws/myimage:latest."),
+			reference: z
+				.string()
+				.regex(/^[^:@]+$/, "publish takes the TAGLESS form <workspace>/<artifact> — the API rejects a tag or @snapshot here")
+				.describe("Target image reference in TAGLESS form <workspace>/<artifact>, e.g. myws/myimage — the API rejects a tag or @snapshot on publish."),
 			kind: z.enum(["snapshot", "template"]).describe("Source kind for the image contents."),
 			snapshot_id: z.string().optional().describe("Snapshot id to publish (required when kind=snapshot)."),
 			source_template_id: z.string().optional().describe("Template id to publish (required when kind=template)."),
@@ -141,14 +144,23 @@ export function registerRegistry(server: McpServer, client: TenkiClient): void {
 			grant_id: z.string().optional().describe("Specific share grant to revoke (preferred; provide this or grantee_workspace_id)."),
 			grantee_workspace_id: z.string().optional().describe("Workspace whose access to revoke."),
 		},
-		async ({ reference, grant_id, grantee_workspace_id }) =>
-			ok(
+		async ({ reference, grant_id, grantee_workspace_id }) => {
+			// Without one of these the server revokes nothing and still returns the
+			// image object, which reads as a successful revoke. Mirror the guard
+			// tenki_delete_image already applies to its own one-of.
+			if (!grant_id && !grantee_workspace_id) {
+				throw new Error(
+					"tenki_unshare_image: pass grant_id (preferred) or grantee_workspace_id. With neither, the API revokes nothing and returns the image unchanged, which looks like success.",
+				);
+			}
+			return ok(
 				await client.control("UnshareRegistryImage", {
 					ref: reference,
 					...(grant_id !== undefined ? { grantId: grant_id } : {}),
 					...(grantee_workspace_id !== undefined ? { targetWorkspaceId: grantee_workspace_id } : {}),
 				}),
-			),
+			);
+		},
 	);
 
 	// ── List share grants ───────────────────────────────────────────────────────────
