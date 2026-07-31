@@ -10,10 +10,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER = join(dirname(dirname(fileURLToPath(import.meta.url))), "dist", "index.js");
+const PKG = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const DUMMY = "tk_offline_dummy_key";
 
 let pass = 0, fail = 0;
@@ -48,6 +50,9 @@ try {
 	const init = await client.connect(transport);
 	const info = client.getServerVersion?.() ?? init?.serverInfo;
 	check("handshake → serverInfo name is 'tenki'", info?.name === "tenki", JSON.stringify(info));
+	// VERSION in src/server.ts is hand-maintained; this pins it to package.json
+	// so a release bump can never ship the two out of sync again.
+	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
 	check("advertises 84 tools", tools.length === 84, `${tools.length}`);
@@ -110,11 +115,11 @@ try {
 		);
 		check(
 			"whitespace-only session id rejected pre-network",
-			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /at least 1 character/i),
+			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /must not be empty or whitespace-only/i),
 		);
 		check(
 			"empty path rejected pre-network (tenki_read_file)",
-			await rejectsPreNetwork("tenki_read_file", { session_id: "s", path: "  " }, /at least 1 character/i),
+			await rejectsPreNetwork("tenki_read_file", { session_id: "s", path: "  " }, /must not be empty or whitespace-only/i),
 		);
 	}
 

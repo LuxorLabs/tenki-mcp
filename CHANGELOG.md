@@ -2,7 +2,7 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
-## [Unreleased]
+## [2.0.0-alpha.3] — 2026-08-01 — First npm release: typed git, network hardening, structured output
 
 ### Tool-schema DX (git enum, shared schemas, README)
 
@@ -32,6 +32,7 @@ All notable changes to tenki-mcp. This project follows semantic versioning.
 
 ### Fixed
 
+- **Path and session-id validation no longer rewrites values.** The shared schemas used zod's `.trim()`, which is a *transform*: leading/trailing whitespace (legal in POSIX filenames) was silently stripped from file paths before sending, so `tenki_remove_path`/`tenki_move_path` on such a file operated on a *different* path than the one named. Validation now rejects blank values without modifying them; `tenki_exec`'s `cwd` had the same trim and is fixed too.
 - **Sandbox creation was broken for workspace-scoped API keys.** `resolveOwner` forwarded WhoAmI's `ownerType` verbatim into `CreateSession`, but the API validates `owner_type ∈ {SERVICE, USER}` and now returns `WORKSPACE` for workspace-scoped keys → every `tenki_create_sandbox`/`tenki_run_code` failed with `400 invalid_argument`. Fix: send the same placeholder the first-party SDKs hardcode (`"SERVICE"`/`"self"`) when WhoAmI returns a type CreateSession rejects — the server derives the real owner from the authenticated identity regardless. Verified live: create → exec (structured) → terminate, 12/12 checks.
 - `test/http-transport.test.mjs` no longer asserts `ownerType === "USER"` (stale against the same API change); it accepts any authenticated owner type.
 

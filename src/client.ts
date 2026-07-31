@@ -454,7 +454,9 @@ export class TenkiClient {
 		const errPath = `${SANDBOX_HOME}/.mcp-exec-${suffix}.err`;
 
 		const execLine = [command, ...(opts.args ?? [])].map(shellQuote).join(" ");
-		const cd = opts.cwd && opts.cwd.trim() ? `cd ${shellQuote(opts.cwd.trim())} && ` : "";
+		// .trim() only decides WHETHER a cd is emitted; the quoted value passes
+		// through verbatim — trailing/leading whitespace is legal in dir names.
+		const cd = opts.cwd && opts.cwd.trim() ? `cd ${shellQuote(opts.cwd)} && ` : "";
 		const script = `${cd}${execLine} > ${outPath} 2> ${errPath}`;
 
 		const body: Record<string, unknown> = { sessionId, command: "sh", args: ["-c", script] };

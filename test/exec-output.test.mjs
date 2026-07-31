@@ -115,5 +115,34 @@ const baseResult = {
 	check("unparseable exitCode → -1, output preserved", r.exitCode === -1 && r.stdout === "salvaged output" && r.ok === false, JSON.stringify(r));
 }
 
+// 6) path arguments reach the API VERBATIM — validation must reject blanks
+// without transforming the value. Regression guard: pathSchema briefly used
+// zod's .trim(), which silently retargeted a path carrying leading/trailing
+// whitespace (legal in POSIX filenames) to a different file.
+{
+	const spacey = "/home/tenki/report ";
+	const seen = {};
+	const client = await connect({
+		readTextFile: async (_sid, path) => { seen.read = path; return "x"; },
+		data: async (_sid, method, req) => { seen[method] = req.path; return {}; },
+		execCaptured: async (_sid, _cmd, opts) => { seen.mvArgs = opts.args; return { ...baseResult, command: "mv", args: opts.args ?? [], stdout: "" }; },
+	});
+	const read = await client.callTool({ name: "tenki_read_file", arguments: { session_id: "s1", path: spacey } });
+	check("read_file passes a spacey path verbatim", read.isError !== true && seen.read === spacey, JSON.stringify(seen.read));
+	await client.callTool({ name: "tenki_stat_path", arguments: { session_id: "s1", path: spacey } });
+	check("stat_path passes a spacey path verbatim", seen.Stat === spacey, JSON.stringify(seen.Stat));
+	const mv = await client.callTool({ name: "tenki_move_path", arguments: { session_id: "s1", from: spacey, to: "/home/tenki/b" } });
+	check("move_path passes a spacey source verbatim", mv.isError !== true && Array.isArray(seen.mvArgs) && seen.mvArgs[0] === spacey, JSON.stringify(seen.mvArgs));
+	let blankRejected = false;
+	try {
+		const b = await client.callTool({ name: "tenki_read_file", arguments: { session_id: "s1", path: "   " } });
+		blankRejected = b.isError === true;
+	} catch {
+		blankRejected = true;
+	}
+	check("whitespace-only path still rejected pre-network", blankRejected);
+	await client.close();
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
