@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "tenki-mcp",
+      "identifier": "@tenkicloud/mcp",
       "version": "2.0.0-beta.1",
       "transport": {
         "type": "stdio"

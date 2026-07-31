@@ -1,4 +1,4 @@
-# tenki-mcp
+# tenki-mcp — `@tenkicloud/mcp`
 
 **A [Model Context Protocol](https://modelcontextprotocol.io) server for [Tenki Cloud](https://tenki.cloud).** Give any agent — Claude, Codex, Cursor — a disposable microVM it can create, run code in, read and write files, run git, and expose to the web. Sandboxes boot in ~2 seconds and are billed per second.
 
@@ -59,7 +59,7 @@ Add the same block to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (glob
 }
 ```
 
-Once published to npm, `node /absolute/path/to/tenki-mcp/dist/index.js` becomes `npx -y tenki-mcp` in all three.
+Once published to npm, `node /absolute/path/to/tenki-mcp/dist/index.js` becomes `npx -y @tenkicloud/mcp` in all three. (The package is `@tenkicloud/mcp`, matching the `@tenkicloud/sandbox` SDK; the command it installs is `tenki-mcp`.)
 
 ### Environment variables
 
