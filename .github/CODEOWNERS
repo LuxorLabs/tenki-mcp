@@ -1,11 +1,13 @@
-# Default owner for everything in the repo.
-# Using an individual rather than a team: an unresolvable team silently disables
-# the whole file. Add @LuxorLabs/<team> here once the team exists.
-*                       @camcalaquian
+# Default owners for everything in the repo.
+# Individuals rather than a team on purpose: an unresolvable team — or any owner
+# without write access — silently disables the rule instead of erroring. Both
+# handles below were verified as collaborators. Swap in @LuxorLabs/<team> once
+# such a team exists.
+*                       @camcalaquian @opencolin
 
 # Release-critical paths. A change to any of these can publish to npm or move the
 # MCP Registry entry, so they warrant an explicit look even when the rest is not.
-/.github/workflows/     @camcalaquian
-/package.json           @camcalaquian
-/server.json            @camcalaquian
-/scripts/               @camcalaquian
+/.github/workflows/     @camcalaquian @opencolin
+/package.json           @camcalaquian @opencolin
+/server.json            @camcalaquian @opencolin
+/scripts/               @camcalaquian @opencolin
