@@ -2,7 +2,7 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
-## [2.0.0-alpha.3] — 2026-08-01 — First npm release: typed git, network hardening, structured output
+## [2.0.0-beta.1] — 2026-08-01 — First npm release: typed git, network hardening, structured output
 
 ### Fixed by an end-to-end sweep of all 85 tools against the live API
 

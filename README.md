@@ -107,7 +107,7 @@ Set one of `TENKI_API_KEY` or `TENKI_AUTH_TOKEN` — when both are set, `TENKI_A
 
 **Without a credential the server still starts**, registering only `tenki_auth_status` — so instead of an MCP client reporting an opaque "server failed to start", the agent can call that tool and get told what to set. Ask it "check tenki auth status" any time other tools return auth errors: it reports the credential kind (API key vs session token), the endpoint, and whether a live identity probe succeeded — never the token itself. It reports status only; get a credential with `tenki login` or from the dashboard.
 
-## Host it over HTTP (v2.0-alpha)
+## Host it over HTTP (v2.0-beta)
 
 Besides stdio, the server speaks **Streamable HTTP** so it can be hosted for remote MCP clients:
 
@@ -128,7 +128,7 @@ TENKI_MCP_TRANSPORT=http TENKI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
   TENKI_MCP_HTTP_TOKEN=$(openssl rand -hex 32) TENKI_API_KEY=… node dist/index.js
 ```
 
-Point an HTTP-capable MCP client at `/mcp`. v2.0-alpha uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is not yet implemented. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
+Point an HTTP-capable MCP client at `/mcp`. v2.0-beta uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is not yet implemented. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
 
 ## How it works
 
@@ -143,7 +143,7 @@ The wire details are ported from the live-verified [n8n community node](https://
 This server holds a Tenki API key and can run code + spend credits, so treat it as a capability. Full model + [CSA MCP Server Top-10](https://modelcontextprotocol-security.io/top10/server/) mapping in **[SECURITY.md](SECURITY.md)**. Quick controls:
 
 - **Least privilege:** every tool carries MCP annotations (`readOnlyHint` / `destructiveHint`). Run `TENKI_MCP_READONLY=1` for an inspection-only server (read tools only), or `TENKI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
-- **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http-v20-alpha)).
+- **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http-v20-beta)).
 - **Audit:** `TENKI_MCP_AUDIT=1` logs each tool call's name to stderr.
 - **Untrusted output:** `tenki_run_code`/`tenki_exec`/`tenki_read_file` return output from untrusted code — clients should treat tool results as data, not instructions.
 

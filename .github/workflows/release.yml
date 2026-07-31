@@ -1,0 +1,210 @@
+name: Release
+
+# Publishes tenki-mcp to npm (with provenance) and then registers the new version
+# with the official MCP Registry. Triggered by pushing a v* tag whose version must
+# already match package.json and server.json — the workflow refuses to publish if
+# they disagree, because npm publish is irreversible and the registry step runs
+# after it.
+#
+#   # bump package.json, server.json (version AND packages[0].version), src/server.ts
+#   git commit -am "tenki-mcp 2.0.0-beta.1" && git tag v2.0.0-beta.1
+#   git push origin main --follow-tags
+#
+# FIRST PUBLISH ONLY: npm trusted publishing is configured per-package and the
+# package must already exist, so it cannot mint version one. Add a short-lived
+# granular write token as the NPM_TOKEN secret for that run; this workflow uses it
+# when present and switches to keyless OIDC automatically once it is removed. Then
+# configure the trusted publisher on npmjs.com and delete the secret.
+#
+# Use the workflow_dispatch entry with dry_run (the default) to exercise every gate
+# without publishing anything.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every gate but skip both publishes"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: tenki-standard-small-2c-4g
+    # A GitHub environment turns each publish into a one-click human approval once
+    # you add required reviewers to it. If you set an Environment in the npm
+    # trusted-publisher config, it must match this name exactly.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # npm provenance + trusted publishing, and mcp-publisher OIDC
+    env:
+      # Mapped here because the `secrets` context is not available in step-level
+      # `if:` conditions, while `env` is. Empty when the secret is absent, which is
+      # exactly how the workflow decides between the bootstrap and keyless paths.
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24" # Active LTS; Node 20 went EOL 2026-04-30
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Everything below this line runs BEFORE anything irreversible happens.
+
+      - name: Verify tag matches every manifest
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # No tag on a manual run — check the manifests agree with each other.
+            TAG=$(node -p "require('./package.json').version")
+          else
+            TAG="${GITHUB_REF_NAME#v}"
+          fi
+          node - "$TAG" <<'JS'
+          const tag = process.argv[2];
+          const pkg = require("./package.json");
+          const srv = require("./server.json");
+          const fail = (m) => { console.error(`::error::${m}`); process.exitCode = 1; };
+          if (pkg.version !== tag) fail(`package.json version ${pkg.version} != tag ${tag}`);
+          if (srv.version !== tag) fail(`server.json version ${srv.version} != tag ${tag}`);
+          for (const [i, p] of (srv.packages ?? []).entries())
+            if (p.version !== tag) fail(`server.json packages[${i}].version ${p.version} != tag ${tag}`);
+          // The registry proves npm ownership with an exact, case-sensitive compare
+          // of the published package's mcpName against server.json's name.
+          if (pkg.mcpName !== srv.name) fail(`mcpName ${pkg.mcpName} != server.json name ${srv.name}`);
+          JS
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "npm_name=$(node -p 'require("./package.json").name')" >> "$GITHUB_OUTPUT"
+
+      - name: Validate server.json against the MCP Registry schema
+        run: node scripts/validate-server-json.mjs
+
+      - run: npm run build
+
+      - name: Offline test gate
+        run: npm test # pretest rebuilds; runs all five offline suites
+
+      - name: Parity audit
+        run: node scripts/parity-audit.mjs
+
+      - name: Dependency audit (production deps)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Show the tarball that will be published
+        run: npm pack --dry-run
+
+      # ── Irreversible from here ────────────────────────────────────────────────
+
+      # Two mutually exclusive publish paths. The token path exists ONLY to mint
+      # version one, because a trusted publisher cannot be configured for a package
+      # that does not yet exist. Delete the NPM_TOKEN secret afterwards and the
+      # keyless path takes over with no workflow change.
+      - name: Publish to npm (bootstrap — NPM_TOKEN present)
+        if: (github.event_name == 'push' || !inputs.dry_run) && env.NPM_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Publish to npm (trusted publishing, keyless)
+        if: (github.event_name == 'push' || !inputs.dry_run) && env.NPM_TOKEN == ''
+        run: |
+          set -euo pipefail
+          # Trusted publishing needs npm >= 11.5.1. Node 24 bundles npm 11.x, so this
+          # normally no-ops — it fails loudly rather than silently falling back.
+          node -e 'const p=s=>s.split(/[.-]/).slice(0,3).map(Number),[x,y]=[p(process.argv[1]),p("11.5.1")];
+            for(let i=0;i<3;i++){if(x[i]>y[i])process.exit(0);if(x[i]<y[i]){
+              console.error(`::error::npm ${process.argv[1]} < 11.5.1; trusted publishing unavailable`);process.exit(1);}}' "$(npm --version)"
+          npm publish --provenance --access public
+
+      # The registry fetches registry.npmjs.org/<pkg>/<version> to verify mcpName,
+      # and a fresh publish takes a moment to propagate. Poll instead of sleeping so
+      # the registry step cannot lose that race.
+      - name: Wait for npm to serve the new version
+        if: github.event_name == 'push' || !inputs.dry_run
+        env:
+          PKG: ${{ steps.ver.outputs.npm_name }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/${PKG}/${VERSION}" || echo 000)
+            if [ "$code" = "200" ]; then echo "npm is serving ${PKG}@${VERSION}"; exit 0; fi
+            echo "attempt ${i}/30: HTTP ${code}"; sleep 10
+          done
+          echo "::error::npm did not serve ${PKG}@${VERSION} within 5 minutes"
+          exit 1
+
+      - name: Install mcp-publisher (pinned + checksum-verified)
+        env:
+          MCP_PUBLISHER_VERSION: "1.8.0"
+          # Digest of mcp-publisher_linux_amd64.tar.gz for the version above,
+          # recorded here at review time. Pinning the literal — rather than only
+          # comparing against the checksums file from the same release — means a
+          # retargeted or re-cut upstream release fails this step instead of
+          # silently shipping a different binary. Update both together.
+          MCP_PUBLISHER_SHA256: "1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf"
+        run: |
+          set -euo pipefail
+          base="https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}"
+          asset="mcp-publisher_linux_amd64.tar.gz"
+          # Save under the asset's own name: `sha256sum -c` resolves the path from
+          # the checksum line, so downloading to any other filename fails with
+          # "No such file or directory" (verified).
+          curl -fsSL -o "$asset" "${base}/${asset}"
+          echo "${MCP_PUBLISHER_SHA256}  ${asset}" | sha256sum -c -
+          # Cross-check against the upstream checksums file too: catches a bad
+          # download, and surfaces a mismatch if upstream ever re-cuts the release.
+          curl -fsSL -o checksums.txt "${base}/registry_${MCP_PUBLISHER_VERSION}_checksums.txt"
+          grep " ${asset}\$" checksums.txt | sha256sum -c -
+          tar xzf "$asset" mcp-publisher
+          chmod +x mcp-publisher
+
+      # Grants publish rights for io.github.<repository_owner>/* — i.e.
+      # io.github.LuxorLabs/* for any repo in the org. No secret required.
+      - name: Authenticate to the MCP Registry (GitHub OIDC)
+        if: github.event_name == 'push' || !inputs.dry_run
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to the MCP Registry
+        if: github.event_name == 'push' || !inputs.dry_run
+        run: ./mcp-publisher publish
+
+      - name: Confirm the registry entry is live
+        if: github.event_name == 'push' || !inputs.dry_run
+        run: |
+          set -euo pipefail
+          name=$(node -p 'require("./server.json").name')
+          curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=${name}" | tee /dev/stderr | grep -q "$name"
+
+      - name: Publish summary
+        if: always()
+        env:
+          PKG: ${{ steps.ver.outputs.npm_name }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          {
+            echo "### tenki-mcp release"
+            echo ""
+            echo "- version: \`${VERSION}\`"
+            echo "- npm: https://www.npmjs.com/package/${PKG}/v/${VERSION}"
+            echo "- install: \`npx -y ${PKG}\`"
+            echo ""
+            echo "After a FIRST publish: configure the npm trusted publisher"
+            echo "(org LuxorLabs, repo tenki-mcp, workflow release.yml, environment release),"
+            echo "then delete the NPM_TOKEN secret and revoke the token."
+          } >> "$GITHUB_STEP_SUMMARY"

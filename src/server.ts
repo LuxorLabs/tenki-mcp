@@ -34,7 +34,7 @@ import { registerArtifacts } from "./tools/artifacts.js";
 import { registerSsh } from "./tools/ssh.js";
 import { registerAuthStatus } from "./tools/auth_status.js";
 
-export const VERSION = "2.0.0-alpha.3";
+export const VERSION = "2.0.0-beta.1";
 
 const modules = [
 	registerIdentity,
