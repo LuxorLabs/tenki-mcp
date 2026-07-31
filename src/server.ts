@@ -120,6 +120,22 @@ function withAudit(name: string, handler: (...a: unknown[]) => unknown, audit: b
 }
 
 /**
+ * Handle returned for a tool the guard skipped (denylist / read-only posture).
+ * The real registration APIs return a RegisteredTool handle; a module that
+ * calls .enable()/.remove() on its registration must not crash only in
+ * read-only or denylist mode, so skipped registrations get an inert stand-in.
+ */
+function noopToolHandle() {
+	return {
+		enabled: false,
+		enable() {},
+		disable() {},
+		update() {},
+		remove() {},
+	};
+}
+
+/**
  * Wrap a server so every tool registration from a module is annotated + subject
  * to the least-privilege env controls above. Both registration APIs are guarded:
  * the legacy `.tool(name, description, schema, handler)` form and the modern
@@ -133,8 +149,8 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 			if (prop === "tool") {
 				return (name: string, description: string, schema: unknown, handler: (...a: unknown[]) => unknown) => {
 					const cls = classifyTool(name);
-					if (opts.disabled.has(name)) return; // explicit denylist
-					if (opts.readonly && cls !== "read") return; // read-only posture: skip anything that mutates/spends
+					if (opts.disabled.has(name)) return noopToolHandle(); // explicit denylist
+					if (opts.readonly && cls !== "read") return noopToolHandle(); // read-only posture: skip anything that mutates/spends
 					return (target.tool as (...a: unknown[]) => unknown)(
 						name,
 						description,
@@ -147,8 +163,8 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 			if (prop === "registerTool") {
 				return (name: string, config: Record<string, unknown>, handler: (...a: unknown[]) => unknown) => {
 					const cls = classifyTool(name);
-					if (opts.disabled.has(name)) return; // explicit denylist
-					if (opts.readonly && cls !== "read") return; // read-only posture: skip anything that mutates/spends
+					if (opts.disabled.has(name)) return noopToolHandle(); // explicit denylist
+					if (opts.readonly && cls !== "read") return noopToolHandle(); // read-only posture: skip anything that mutates/spends
 					// Name-derived classification stays authoritative for the four hints so
 					// a module cannot soften them; other annotation fields pass through.
 					const annotations = {
