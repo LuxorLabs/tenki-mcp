@@ -74,7 +74,7 @@ Once published to npm, `node /absolute/path/to/tenki-mcp/dist/index.js` becomes 
 | `TENKI_MCP_TRANSPORT` | `stdio` | `http` serves Streamable HTTP instead (see below). |
 | `PORT` | `3000` | HTTP transport port. |
 | `TENKI_MCP_HTTP_HOST` | `127.0.0.1` | HTTP bind host; non-loopback requires `TENKI_MCP_HTTP_TOKEN`. |
-| `TENKI_MCP_HTTP_TOKEN` | — | Bearer token required by the HTTP endpoint. |
+| `TENKI_MCP_HTTP_TOKEN` | — | Bearer token for the HTTP endpoint; optional on loopback, required on a non-loopback host. |
 
 ## Tools
 

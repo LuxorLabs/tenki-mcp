@@ -67,7 +67,7 @@ export function registerSessionsAdmin(server: McpServer, client: TenkiClient): v
 		"tenki_terminate_sandboxes",
 		"Terminate MULTIPLE sandboxes in one call (bulk). IRREVERSIBLE — every listed sandbox and its filesystem is destroyed. Use tenki_terminate_sandbox for a single one.",
 		{
-			session_ids: z.array(z.string()).min(1).describe("The sandbox/session IDs to terminate."),
+			session_ids: z.array(sessionIdSchema).min(1).describe("The sandbox/session IDs to terminate."),
 		},
 		async ({ session_ids }) => ok(await client.control("TerminateSessions", { sessionIds: session_ids })),
 	);

@@ -24,14 +24,22 @@ export function registerGit(server: McpServer, client: TenkiClient): void {
 		{
 			session_id: sessionIdSchema,
 			operation: z.enum(GIT_OPERATIONS).describe("One of: clone, checkout, diff, log (the API rejects anything else)."),
+			// The wire type is map<string,string>, but the values models most want
+			// to send as numbers or booleans (depth, max_count, create) are
+			// accepted here and coerced — a client-side rejection of `create: true`
+			// for a call that would serialize identically helps nobody.
 			args: z
-				.record(z.string())
+				.record(z.union([z.string(), z.number(), z.boolean()]))
 				.optional()
 				.describe(
-					"Operation args as a key→value object (all values strings). clone: {repo, branch?, depth?, directory?}; checkout: {ref, create?: 'true'}; diff: {range?} or {base?, head?}, {path?}; log: {max_count?, range?, path?}.",
+					"Operation args as a key→value object (values are sent as strings; numbers/booleans are coerced). clone: {repo, branch?, depth?, directory?}; checkout: {ref, create?: 'true'}; diff: {range?} or {base?, head?}, {path?}; log: {max_count?, range?, path?}.",
 				),
 		},
-		async ({ session_id, operation, args }) =>
-			ok(await client.control("GitOperation", { sessionId: session_id, operation, ...(args ? { args } : {}) })),
+		async ({ session_id, operation, args }) => {
+			const stringArgs = args ? Object.fromEntries(Object.entries(args).map(([k, v]) => [k, String(v)])) : undefined;
+			return ok(
+				await client.control("GitOperation", { sessionId: session_id, operation, ...(stringArgs ? { args: stringArgs } : {}) }),
+			);
+		},
 	);
 }

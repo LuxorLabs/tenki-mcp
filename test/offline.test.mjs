@@ -30,8 +30,18 @@ const check = (name, cond, detail = "") => {
 	check("no-key writes nothing to stdout", (r.stdout || "") === "", JSON.stringify((r.stdout || "").slice(0, 40)));
 }
 
-// 2) the server over a real MCP client (spawned with a dummy key) — no network hit
-const transport = new StdioClientTransport({ command: process.execPath, args: [SERVER], env: { ...process.env, TENKI_API_KEY: DUMMY }, stderr: "ignore" });
+// 2) the server over a real MCP client (spawned with a dummy key) — no network hit.
+// The API endpoint is pinned to a dead loopback port so the suite's "ZERO
+// network calls" promise is enforced, not assumed: if a validation regression
+// ever lets a request escape, it fails loudly here instead of reaching
+// api.tenki.cloud with the dummy key.
+const DEAD_ENDPOINT = "http://127.0.0.1:1";
+const transport = new StdioClientTransport({
+	command: process.execPath,
+	args: [SERVER],
+	env: { ...process.env, TENKI_API_KEY: DUMMY, TENKI_API_ENDPOINT: DEAD_ENDPOINT },
+	stderr: "ignore",
+});
 const client = new Client({ name: "offline-test", version: "1.0.0" });
 
 try {
@@ -73,25 +83,35 @@ try {
 	}
 	check("out-of-range tool arg rejected pre-network (cpu_cores 999)", rejected);
 
-	// 3b) shared schemas reject bad input pre-network: port out of range, unsupported git op
+	// 3b) shared schemas reject bad input pre-network: port out of range, unsupported git op.
+	// A bare `isError === true` is NOT enough to pass: a validation regression
+	// would send the request, hit the dead endpoint, and come back isError with
+	// a network message. Only a message naming the schema constraint counts.
 	{
-		let portRejected = false;
-		try {
-			const r = await client.callTool({ name: "tenki_expose_port", arguments: { session_id: "s", port: 99999 } });
-			portRejected = r.isError === true;
-		} catch (e) {
-			portRejected = /-32602|invalid|validation/i.test(e?.message ?? "");
-		}
-		check("out-of-range port rejected pre-network (99999)", portRejected);
+		const rejectsPreNetwork = async (name, args, constraintRe) => {
+			let msg = "";
+			try {
+				const r = await client.callTool({ name, arguments: args });
+				if (r.isError !== true) return false;
+				msg = r.content?.find((c) => c.type === "text")?.text ?? "";
+			} catch (e) {
+				msg = e?.message ?? "";
+			}
+			return constraintRe.test(msg) && !/fetch failed|econn|socket|network/i.test(msg);
+		};
 
-		let gitRejected = false;
-		try {
-			const r = await client.callTool({ name: "tenki_git", arguments: { session_id: "s", operation: "push" } });
-			gitRejected = r.isError === true;
-		} catch (e) {
-			gitRejected = /-32602|invalid|validation/i.test(e?.message ?? "");
-		}
-		check("unsupported git operation rejected pre-network ('push' — API supports clone/checkout/diff/log)", gitRejected);
+		check(
+			"out-of-range port rejected pre-network (99999)",
+			await rejectsPreNetwork("tenki_expose_port", { session_id: "s", port: 99999 }, /65535|less than or equal/i),
+		);
+		check(
+			"unsupported git operation rejected pre-network ('push' — API supports clone/checkout/diff/log)",
+			await rejectsPreNetwork("tenki_git", { session_id: "s", operation: "push" }, /clone.*checkout.*diff.*log|invalid enum/is),
+		);
+		check(
+			"whitespace-only session id rejected pre-network",
+			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /at least 1 character/i),
+		);
 	}
 
 	// 4) unknown tool → clean error (thrown JSON-RPC error OR isError result), not a crash

@@ -8,19 +8,29 @@ export const ok = (value: unknown) => ({
 /** Shared env-map schema used by tools that accept environment variables. */
 export const envSchema = z.record(z.string()).optional().describe("Environment variables as a key→value object.");
 
-/** Shared session-id schema — every per-sandbox tool takes one of these. */
+/** Shared session-id schema — every per-sandbox tool takes one of these.
+ * Trimmed before the min-length check so a whitespace-only id is rejected
+ * client-side like an empty one (the same user mistake one space over). */
 export const sessionIdSchema = z
 	.string()
+	.trim()
 	.min(1)
 	.describe("Sandbox session id (UUID), from tenki_create_sandbox or tenki_list_sandboxes.");
 
 /** Shared TCP-port schema. */
 export const portSchema = z.number().int().min(1).max(65535).describe("TCP port inside the sandbox (1-65535).");
 
-/** Preview-slug schema — live-verified server rules: 3-63 chars, [a-z0-9-]. */
+/**
+ * Preview-slug schema, matching the server's validatePreviewSlug: 3-63 chars,
+ * lowercase/digits/hyphens, no leading/trailing hyphen. ExposePort routes a
+ * slug through the SAME preview validation (exposePersistentPreviewURL), so
+ * this applies to tenki_expose_port too. The server additionally rejects
+ * consecutive hyphens, reserved names, and workspace-length overflows —
+ * those stay server-side.
+ */
 export const slugSchema = z
 	.string()
 	.min(3)
 	.max(63)
-	.regex(/^[a-z0-9-]+$/, "lowercase letters, digits, and hyphens only")
-	.describe("Subdomain slug for the preview URL (3-63 chars, lowercase letters/digits/hyphens).");
+	.regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, "lowercase letters, digits, and hyphens; cannot start or end with a hyphen")
+	.describe("Subdomain slug for the preview URL (3-63 chars, lowercase letters/digits/hyphens, no leading/trailing hyphen).");
