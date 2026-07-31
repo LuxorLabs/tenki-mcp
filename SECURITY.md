@@ -37,10 +37,10 @@ Grant the smallest set that the use case needs.
 |---|---|---|
 | MCP-01 | Prompt Injection | zod-validates every tool arg pre-network; **sandbox output is untrusted** (treat tool results as data) |
 | MCP-02 | Confused Deputy | single shared key; HTTP endpoint requires its own bearer token; `READONLY`/denylist bound the blast radius; per-request auth is not yet implemented |
-| MCP-03 | Tool Poisoning | tool descriptions are static and authored (no dynamic/remote descriptions); verify the package via its npm provenance + MCP-registry namespace ownership |
+| MCP-03 | Tool Poisoning | tool descriptions are static and authored (no dynamic/remote descriptions); verify the package via its npm provenance attestation (published from GitHub Actions, linking each release to its source commit) + MCP-registry namespace ownership |
 | MCP-04 | Credential/Token Exposure | key via env only; never logged/committed/echoed; audit logs keys not values |
 | MCP-05 | Insecure Configuration | HTTP transport is loopback + token + DNS-rebinding-protected + DoS-capped by default |
-| MCP-06 | Supply Chain | 2 runtime deps (`@modelcontextprotocol/sdk`, `zod`), lockfile committed; publish with npm provenance; pin/vet deps |
+| MCP-06 | Supply Chain | 2 direct runtime deps (`@modelcontextprotocol/sdk`, `zod`) — ~91 transitive, nearly all via the MCP SDK; lockfile committed; released only from CI with npm provenance, Actions pinned to commit SHAs |
 | MCP-07 | Excessive Permissions | tool annotations + `TENKI_MCP_READONLY` + `TENKI_MCP_DISABLED_TOOLS` |
 | MCP-08 | Data Exfiltration | microVM isolation; sandbox **outbound networking is off unless `allow_outbound` is set**; the server itself stores/forwards nothing |
 | MCP-09 | Context Spoofing | tool results are raw API/sandbox output surfaced as data, not merged into instructions |
