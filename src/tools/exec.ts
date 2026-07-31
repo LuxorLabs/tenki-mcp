@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient, ExecResult } from "../client.js";
-import { envSchema } from "./common.js";
+import { envSchema, sessionIdSchema } from "./common.js";
 
 /**
  * Structured result contract for tenki_exec. Mirrors ExecResult in client.ts —
@@ -74,7 +74,7 @@ export function registerExec(server: McpServer, client: TenkiClient): void {
 		{
 			description: "Run a command in an existing sandbox and return stdout, stderr, and exit code inline.",
 			inputSchema: {
-				session_id: z.string(),
+				session_id: sessionIdSchema,
 				command: z.string().describe("Executable, e.g. 'npm' or 'python3'."),
 				args: z.array(z.string()).optional().describe("Arguments."),
 				cwd: z.string().optional().describe("Working directory (honored in-script)."),

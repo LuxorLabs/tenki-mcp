@@ -14,7 +14,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok } from "./common.js";
+import { ok, sessionIdSchema } from "./common.js";
 
 const SSH_GATEWAY_SERVICE = "tenki.sandbox.v1.SSHGatewayClientService";
 
@@ -23,7 +23,7 @@ export function registerSsh(server: McpServer, client: TenkiClient): void {
 		"tenki_update_ssh_keys",
 		"Set the SSH authorized public keys on a running sandbox, enabling direct SSH access for the given keys.",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			public_keys: z.array(z.string()).describe("SSH public keys (ssh-ed25519 …, ssh-rsa …) to authorize. Replaces the current set."),
 		},
 		async ({ session_id, public_keys }) =>
@@ -34,7 +34,7 @@ export function registerSsh(server: McpServer, client: TenkiClient): void {
 		"tenki_issue_ssh_cert",
 		"Issue a short-lived SSH certificate for a public key, authorizing SSH access to a sandbox via the SSH gateway.",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			public_key: z.string().describe("The SSH public key to sign into a certificate."),
 		},
 		async ({ session_id, public_key }) =>

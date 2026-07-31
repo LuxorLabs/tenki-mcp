@@ -17,15 +17,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok } from "./common.js";
-
-const portSchema = z.number().int().min(1).max(65535);
-const slugSchema = z
-	.string()
-	.min(3)
-	.max(63)
-	.regex(/^[a-z0-9-]+$/, "lowercase letters, digits, and hyphens only")
-	.describe("Subdomain slug for the preview URL (>=3 chars, lowercase letters/digits/hyphens).");
+import { ok, portSchema, sessionIdSchema, slugSchema } from "./common.js";
 
 export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Unexpose a port (tear down its exposure + preview) ────────────────────────
@@ -33,7 +25,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 		"tenki_unexpose_port",
 		"Remove an inbound port exposure from a sandbox, taking its public URL/preview offline. Use this to un-publish a port previously exposed with tenki_expose_port.",
 		{
-			session_id: z.string().describe("The sandbox session whose port to unexpose."),
+			session_id: sessionIdSchema.describe("The sandbox session whose port to unexpose."),
 			port: portSchema.describe("The TCP port inside the sandbox to unexpose (1-65535)."),
 		},
 		async ({ session_id, port }) => ok(await client.control("UnexposePort", { sessionId: session_id, port })),
@@ -44,7 +36,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 		"tenki_create_preview_url",
 		"Create a shareable public preview URL for a port in a sandbox. The sandbox must have inbound networking enabled (create it with allow_inbound). Project-scoped; defaults to the key's first project.",
 		{
-			session_id: z.string().describe("The sandbox session serving the port."),
+			session_id: sessionIdSchema.describe("The sandbox session serving the port."),
 			port: portSchema.describe("The TCP port inside the sandbox to create a preview URL for (1-65535)."),
 			slug: slugSchema,
 			project_id: z.string().optional().describe("Project the preview URL belongs to (defaults to the key's first project)."),
@@ -72,7 +64,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 		"tenki_open_preview",
 		"Open (get) a live preview for a port in a sandbox and return its preview URL. The sandbox must have inbound networking enabled (allow_inbound).",
 		{
-			session_id: z.string().describe("The sandbox session serving the port."),
+			session_id: sessionIdSchema.describe("The sandbox session serving the port."),
 			port: portSchema.describe("The TCP port inside the sandbox to open a preview for (1-65535)."),
 			project_id: z.string().optional().describe("Project scope (defaults to the key's first project)."),
 			expires_at: z
@@ -98,7 +90,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 		"tenki_list_preview_urls",
 		"List preview URLs in a project (defaults to the key's first project), optionally filtered to one sandbox.",
 		{
-			session_id: z.string().optional().describe("Optional: filter to preview URLs for this sandbox session."),
+			session_id: sessionIdSchema.optional().describe("Optional: filter to preview URLs for this sandbox session."),
 			project_id: z.string().optional().describe("Project to list (defaults to the key's first project)."),
 		},
 		async ({ session_id, project_id }) => {
@@ -155,7 +147,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 		"Bind a named preview URL to a sandbox session and port (advanced routing).",
 		{
 			preview_url_id: z.string().describe("The preview URL id to bind."),
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			port: portSchema.describe("The port to route the preview URL to."),
 		},
 		async ({ preview_url_id, session_id, port }) =>

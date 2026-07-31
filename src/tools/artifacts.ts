@@ -15,14 +15,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok } from "./common.js";
+import { ok, sessionIdSchema } from "./common.js";
 
 export function registerArtifacts(server: McpServer, client: TenkiClient): void {
 	server.tool(
 		"tenki_get_upload_url",
 		"Get a short-lived signed URL to upload (HTTP PUT) a binary file to a path inside a sandbox. Use for non-text payloads too large or binary for tenki_write_file.",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			path: z.string().describe("Destination path in the sandbox, e.g. /home/tenki/data.bin"),
 			content_type: z.string().optional().describe("MIME type of the upload, e.g. application/octet-stream."),
 		},
@@ -40,7 +40,7 @@ export function registerArtifacts(server: McpServer, client: TenkiClient): void 
 		"tenki_get_download_url",
 		"Get a short-lived signed URL to download (HTTP GET) a command artifact from a sandbox by its artifact id (e.g. a command's stdout/stderr artifact). Note: the API supports download-by-artifact-id only, not download-by-path.",
 		{
-			session_id: z.string(),
+			session_id: sessionIdSchema,
 			artifact_id: z.string().describe("Artifact id to download (e.g. a command's stdout/stderr artifact)."),
 		},
 		// GetArtifactDownloadUrl only accepts an artifact UUID; a `path` is rejected (live-verified).
