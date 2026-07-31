@@ -17,6 +17,8 @@ import { readFileSync } from "node:fs";
 const read = (f) => JSON.parse(readFileSync(new URL(`../${f}`, import.meta.url), "utf8"));
 const pkg = read("package.json");
 const srv = read("server.json");
+// Read from source rather than dist/ so this stays a fast fail that needs no build.
+const serverTs = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
 
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
 const SCHEMA_RE = /^https:\/\/static\.modelcontextprotocol\.io\/schemas\/[A-Za-z0-9_~.-]+\/server\.schema\.json$/;
@@ -73,6 +75,21 @@ for (const [i, p] of (srv.packages ?? []).entries()) {
     check(
       p.identifier === pkg.name,
       `server.json packages[${i}].identifier (${p.identifier}) != package.json name (${pkg.name})`,
+    );
+  }
+}
+
+// src/server.ts's VERSION is hand-maintained and reported to clients as
+// serverInfo.version. The offline suite pins it to package.json too, but that
+// needs a build; checking it here fails a release in seconds instead of minutes,
+// and covers the fourth place a release bump has to touch.
+{
+  const m = serverTs.match(/export const VERSION = "([^"]+)"/);
+  check(m !== null, "src/server.ts does not export a VERSION string literal");
+  if (m) {
+    check(
+      m[1] === pkg.version,
+      `src/server.ts VERSION (${m[1]}) != package.json version (${pkg.version})`,
     );
   }
 }
