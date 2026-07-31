@@ -1,0 +1,127 @@
+.github/workflows/ci.yml
+  s_cbfc88b8fa26fc::t_a56a7cb3a0e9ac 1-43
+CHANGELOG.md
+  s_cbfc88b8fa26fc::t_476c0aebed3e88 1-131
+package.json
+  s_cbfc88b8fa26fc::t_9e122e08dbcd1f 1-62
+src/client.ts
+  s_cbfc88b8fa26fc::t_2d216574747d8f 1-543
+src/server.ts
+  s_cbfc88b8fa26fc::t_0ea86796282a61 1-195
+src/tools/exec.ts
+  s_cbfc88b8fa26fc::t_716354ce32b9af 1-101
+src/tools/files_ops.ts
+  s_cbfc88b8fa26fc::t_3f7204be6152b6 1-86
+test/client-net.test.mjs
+  s_cbfc88b8fa26fc::t_f83041f359449a 1-362
+test/exec-output.test.mjs
+  s_cbfc88b8fa26fc::t_f8bcb2af9304f9 1-119
+test/harness.mjs
+  s_cbfc88b8fa26fc::t_2684ac9c512eea 1-175
+test/http-transport.test.mjs
+  s_cbfc88b8fa26fc::t_2d121321f88201 1-120
+test/offline.test.mjs
+  s_cbfc88b8fa26fc::t_8352e7131041ad 1-94
+test/security.test.mjs
+  s_cbfc88b8fa26fc::t_65312bf4294eff 1-67
+CONTRIBUTING.md
+  s_ff05f0a6f5a801::t_f977d6bce0e417 1-49
+.env.example
+  s_cbfc88b8fa26fc::t_2098c8363a6984 1-25
+.gitignore
+  s_cbfc88b8fa26fc::t_e43186f9c15b83 1-13
+LICENSE
+  s_cbfc88b8fa26fc::t_3e2e05f436667e 1-21
+README.md
+  s_cbfc88b8fa26fc::t_456e3d407100ae 1-119
+SECURITY.md
+  s_cbfc88b8fa26fc::t_253486c06538dc 1-50
+package-lock.json
+  s_cbfc88b8fa26fc::t_7e527374323986 1-1217
+scripts/live-test.mjs
+  s_cbfc88b8fa26fc::t_eb89e23c3bf858 1-69
+scripts/parity-audit.mjs
+  s_cbfc88b8fa26fc::t_a2c06cd3b4deef 1-104
+scripts/verify-domains.mjs
+  s_cbfc88b8fa26fc::t_4ad367d9c1c6a4 1-89
+server.json
+  s_cbfc88b8fa26fc::t_5491233c2877b6 1-37
+src/http.ts
+  s_cbfc88b8fa26fc::t_d6d2e2a0992081 1-246
+src/index.ts
+  s_cbfc88b8fa26fc::t_0349f7dcbe401a 1-47
+src/tools/artifacts.ts
+  s_cbfc88b8fa26fc::t_c799d259f2f672 1-50
+src/tools/common.ts
+  s_cbfc88b8fa26fc::t_f93c3b988d1bbb 1-9
+src/tools/files.ts
+  s_cbfc88b8fa26fc::t_38ac1c8759f508 1-29
+src/tools/git.ts
+  s_cbfc88b8fa26fc::t_8565cb6ac26fcb 1-20
+src/tools/identity.ts
+  s_cbfc88b8fa26fc::t_fff4babfea8786 1-14
+src/tools/ports.ts
+  s_cbfc88b8fa26fc::t_ecbe745cb3fa08 1-23
+src/tools/previews.ts
+  s_cbfc88b8fa26fc::t_ba5aeae499567b 1-178
+src/tools/registry.ts
+  s_cbfc88b8fa26fc::t_9f98209636d98a 1-180
+src/tools/run.ts
+  s_cbfc88b8fa26fc::t_82c356faaf8ddf 1-21
+src/tools/sandboxes.ts
+  s_cbfc88b8fa26fc::t_800d6b7bba5e11 1-108
+src/tools/sessions_admin.ts
+  s_cbfc88b8fa26fc::t_5d3675ad62e820 1-125
+src/tools/snapshots.ts
+  s_cbfc88b8fa26fc::t_d7279100699fb0 1-173
+src/tools/ssh.ts
+  s_cbfc88b8fa26fc::t_666f0d3a5b7e1b 1-53
+src/tools/templates.ts
+  s_cbfc88b8fa26fc::t_fc9ee81a3ecb79 1-222
+src/tools/volumes.ts
+  s_cbfc88b8fa26fc::t_e0c7d6e926aa0a 1-176
+src/tools/workspace.ts
+  s_cbfc88b8fa26fc::t_7988ec1d21c605 1-131
+test/admin-previews.test.mjs
+  s_cbfc88b8fa26fc::t_622d2d21f9cd09 1-449
+test/client-integration.test.mjs
+  s_cbfc88b8fa26fc::t_fca9d44842c6ee 1-347
+test/coverage.test.mjs
+  s_cbfc88b8fa26fc::t_0de7a946f3dc78 1-165
+test/errors-edge.test.mjs
+  s_cbfc88b8fa26fc::t_ec12c4484a1951 1-312
+test/http-input.test.mjs
+  s_cbfc88b8fa26fc::t_ef328af1f07da9 1-63
+test/journeys.test.mjs
+  s_cbfc88b8fa26fc::t_5b911507feef93 1-329
+test/registry-shapes.test.mjs
+  s_cbfc88b8fa26fc::t_34baa7c1ba1dec 1-84
+test/run.mjs
+  s_cbfc88b8fa26fc::t_ab910610192272 1-26
+tsconfig.json
+  s_cbfc88b8fa26fc::t_4d362e6abf190d 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "98d724107840ee53d32255a85498697f48993fdc",
+  "prompts": {},
+  "sessions": {
+    "s_cbfc88b8fa26fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91364208-c9b8-461d-a524-ab0034079597",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "opencolin <colin@lowenberg.org>"
+    },
+    "s_ff05f0a6f5a801": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aab0522561735fb7a",
+        "model": "unknown"
+      },
+      "human_author": "opencolin <colin@lowenberg.org>"
+    }
+  }
+}
