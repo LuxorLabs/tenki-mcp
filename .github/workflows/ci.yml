@@ -13,11 +13,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Cheap, fails fast, and catches the class of error that would otherwise only
+  # surface AFTER npm publish has already succeeded during a release.
+  manifests:
+    name: Manifest consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Validate server.json / package.json for MCP Registry publish
+        run: node scripts/validate-server-json.mjs
+
   build-and-parity:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node: [20, 22]
+        # 24 = Active LTS, 22 = Maintenance LTS. Node 20 went EOL 2026-04-30
+        # and was dropped; keep this matrix in step with package.json engines.
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,19 +41,53 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: "npm"
       - run: npm ci
+
       - name: Build
         run: npm run build
-      - name: HTTP input boundary (offline regression)
-        run: node test/http-input.test.mjs
+
+      # Invoke the package's own test script rather than re-listing suites here.
+      # The previous inline list had already drifted: test/exec-output.test.mjs
+      # was in `npm test` but absent from CI.
+      - name: Offline test suite
+        run: npm test
+
       - name: Parity audit (fails if any API method lacks a tool)
         run: node scripts/parity-audit.mjs
-      - name: Offline test suite (no live token needed)
-        run: node test/offline.test.mjs
-      - name: Security posture suite (annotations, read-only mode, denylist)
-        run: node test/security.test.mjs
-      - name: Client network behavior (retry policy, timeouts, credential cache — local stub)
-        run: node test/client-net.test.mjs
-      - name: Dependency audit (production deps)
-        run: npm audit --omit=dev --audit-level=high
-      # The live suites (test/*.test.mjs against api.tenki.cloud) need a TENKI_API_KEY
+
+      # The live suites (test/journeys, coverage, errors-edge, admin-previews,
+      # client-integration, http-transport, registry-shapes) need a TENKI_API_KEY
       # secret + reachable data plane; run them locally with `npm run test:all`.
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      # Its own job so a transient registry hiccup or a fresh advisory does not
+      # mask the build/test result, and so it runs once instead of per matrix leg.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  # Proves the published tarball is exactly what is intended, on every PR --
+  # before a tag makes it irreversible.
+  package:
+    name: Package contents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      - name: Pack and list contents
+        run: |
+          npm pack --dry-run 2>&1 | tee pack.log
+          # dist/index.js is the bin entrypoint; if it is missing the package is
+          # installable but unrunnable.
+          grep -q 'dist/index.js' pack.log || { echo "::error::dist/index.js absent from tarball"; exit 1; }
