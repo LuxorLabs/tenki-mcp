@@ -1,0 +1,19 @@
+README.md
+  s_cbfc88b8fa26fc::t_9fbc270f363d34 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "96a9d3e4beefe7519ce53a5e21a010472d4ce0d3",
+  "prompts": {},
+  "sessions": {
+    "s_cbfc88b8fa26fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91364208-c9b8-461d-a524-ab0034079597",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "opencolin <colin@lowenberg.org>"
+    }
+  }
+}
