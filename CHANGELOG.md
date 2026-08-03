@@ -56,6 +56,12 @@ Published as **`@tenkicloud/mcp`**, matching the `@tenkicloud/sandbox` SDK. Inst
 - **Sandbox creation was broken for workspace-scoped API keys.** `resolveOwner` forwarded WhoAmI's `ownerType` verbatim into `CreateSession`, but the API validates `owner_type ∈ {SERVICE, USER}` and now returns `WORKSPACE` for workspace-scoped keys → every `tenki_create_sandbox`/`tenki_run_code` failed with `400 invalid_argument`. Fix: send the same placeholder the first-party SDKs hardcode (`"SERVICE"`/`"self"`) when WhoAmI returns a type CreateSession rejects — the server derives the real owner from the authenticated identity regardless. Verified live: create → exec (structured) → terminate, 12/12 checks.
 - `test/http-transport.test.mjs` no longer asserts `ownerType === "USER"` (stale against the same API change); it accepts any authenticated owner type.
 
+---
+
+# Pre-npm history
+
+Everything below predates the npm publish. These versions were internal git-tag releases of the unpublished `tenki-mcp` server; versioning restarted at 0.1.0 for the first npm release as `@tenkicloud/mcp`. The `[0.1.0]` at the bottom of this section is the original internal release from 2026-07-20, unrelated to the published 0.1.0 above.
+
 ## [2.0.0-alpha.2] — 2026-07-27 — MCP security hardening + registry fixes
 
 ### MCP security hardening (least privilege + annotations)
