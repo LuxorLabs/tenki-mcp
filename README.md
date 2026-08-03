@@ -20,6 +20,8 @@ npx -y @tenkicloud/mcp     # speaks MCP over stdio
 
 Nothing to clone or build. The package installs one command, `tenki-mcp`.
 
+> **Heads up — pending first npm publish.** Until `@tenkicloud/mcp` lands on npm, use [Run it from a clone](#run-it-from-a-clone-instead) below. Every `npx -y @tenkicloud/mcp` form here activates the moment it's published.
+
 ### Use it in Claude Code
 
 ```bash
@@ -57,6 +59,26 @@ Add the same block to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (glob
   }
 }
 ```
+
+### Use it in Codex
+
+The OpenAI Codex CLI reads MCP servers from `~/.codex/config.toml`. Add:
+
+```toml
+[mcp_servers.tenki]
+command = "npx"
+args = ["-y", "@tenkicloud/mcp"]
+env = { TENKI_API_KEY = "tk_your_key_here" }
+```
+
+### Confirm it's working
+
+After adding the server, **start a fresh session** so the client loads it, then ask your agent one of:
+
+- *"Check tenki auth status."* — confirms your credential was picked up.
+- *"Run `print(2+2)` in a fresh Tenki sandbox."* — a full boot → run → teardown round-trip.
+
+If the `tenki_*` tools don't show up, restart the client so it re-reads its config.
 
 No key yet? Start the server without one and ask the agent to check `tenki_auth_status` — it reports what to set and where. See [Auth](#auth).
 
