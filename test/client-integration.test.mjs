@@ -21,6 +21,7 @@
  * check/report/cleanup plumbing and as the canonical advertised-tool set (h.tools).
  */
 import { Harness, isDataPlaneOutage } from "./harness.mjs";
+import { VERSION } from "../dist/server.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { CallToolResultSchema, LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
@@ -163,10 +164,10 @@ console.log(`connected — ${h.tools.length} tools\n`);
 try {
 	// ══ mcp-handshake-toolslist ═════════════════════════════════════════════════════
 
-	await h.check("handshake: serverInfo {name:tenki, version:1.0.1} + capabilities.tools.listChanged", async () => {
+	await h.check(`handshake: serverInfo {name:tenki, version:${VERSION}} + capabilities.tools.listChanged`, async () => {
 		const info = h.client.getServerVersion();
 		must(info?.name === "tenki", `serverInfo.name=${info?.name} (want 'tenki')`);
-		must(info?.version === "1.0.1", `serverInfo.version=${info?.version} (want '1.0.1')`);
+		must(info?.version === VERSION, `serverInfo.version=${info?.version} (want '${VERSION}')`);
 		const caps = h.client.getServerCapabilities();
 		must(caps?.tools?.listChanged === true, `capabilities.tools.listChanged=${JSON.stringify(caps?.tools)}`);
 	});
@@ -196,7 +197,7 @@ try {
 		must(!latest.init.error, `initialize errored: ${JSON.stringify(latest.init.error)}`);
 		must(latest.init.result?.protocolVersion === LATEST_PROTOCOL_VERSION, `echoed protocol ${latest.init.result?.protocolVersion} (want ${LATEST_PROTOCOL_VERSION})`);
 		const si = latest.init.result?.serverInfo;
-		must(si?.name === "tenki" && si?.version === "1.0.1", `serverInfo=${JSON.stringify(si)}`);
+		must(si?.name === "tenki" && si?.version === VERSION, `serverInfo=${JSON.stringify(si)}`);
 		must(latest.init.result?.capabilities?.tools?.listChanged === true, `capabilities=${JSON.stringify(latest.init.result?.capabilities)}`);
 		must(latest.list?.result?.tools?.length === h.tools.length, `raw tools/list=${latest.list?.result?.tools?.length} (want ${h.tools.length})`);
 		must(latest.initMs < 2000, `handshake took ${latest.initMs}ms (want <2000ms offline)`);
