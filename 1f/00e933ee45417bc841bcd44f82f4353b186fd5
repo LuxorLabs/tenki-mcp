@@ -1,0 +1,21 @@
+src/server.ts
+  s_cbfc88b8fa26fc::t_255b0d9b97bc99 201,205,209
+  s_cbfc88b8fa26fc::t_3e027397fba6e7 188
+  s_cbfc88b8fa26fc::t_7580e3e8e304d8 117-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "1f00e933ee45417bc841bcd44f82f4353b186fd5",
+  "prompts": {},
+  "sessions": {
+    "s_cbfc88b8fa26fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91364208-c9b8-461d-a524-ab0034079597",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "opencolin <colin@lowenberg.org>"
+    }
+  }
+}
