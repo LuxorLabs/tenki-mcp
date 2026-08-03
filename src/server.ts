@@ -114,6 +114,24 @@ function annotationsFor(cls: Cls) {
 	};
 }
 
+// Words to upper-case whole when building a display title (acronyms/initialisms).
+const TITLE_ACRONYMS = new Set(["url", "urls", "ssh", "id", "ids", "vm", "vms", "cpu", "ip", "tcp", "http", "https", "json", "rpc", "ssl", "tls", "api", "os", "pr"]);
+
+/**
+ * Human-readable display title derived from a tool's name, e.g.
+ * `tenki_get_upload_url` → "Get Upload URL", `tenki_list_ssh_gateways` →
+ * "List SSH Gateways". Hosts (Claude, ChatGPT, …) surface `title` in their tool
+ * pickers; deriving it centrally means every tool gets one and none can drift.
+ */
+function titleFor(name: string): string {
+	return name
+		.replace(/^tenki_/, "")
+		.split("_")
+		.filter(Boolean)
+		.map((w) => (TITLE_ACRONYMS.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+		.join(" ");
+}
+
 /** Wrap a handler so TENKI_MCP_AUDIT=1 logs the call name + argument keys. */
 function withAudit(name: string, handler: (...a: unknown[]) => unknown, audit: boolean) {
 	if (!audit) return handler;
@@ -167,7 +185,7 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 						name,
 						description,
 						schema,
-						annotationsFor(cls),
+						{ ...annotationsFor(cls), title: titleFor(name) },
 						withAudit(name, handler, opts.audit),
 					);
 				};
@@ -180,13 +198,15 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 					// Name-derived classification stays authoritative for the four hints so
 					// a module cannot soften them; other annotation fields pass through.
 					if (opts.registered) opts.registered.count++;
+					const title = (config.title as string | undefined) ?? titleFor(name);
 					const annotations = {
 						...(config.annotations as Record<string, unknown> | undefined),
 						...annotationsFor(cls),
+						title,
 					};
 					return (target.registerTool as (...a: unknown[]) => unknown)(
 						name,
-						{ ...config, annotations },
+						{ ...config, title, annotations },
 						withAudit(name, handler, opts.audit),
 					);
 				};
