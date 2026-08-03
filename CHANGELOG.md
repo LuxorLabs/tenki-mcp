@@ -2,7 +2,7 @@
 
 All notable changes to tenki-mcp. This project follows semantic versioning.
 
-## [2.0.0-beta.1] — 2026-08-01 — First npm release: typed git, network hardening, structured output
+## [0.1.0] — 2026-08-03 — First npm release: typed git, network hardening, structured output
 
 Published as **`@tenkicloud/mcp`**, matching the `@tenkicloud/sandbox` SDK. Install with `npx -y @tenkicloud/mcp`; the command it provides is still `tenki-mcp`.
 
