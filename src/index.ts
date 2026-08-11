@@ -29,7 +29,7 @@ if (!token) {
 	console.error(
 		"tenki-mcp: no credential — starting in unauthenticated mode (only tenki_auth_status is available). " +
 			"Set TENKI_API_KEY (tk_…) or TENKI_AUTH_TOKEN (ory_st_…) in the server's env and restart, " +
-			"e.g. claude mcp add tenki --env TENKI_API_KEY=tk_… -- npx -y tenki-mcp",
+			"e.g. claude mcp add tenki --env TENKI_API_KEY=tk_… -- npx -y @tenkicloud/mcp",
 	);
 }
 const baseUrl = process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined;

@@ -20,8 +20,6 @@ npx -y @tenkicloud/mcp     # speaks MCP over stdio
 
 Nothing to clone or build. The package installs one command, `tenki-mcp`.
 
-> **Heads up — pending first npm publish.** Until `@tenkicloud/mcp` lands on npm, use [Run it from a clone](#run-it-from-a-clone-instead) below. Every `npx -y @tenkicloud/mcp` form here activates the moment it's published.
-
 ### Use it in Claude Code
 
 ```bash
