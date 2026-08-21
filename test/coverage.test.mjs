@@ -136,11 +136,6 @@ try {
 		h.resources.template = h.resources.template.filter((x) => x !== tid);
 	});
 
-	// ── registry (read) ─────────────────────────────────────────────────────────────
-	await h.check("registry: list images", async () => {
-		await h.call("tenki_list_images", {});
-	});
-
 	// ── workspace ────────────────────────────────────────────────────────────────
 	await h.check("workspace: usage → settings → retention", async () => {
 		await h.call("tenki_get_workspace_usage", {});

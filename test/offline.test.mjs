@@ -98,8 +98,9 @@ try {
 	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
-	check("advertises 85 tools (84 + tenki_auth_status)", tools.length === 85, `${tools.length}`);
+	check("advertises 75 tools (74 + tenki_auth_status)", tools.length === 75, `${tools.length}`);
 	const names = tools.map((t) => t.name);
+	check("standalone registry terminology is absent", !/registry/i.test(JSON.stringify(tools)));
 	check("no duplicate tool names", new Set(names).size === names.length);
 	check("every tool name matches ^tenki_[a-z0-9_]+$", names.every((n) => /^tenki_[a-z0-9_]+$/.test(n)));
 	check("every tool has a non-empty description", tools.every((t) => typeof t.description === "string" && t.description.length > 0));

@@ -8,7 +8,7 @@ import { ok, envSchema, sessionIdSchema } from "./common.js";
 export function registerSandboxes(server: McpServer, client: TenkiClient): void {
 	server.tool(
 		"tenki_create_sandbox",
-		"Create a persistent sandbox microVM. Returns the session (id, state) and its data-plane endpoint. Boots in ~2s. Use tenki_exec / tenki_read_file / tenki_write_file against the returned session_id.",
+		"Create a persistent sandbox microVM, optionally from a snapshot or template image. Returns the session (id, state) and its data-plane endpoint. Boots in ~2s. Use tenki_exec / tenki_read_file / tenki_write_file against the returned session_id.",
 		{
 			name: z.string().optional().describe("Human-readable name."),
 			cpu_cores: z.number().int().min(1).max(16).optional().describe("vCPUs (default 2)."),
@@ -20,7 +20,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 			allow_outbound: z.boolean().optional().describe("Allow outbound networking (off by default)."),
 			allow_inbound: z.boolean().optional().describe("Allow inbound networking (off by default)."),
 			snapshot_id: z.string().optional().describe("Boot from a snapshot."),
-			registry_ref: z.string().optional().describe("Boot from a custom registry image."),
+			image: z.string().optional().describe("Boot from a reusable template image returned by tenki_build_template."),
 			tags: z.array(z.string()).optional().describe("Tags for later filtering."),
 			project_id: z.string().optional().describe("Project to create in (defaults to the key's first project)."),
 			workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
@@ -46,7 +46,8 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 				...(a.allow_outbound ? { allowOutbound: true } : {}),
 				...(a.allow_inbound ? { allowInbound: true } : {}),
 				...(a.snapshot_id ? { snapshotId: a.snapshot_id } : {}),
-				...(a.registry_ref ? { registryRef: a.registry_ref } : {}),
+				// The API still uses registryRef internally for template-image launches.
+				...(a.image ? { registryRef: a.image } : {}),
 				...(a.tags && a.tags.length ? { tags: a.tags } : {}),
 				...(a.env && Object.keys(a.env).length ? { env: a.env } : {}),
 			};

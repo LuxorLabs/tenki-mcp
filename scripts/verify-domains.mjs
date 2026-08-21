@@ -27,7 +27,6 @@ await check("ListVolumes", () => client.control("ListVolumes", { workspaceId: ws
 await check("ListSnapshots", () => client.control("ListSnapshots", {}));
 await check("ListDanglingSnapshots", () => client.control("ListDanglingSnapshots", {}));
 await check("ListTemplates", () => client.control("ListTemplates", { workspaceId: ws }));
-await check("ListRegistryImages", () => client.control("ListRegistryImages", {}));
 await check("ListWorkspaceSandboxes", () => client.control("ListWorkspaceSandboxes", { workspaceId: ws }));
 await check("ListProjectSandboxes", () => client.control("ListProjectSandboxes", { projectId: proj }));
 

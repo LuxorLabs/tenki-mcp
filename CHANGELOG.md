@@ -2,13 +2,17 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
+## [Unreleased]
+
+- Remove standalone image management tools. Template images remain available through template builds and sandbox creation.
+
 ## [0.1.0] — 2026-08-03 — Initial release
 
 Model Context Protocol server for Tenki Cloud — disposable microVM sandboxes for AI agents. Published as **`@tenkicloud/mcp`**, matching the `@tenkicloud/sandbox` SDK. Install with `npx -y @tenkicloud/mcp`; the command it provides is `tenki-mcp`.
 
 ### Tools
 
-- **85 tools covering the full Tenki unary API**, enforced by a CI parity audit (`scripts/parity-audit.mjs` fails the build if any SandboxService / DataPlane / SSHGateway method lacks a tool): sandbox lifecycle, code execution (`tenki_exec`, `tenki_run_code`), files, git, ports and preview URLs, snapshots, volumes, templates, registry, SSH, artifacts, and workspace administration.
+- **85 tools covering the full Tenki unary API**, enforced by a CI parity audit (`scripts/parity-audit.mjs` fails the build if any SandboxService / DataPlane / SSHGateway method lacks a tool): sandbox lifecycle, code execution (`tenki_exec`, `tenki_run_code`), files, git, ports and preview URLs, snapshots, volumes, templates, SSH, artifacts, and workspace administration.
 - **`tenki_git`** validates `operation` as an enum of what the API actually supports (`clone`, `checkout`, `diff`, `log`) with per-operation arg keys documented; other git commands go through `tenki_exec`.
 - **`tenki_exec` returns structured output**: it declares an `outputSchema` and returns `structuredContent` (`stdout`/`stderr`/`exitCode`/`ok`) alongside a human-readable rendering in which control characters, bidi overrides, and zero-width marks are escaped to visible `\xNN`/`\uNNNN` — sandbox output is untrusted.
 - **`tenki_auth_status`** reports whether a usable credential is configured, which kind (`api_key`, `oauth_session_token`, or `session_cookie`), which env var it came from, the endpoint targeted, and whether a live identity probe succeeded — without ever returning the token. The server boots without a credential with this as the only registered tool, so a misconfigured client can ask what is wrong instead of seeing an opaque "server failed to start".

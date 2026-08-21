@@ -12,8 +12,6 @@
  *   • ssh                         list_ssh_gateways (separate SSHGatewayClientService),
  *                                 update_ssh_keys on a sandbox (throwaway TEST pubkey),
  *                                 issue_ssh_cert wire-contract + ghost-session guard.
- *   • registry                    list_images + list_image_share_grants (ACL read),
- *                                 get/resolve NotFound guards. NO publish / NO share.
  *   • previews                    on an allow_inbound sandbox: expose → create_preview_url
  *                                 (slug) → get → list → delete → unexpose, plus the
  *                                 non-inbound + bad-project + invalid-slug guardrails.
@@ -290,35 +288,6 @@ try {
 
 	await h.check("ssh: issue_ssh_cert on a ghost session → clean isError (no crash/hang)", async () => {
 		await h.expectError("tenki_issue_ssh_cert", { session_id: "sess_ghost_admprev", public_key: TEST_SSH_PUBKEY });
-	});
-
-	// ── registry: read surface + ACL (list share grants). NO publish, NO share. ──────
-	await h.check("registry: list_images (read)", async () => {
-		const r = await h.call("tenki_list_images", {});
-		if (r === undefined || r === null || typeof r !== "object")
-			throw new Error(`malformed images payload: ${JSON.stringify(r).slice(0, 80)}`);
-	});
-	await h.check("registry: list_image_share_grants (ACL surface read)", async () => {
-		// FIXED (v1.0.2): the tool now sends `ref` (a tag-free reference), not the
-		// ignored `reference`. For an absent image a tag-free ref returns a clean
-		// NotFound/empty — proof the ACL-read surface is reachable. A "ref required"
-		// 400 here would be a regression.
-		try {
-			const r = await h.call("tenki_list_image_share_grants", { reference: "admprev/nope" });
-			if (r === undefined || r === null || typeof r !== "object")
-				throw new Error(`malformed grants payload: ${JSON.stringify(r).slice(0, 80)}`);
-		} catch (e) {
-			const m = e?.message ?? String(e);
-			if (/one of image_id or ref is required/i.test(m)) throw new Error("REGRESSION: sends `reference` not `ref`");
-			if (/not.?found|failed \(404|does not exist|no such|unknown image/i.test(m)) return; // reachable; image just absent
-			throw e;
-		}
-	});
-	await h.check("registry: get_image on nonexistent ref → clean isError", async () => {
-		await h.expectError("tenki_get_image", { reference: "noone/nothere-admprev:latest" });
-	});
-	await h.check("registry: resolve_image_ref on nonexistent ref → clean isError", async () => {
-		await h.expectError("tenki_resolve_image_ref", { registry_ref: "noone/nothere-admprev:latest" });
 	});
 
 	// ── previews: full lifecycle on the allow_inbound sandbox ────────────────────────

@@ -28,7 +28,6 @@ import { registerPreviews } from "./tools/previews.js";
 import { registerSnapshots } from "./tools/snapshots.js";
 import { registerVolumes } from "./tools/volumes.js";
 import { registerTemplates } from "./tools/templates.js";
-import { registerRegistry } from "./tools/registry.js";
 import { registerWorkspace } from "./tools/workspace.js";
 import { registerArtifacts } from "./tools/artifacts.js";
 import { registerSsh } from "./tools/ssh.js";
@@ -50,7 +49,6 @@ const modules = [
 	registerSnapshots,
 	registerVolumes,
 	registerTemplates,
-	registerRegistry,
 	registerWorkspace,
 	registerArtifacts,
 	registerSsh,

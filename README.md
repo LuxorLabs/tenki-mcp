@@ -111,7 +111,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 
 ## Tools
 
-**85 tools** — 84 with full parity to the Tenki unary API (enforced by a CI [parity audit](scripts/parity-audit.mjs)), plus `tenki_auth_status`. Grouped by domain:
+**75 tools** — 74 covering Tenki's public sandbox workflows (enforced by a CI [parity audit](scripts/parity-audit.mjs)), plus `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
@@ -129,7 +129,6 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | **Snapshots** | create · get · list · list-session · list-project · list-workspace · list-dangling · update · delete · get-download-url |
 | **Volumes** | create · get · list · list-project · update · delete · resize · attach · detach |
 | **Templates** | create · get · list · list-project · update · delete · build · cancel-build · get-build · list-active-builds |
-| **Registry** (custom images) | publish · get · list · set-visibility · delete · resolve-ref · share · unshare · list-share-grants · revoke-share-grant |
 | **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_settings` · `tenki_update_workspace_settings` · `tenki_get_snapshot_retention_settings` · `tenki_update_snapshot_retention_settings` |
 
 Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
