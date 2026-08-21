@@ -154,6 +154,10 @@ try {
 			await rejectsPreNetwork("tenki_expose_port", { session_id: "s", port: 99999 }, /65535|less than or equal/i),
 		);
 		check(
+			"removed registry_ref is rejected pre-network instead of silently booting the default image",
+			await rejectsPreNetwork("tenki_create_sandbox", { registry_ref: "workspace/template:latest" }, /unrecognized key|registry_ref/i),
+		);
+		check(
 			"unsupported git operation rejected pre-network ('push' — API supports clone/checkout/diff/log)",
 			await rejectsPreNetwork("tenki_git", { session_id: "s", operation: "push" }, /clone.*checkout.*diff.*log|invalid enum/is),
 		);

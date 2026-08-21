@@ -111,7 +111,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 
 ## Tools
 
-**75 tools** — 74 covering Tenki's public sandbox workflows (enforced by a CI [parity audit](scripts/parity-audit.mjs)), plus `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
+**75 tools** — all 72 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs)), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
