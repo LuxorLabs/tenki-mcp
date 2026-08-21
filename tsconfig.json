@@ -11,6 +11,7 @@
     "declaration": true,
     "sourceMap": false,
     "resolveJsonModule": true,
+    "types": ["node"],
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"]

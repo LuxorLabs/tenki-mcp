@@ -26,7 +26,7 @@ export const ok = (value: unknown) => ({
 });
 
 /** Shared env-map schema used by tools that accept environment variables. */
-export const envSchema = z.record(z.string()).optional().describe("Environment variables as a key→value object.");
+export const envSchema = z.record(z.string(), z.string()).optional().describe("Environment variables as a key→value object.");
 
 /** Shared session-id schema — every per-sandbox tool takes one of these.
  * Trimmed, unlike pathSchema below: a session id is a UUID, so surrounding

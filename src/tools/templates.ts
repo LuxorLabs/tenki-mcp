@@ -41,7 +41,7 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			tags: z.array(z.string()).optional().describe("Tags for later filtering."),
 			parent_template_id: z.string().optional().describe("Derive this template from an existing template."),
 			parent_image: z.string().optional().describe("Derive this template from an existing built image reference."),
-			builder_spec: z.record(z.unknown()).optional().describe("Advanced structured build spec (TemplateBuildSpec); passed through as-is."),
+			builder_spec: z.record(z.string(), z.unknown()).optional().describe("Advanced structured build spec (TemplateBuildSpec); passed through as-is."),
 			workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
 			project_id: z.string().optional().describe("Project to create in (defaults to the key's first project)."),
 		},
@@ -116,7 +116,7 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			env_vars: envSchema,
 			tags: z.array(z.string()).optional().describe("Replacement set of tags."),
 			clear_tags: z.boolean().optional().describe("Remove all tags from the template."),
-			builder_spec: z.record(z.unknown()).optional().describe("Advanced structured build spec (TemplateBuildSpec); passed through as-is."),
+			builder_spec: z.record(z.string(), z.unknown()).optional().describe("Advanced structured build spec (TemplateBuildSpec); passed through as-is."),
 		},
 		async (a) => {
 			const resources = resourcesFrom(a.cpu_cores, a.memory_mb, a.disk_size_gb);
@@ -161,8 +161,8 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			template_id: z.string().describe("The template ID to build."),
 			image_name: z.string().optional().describe("Name for the resulting image."),
 			publish_raw_image: z.boolean().optional().describe("Publish the raw rootfs image alongside the build snapshot."),
-			build_secrets: z.record(z.string()).optional().describe("Build-time secrets as a key→value object (not persisted into the image)."),
-			build_env: z.record(z.string()).optional().describe("Per-build environment overrides frozen into this build only."),
+			build_secrets: z.record(z.string(), z.string()).optional().describe("Build-time secrets as a key→value object (not persisted into the image)."),
+			build_env: z.record(z.string(), z.string()).optional().describe("Per-build environment overrides frozen into this build only."),
 		},
 		async ({ template_id, image_name, publish_raw_image, build_secrets, build_env }) =>
 			ok(
