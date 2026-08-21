@@ -2,7 +2,7 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
-## [Unreleased]
+## [0.2.0] — 2026-08-21
 
 - Remove standalone image management tools. Template images remain available through template builds and sandbox creation.
 - Use `image` when creating a sandbox from a template image; removed image-reference arguments are now rejected.

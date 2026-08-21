@@ -3,7 +3,7 @@
   "name": "io.github.LuxorLabs/tenki-mcp",
   "title": "Tenki Sandbox MCP",
   "description": "Disposable microVM sandboxes for AI agents: run code, read/write files, git, preview URLs.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "websiteUrl": "https://tenki.cloud/?utm_source=mcp-registry&utm_medium=mcp-registry&utm_campaign=mcp-registry",
   "repository": {
     "url": "https://github.com/LuxorLabs/tenki-mcp",
@@ -14,7 +14,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@tenkicloud/mcp",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
