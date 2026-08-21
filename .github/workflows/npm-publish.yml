@@ -10,11 +10,11 @@ name: Release
 #   git commit -am "tenki-mcp 0.1.0" && git tag v0.1.0
 #   git push origin main --follow-tags
 #
-# FIRST PUBLISH ONLY: npm trusted publishing is configured per-package and the
-# package must already exist, so it cannot mint version one. Add a short-lived
-# granular write token as the NPM_TOKEN secret for that run; this workflow uses it
-# when present and switches to keyless OIDC automatically once it is removed. Then
-# configure the trusted publisher on npmjs.com and delete the secret.
+# Publishing is keyless (npm trusted publishing via GitHub OIDC): the trusted
+# publisher for @tenkicloud/mcp on npmjs.com points at this exact workflow file
+# (npm-publish.yml) and the npm-publish environment. The NPM_TOKEN secret exists
+# only as a bootstrap escape hatch — if it is set, the workflow uses it instead;
+# once removed, the keyless path takes over with no workflow change.
 #
 # Use the workflow_dispatch entry with dry_run (the default) to exercise every gate
 # without publishing anything.
@@ -40,9 +40,10 @@ jobs:
   release:
     runs-on: tenki-standard-small-2c-4g
     # A GitHub environment turns each publish into a one-click human approval once
-    # you add required reviewers to it. If you set an Environment in the npm
-    # trusted-publisher config, it must match this name exactly.
-    environment: release
+    # you add required reviewers to it. The npm trusted-publisher config for
+    # @tenkicloud/mcp is set to workflow npm-publish.yml + environment npm-publish
+    # (same convention as tenki-composio-tools) — both must match exactly.
+    environment: npm-publish
     permissions:
       contents: read
       id-token: write # npm provenance + trusted publishing, and mcp-publisher OIDC
@@ -204,7 +205,7 @@ jobs:
             echo "- npm: https://www.npmjs.com/package/${PKG}/v/${VERSION}"
             echo "- install: \`npx -y ${PKG}\`"
             echo ""
-            echo "After a FIRST publish: configure the npm trusted publisher"
-            echo "(org LuxorLabs, repo tenki-mcp, workflow release.yml, environment release),"
-            echo "then delete the NPM_TOKEN secret and revoke the token."
+            echo "Trusted publisher config on npmjs.com: org LuxorLabs, repo tenki-mcp,"
+            echo "workflow npm-publish.yml, environment npm-publish. If NPM_TOKEN is still"
+            echo "set as a secret, delete it and revoke the token — keyless OIDC takes over."
           } >> "$GITHUB_STEP_SUMMARY"
