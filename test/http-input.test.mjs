@@ -53,11 +53,11 @@ try {
 	const client = new Client({ name: "http-input-test", version: "1.0.0" });
 	await client.connect(transport);
 	const { tools } = await client.listTools();
-	if (tools.length !== 85) throw new Error(`normal MCP request returned ${tools.length} tools; expected 85`);
+	if (tools.length !== 71) throw new Error(`normal MCP request returned ${tools.length} tools; expected 71`);
 	await client.close();
 
 	console.log("✓ oversized chunked POST rejected with 413");
-	console.log("✓ normal MCP initialization still advertises 85 tools");
+	console.log("✓ normal MCP initialization still advertises 71 tools");
 } finally {
 	await new Promise((resolve) => server.close(resolve));
 }

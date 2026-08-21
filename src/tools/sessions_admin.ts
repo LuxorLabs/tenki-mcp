@@ -7,7 +7,7 @@ import { ok, sessionIdSchema } from "./common.js";
 /**
  * Extended sandbox (session) admin ops on the control plane: wall-clock lifetime
  * extension, mutable-field updates, bulk termination, activity heartbeats, and
- * workspace/project-scoped listing. The lifecycle basics
+ * workspace-scoped listing. The lifecycle basics
  * (create/get/list/terminate/pause/resume) live in sandboxes.ts.
  */
 export function registerSessionsAdmin(server: McpServer, client: TenkiClient): void {
@@ -101,25 +101,4 @@ export function registerSessionsAdmin(server: McpServer, client: TenkiClient): v
 		},
 	);
 
-	server.tool(
-		"tenki_list_project_sandboxes",
-		"List every sandbox belonging to a specific project (defaults to the API key's default project).",
-		{
-			project_id: z.string().optional().describe("Project to list (defaults to the key's first project)."),
-			include_terminated: z.boolean().optional().describe("Include terminated sandboxes (default false)."),
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
-		},
-		async ({ project_id, include_terminated, page_size, page_token }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(
-				await client.control("ListProjectSandboxes", {
-					...(projectId ? { projectId } : {}),
-					...(include_terminated ? { includeTerminated: true } : {}),
-					...(page_size ? { pageSize: page_size } : {}),
-					...(page_token ? { pageToken: page_token } : {}),
-				}),
-			);
-		},
-	);
 }

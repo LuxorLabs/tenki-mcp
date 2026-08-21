@@ -20,8 +20,6 @@ npx -y @tenkicloud/mcp     # speaks MCP over stdio
 
 Nothing to clone or build. The package installs one command, `tenki-mcp`.
 
-> **Heads up — pending first npm publish.** Until `@tenkicloud/mcp` lands on npm, use [Run it from a clone](#run-it-from-a-clone-instead) below. Every `npx -y @tenkicloud/mcp` form here activates the moment it's published.
-
 ### Use it in Claude Code
 
 ```bash
@@ -111,7 +109,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 
 ## Tools
 
-**85 tools** — 84 with full parity to the Tenki unary API (enforced by a CI [parity audit](scripts/parity-audit.mjs)), plus `tenki_auth_status`. Grouped by domain:
+**71 tools** — all 68 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs)), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
@@ -119,17 +117,16 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | **Identity** | `tenki_whoami` |
 | **Run** | `tenki_run_code` (one-shot: boot → run shell/python/js → tear down) |
 | **Sandboxes** | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox` |
-| **Session admin** | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes` · `tenki_list_project_sandboxes` |
+| **Session admin** | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes` |
 | **Exec** | `tenki_exec` (stdout/stderr/exit inline) |
 | **Files** | `tenki_read_file` · `tenki_write_file` · `tenki_list_files` · `tenki_stat_path` · `tenki_make_dir` · `tenki_remove_path` · `tenki_move_path` |
 | **Git** | `tenki_git` (clone/checkout/diff/log — the API supports exactly these four; run other git commands via `tenki_exec`) |
 | **Ports & previews** | expose · list-exposed · unexpose · create-preview-url · open-preview · list/get/delete-preview-url · touch-preview · bind/unbind-preview-url · resolve-preview-token |
 | **Artifacts** (binary transfer) | `tenki_get_upload_url` · `tenki_get_download_url` (signed URLs for binary PUT/GET) |
 | **SSH** | `tenki_update_ssh_keys` · `tenki_issue_ssh_cert` · `tenki_list_ssh_gateways` |
-| **Snapshots** | create · get · list · list-session · list-project · list-workspace · list-dangling · update · delete · get-download-url |
-| **Volumes** | create · get · list · list-project · update · delete · resize · attach · detach |
-| **Templates** | create · get · list · list-project · update · delete · build · cancel-build · get-build · list-active-builds |
-| **Registry** (custom images) | publish · get · list · set-visibility · delete · resolve-ref · share · unshare · list-share-grants · revoke-share-grant |
+| **Snapshots** | create · get · list · list-session · list-workspace · list-dangling · update · delete · get-download-url |
+| **Volumes** | create · get · list · update · delete · resize · attach · detach |
+| **Templates** | create · get · list · update · delete · build · cancel-build · get-build · list-active-builds |
 | **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_settings` · `tenki_update_workspace_settings` · `tenki_get_snapshot_retention_settings` · `tenki_update_snapshot_retention_settings` |
 
 Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).

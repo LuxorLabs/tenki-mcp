@@ -151,23 +151,4 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		},
 	);
 
-	server.tool(
-		"tenki_list_project_snapshots",
-		"List all snapshots in a project (defaults to the key's first project). Supports pagination.",
-		{
-			project_id: z.string().optional().describe("Project to list (defaults to the key's first project)."),
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
-		},
-		async ({ project_id, page_size, page_token }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(
-				await client.control("ListProjectSnapshots", {
-					...(projectId ? { projectId } : {}),
-					...(page_size ? { pageSize: page_size } : {}),
-					...(page_token ? { pageToken: page_token } : {}),
-				}),
-			);
-		},
-	);
 }

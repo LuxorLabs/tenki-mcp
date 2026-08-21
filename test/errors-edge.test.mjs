@@ -126,7 +126,6 @@ try {
 		await expectZodReject("tenki_write_file", { session_id: "sess_x", path: "/home/tenki/x" }); // missing content
 		await expectZodReject("tenki_attach_volume", { session_id: "sess_x", volume_id: "vol_x" }); // missing mount_path
 		await expectZodReject("tenki_resize_volume", { volume_id: "vol_x" }); // missing size_bytes
-		await expectZodReject("tenki_share_image", { reference: "ws/img:latest" }); // missing grantee_workspace_id
 		await expectZodReject("tenki_create_volume", { size_bytes: 1_048_576 }); // missing name
 	});
 
@@ -136,12 +135,11 @@ try {
 	});
 
 	// ── semantic-rejects: well-formed bogus ids reach the API → attributable isError ───────
-	await h.check("notfound: well-formed bogus ids return attributable isError across 6 domains", async () => {
+	await h.check("notfound: well-formed bogus ids return attributable isError across 5 domains", async () => {
 		await expectNotFound("tenki_get_sandbox", { session_id: "sess_000" });
 		await expectNotFound("tenki_get_volume", { volume_id: "vol_000" });
 		await expectNotFound("tenki_get_snapshot", { snapshot_id: "snap_000" });
 		await expectNotFound("tenki_get_template", { template_id: "tpl_000" });
-		await expectNotFound("tenki_get_image", { reference: "noone/nothere:latest" });
 		await expectNotFound("tenki_get_preview_url", { preview_url_id: "prev_000" });
 	});
 

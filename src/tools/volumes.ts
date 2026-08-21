@@ -9,7 +9,7 @@
  *   CreateVolume · GetVolume · ListVolumes · UpdateVolume · DeleteVolume ·
  *   ResizeVolume · AttachVolume · DetachVolume
  *
- * CreateVolumeRequest is flat: { workspaceId, name, sizeBytes (int64), projectId? }.
+ * CreateVolumeRequest is flat: { workspaceId, name, sizeBytes (int64) }.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -33,23 +33,19 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Create ────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_create_volume",
-		"Create a workspace-scoped persistent volume — durable block storage that survives sandbox teardown. Defaults the workspace and project to the API key's first; override with workspace_id/project_id.",
+		"Create a workspace-scoped persistent volume — durable block storage that survives sandbox teardown. Defaults the workspace to the API key's first; override with workspace_id.",
 		{
 			name: z.string().describe("Human-readable name for the volume."),
 			size_bytes: sizeBytesSchema,
 			workspace_id: z.string().optional().describe("Workspace to create the volume in (defaults to the key's first workspace)."),
-			project_id: z.string().optional().describe("Project to associate the volume with (defaults to the key's first project)."),
 		},
-		async ({ name, size_bytes, workspace_id, project_id }) => {
-			const owner = await client.resolveOwner();
-			const workspaceId = workspace_id ?? owner.workspaceId;
-			const projectId = project_id ?? owner.projectId;
+		async ({ name, size_bytes, workspace_id }) => {
+			const workspaceId = workspace_id ?? (await client.resolveOwner()).workspaceId;
 			return ok(
 				await client.control("CreateVolume", {
 					...(workspaceId ? { workspaceId } : {}),
 					name,
 					sizeBytes: size_bytes,
-					...(projectId ? { projectId } : {}),
 				}),
 			);
 		},
@@ -153,24 +149,4 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 			ok(await client.control("DetachVolume", { sessionId: session_id, volumeId: volume_id })),
 	);
 
-	// ── List (project-scoped) ─────────────────────────────────────────────────────
-	server.tool(
-		"tenki_list_project_volumes",
-		"List persistent volumes in a project (defaults to the key's first project). Supports pagination.",
-		{
-			project_id: z.string().optional().describe("Project to list volumes from (defaults to the key's first project)."),
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
-		},
-		async ({ project_id, page_size, page_token }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(
-				await client.control("ListProjectVolumes", {
-					...(projectId ? { projectId } : {}),
-					...(page_size ? { pageSize: page_size } : {}),
-					...(page_token ? { pageToken: page_token } : {}),
-				}),
-			);
-		},
-	);
 }

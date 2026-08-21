@@ -28,7 +28,6 @@ import { registerPreviews } from "./tools/previews.js";
 import { registerSnapshots } from "./tools/snapshots.js";
 import { registerVolumes } from "./tools/volumes.js";
 import { registerTemplates } from "./tools/templates.js";
-import { registerRegistry } from "./tools/registry.js";
 import { registerWorkspace } from "./tools/workspace.js";
 import { registerArtifacts } from "./tools/artifacts.js";
 import { registerSsh } from "./tools/ssh.js";
@@ -50,7 +49,6 @@ const modules = [
 	registerSnapshots,
 	registerVolumes,
 	registerTemplates,
-	registerRegistry,
 	registerWorkspace,
 	registerArtifacts,
 	registerSsh,
@@ -203,7 +201,7 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
  * start — which MCP clients report as an opaque "server failed to start" —
  * the server boots with ONLY tenki_auth_status registered, so an agent can
  * discover and explain the missing credential. Registering the other tools in
- * that state would offer 84 tools that can only fail.
+ * that state would offer 70 tools that can only fail.
  */
 export function createServer(client: TenkiClient | null): McpServer {
 	const server = new McpServer({ name: "tenki", version: VERSION });

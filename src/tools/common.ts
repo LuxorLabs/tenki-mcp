@@ -1,12 +1,32 @@
 import { z } from "zod";
 
+const PUBLIC_KEYS: Record<string, string> = {
+	registryRef: "image",
+	registry_ref: "image",
+	sourceRegistryImageId: "sourceImageId",
+	source_registry_image_id: "source_image_id",
+	sourceRegistryWorkspaceId: "sourceImageWorkspaceId",
+	source_registry_workspace_id: "source_image_workspace_id",
+	sourceRegistryRef: "sourceImage",
+	source_registry_ref: "source_image",
+};
+
+/** Keep registry-backed implementation fields out of public MCP responses. */
+export function publicValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(publicValue);
+	if (!value || typeof value !== "object") return value;
+	return Object.fromEntries(
+		Object.entries(value as Record<string, unknown>).map(([key, child]) => [PUBLIC_KEYS[key] ?? key, publicValue(child)]),
+	);
+}
+
 /** Serialize any tool return value as MCP text content. */
 export const ok = (value: unknown) => ({
-	content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
+	content: [{ type: "text" as const, text: JSON.stringify(publicValue(value), null, 2) }],
 });
 
 /** Shared env-map schema used by tools that accept environment variables. */
-export const envSchema = z.record(z.string()).optional().describe("Environment variables as a key→value object.");
+export const envSchema = z.record(z.string(), z.string()).optional().describe("Environment variables as a key→value object.");
 
 /** Shared session-id schema — every per-sandbox tool takes one of these.
  * Trimmed, unlike pathSchema below: a session id is a UUID, so surrounding

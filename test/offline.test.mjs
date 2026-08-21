@@ -98,8 +98,9 @@ try {
 	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
-	check("advertises 85 tools (84 + tenki_auth_status)", tools.length === 85, `${tools.length}`);
+	check("advertises 71 tools (70 + tenki_auth_status)", tools.length === 71, `${tools.length}`);
 	const names = tools.map((t) => t.name);
+	check("standalone registry terminology is absent", !/registry/i.test(JSON.stringify(tools)));
 	check("no duplicate tool names", new Set(names).size === names.length);
 	check("every tool name matches ^tenki_[a-z0-9_]+$", names.every((n) => /^tenki_[a-z0-9_]+$/.test(n)));
 	check("every tool has a non-empty description", tools.every((t) => typeof t.description === "string" && t.description.length > 0));
@@ -153,12 +154,16 @@ try {
 			await rejectsPreNetwork("tenki_expose_port", { session_id: "s", port: 99999 }, /65535|less than or equal/i),
 		);
 		check(
+			"removed registry_ref is rejected pre-network instead of silently booting the default image",
+			await rejectsPreNetwork("tenki_create_sandbox", { registry_ref: "workspace/template:latest" }, /unrecognized key|registry_ref/i),
+		);
+		check(
 			"unsupported git operation rejected pre-network ('push' — API supports clone/checkout/diff/log)",
 			await rejectsPreNetwork("tenki_git", { session_id: "s", operation: "push" }, /clone.*checkout.*diff.*log|invalid enum/is),
 		);
 		check(
 			"whitespace-only session id rejected pre-network",
-			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /at least 1 character/i),
+			await rejectsPreNetwork("tenki_get_sandbox", { session_id: "   " }, /at least 1 character|>=1 characters/i),
 		);
 		check(
 			"empty path rejected pre-network (tenki_read_file)",

@@ -6,36 +6,43 @@ import { ok, envSchema, sessionIdSchema } from "./common.js";
 
 /** Sandbox (session) lifecycle. */
 export function registerSandboxes(server: McpServer, client: TenkiClient): void {
-	server.tool(
+	server.registerTool(
 		"tenki_create_sandbox",
-		"Create a persistent sandbox microVM. Returns the session (id, state) and its data-plane endpoint. Boots in ~2s. Use tenki_exec / tenki_read_file / tenki_write_file against the returned session_id.",
 		{
-			name: z.string().optional().describe("Human-readable name."),
-			cpu_cores: z.number().int().min(1).max(16).optional().describe("vCPUs (default 2)."),
-			memory_mb: z.number().int().min(128).max(65536).optional().describe("Memory in MB (default 4096)."),
-			disk_size_gb: z.number().int().positive().optional().describe("Disk in GB (default 5)."),
-			max_duration_seconds: z.number().int().positive().optional().describe("Hard lifetime cap in seconds."),
-			idle_timeout_minutes: z.number().int().positive().optional().describe("Reap after N idle minutes."),
-			clone_repo_url: z.string().optional().describe("Git URL to clone into the sandbox on boot."),
-			allow_outbound: z.boolean().optional().describe("Allow outbound networking (off by default)."),
-			allow_inbound: z.boolean().optional().describe("Allow inbound networking (off by default)."),
-			snapshot_id: z.string().optional().describe("Boot from a snapshot."),
-			registry_ref: z.string().optional().describe("Boot from a custom registry image."),
-			tags: z.array(z.string()).optional().describe("Tags for later filtering."),
-			project_id: z.string().optional().describe("Project to create in (defaults to the key's first project)."),
-			workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
-			env: envSchema,
-			wait_ready: z.boolean().optional().describe("Poll until the sandbox is RUNNING before returning (default true)."),
+			description:
+				"Create a persistent sandbox microVM, optionally from a snapshot or template image. Returns the session (id, state) and its data-plane endpoint. Boots in ~2s. Use tenki_exec / tenki_read_file / tenki_write_file against the returned session_id.",
+			inputSchema: z
+				.object({
+					name: z.string().optional().describe("Human-readable name."),
+					cpu_cores: z.number().int().min(1).max(16).optional().describe("vCPUs (default 2)."),
+					memory_mb: z.number().int().min(128).max(65536).optional().describe("Memory in MB (default 4096)."),
+					disk_size_gb: z.number().int().positive().optional().describe("Disk in GB (default 5)."),
+					max_duration_seconds: z.number().int().positive().optional().describe("Hard lifetime cap in seconds."),
+					idle_timeout_minutes: z.number().int().positive().optional().describe("Reap after N idle minutes."),
+					clone_repo_url: z.string().optional().describe("Git URL to clone into the sandbox on boot."),
+					allow_outbound: z.boolean().optional().describe("Allow outbound networking (off by default)."),
+					allow_inbound: z.boolean().optional().describe("Allow inbound networking (off by default)."),
+					snapshot_id: z.string().optional().describe("Boot from a snapshot."),
+					image: z
+						.string()
+						.optional()
+						.describe(
+							"Boot from a template image, passed as a reference STRING: the imageDigestRef of a READY build from tenki_build_template / tenki_get_template_build (e.g. 'ws/name@sha256:...'), or 'workspace/name' for its latest version.",
+						),
+					tags: z.array(z.string()).optional().describe("Tags for later filtering."),
+					workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
+					env: envSchema,
+					wait_ready: z.boolean().optional().describe("Poll until the sandbox is RUNNING before returning (default true)."),
+				})
+				.strict(),
 		},
 		async (a) => {
 			const owner = await client.resolveOwner();
-			const projectId = a.project_id ?? owner.projectId;
 			const workspaceId = a.workspace_id ?? owner.workspaceId;
 			const body: Record<string, unknown> = {
 				...(owner.ownerType ? { ownerType: owner.ownerType } : {}),
 				...(owner.ownerId ? { ownerId: owner.ownerId } : {}),
 				...(workspaceId ? { workspaceId } : {}),
-				...(projectId ? { projectId } : {}),
 				...(a.name ? { name: a.name } : {}),
 				...(a.cpu_cores ? { cpuCores: a.cpu_cores } : {}),
 				...(a.memory_mb ? { memoryMb: a.memory_mb } : {}),
@@ -46,7 +53,8 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 				...(a.allow_outbound ? { allowOutbound: true } : {}),
 				...(a.allow_inbound ? { allowInbound: true } : {}),
 				...(a.snapshot_id ? { snapshotId: a.snapshot_id } : {}),
-				...(a.registry_ref ? { registryRef: a.registry_ref } : {}),
+				// The API still uses registryRef internally for template-image launches.
+				...(a.image ? { registryRef: a.image } : {}),
 				...(a.tags && a.tags.length ? { tags: a.tags } : {}),
 				...(a.env && Object.keys(a.env).length ? { env: a.env } : {}),
 			};

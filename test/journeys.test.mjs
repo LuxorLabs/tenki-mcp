@@ -86,7 +86,7 @@ async function waitBuild(buildId, { budgetMs = 90000, intervalMs = 4000 } = {}) 
 function bootRefFrom(obj) {
 	const b = obj?.build ?? obj?.template ?? obj;
 	if (!b || typeof b !== "object") return null;
-	for (const k of ["registryRef", "imageRef", "resultImage", "outputImage", "imageRef", "image", "imageId", "registryReference", "snapshotId", "snapshot"]) {
+	for (const k of ["image", "imageRef", "resultImage", "outputImage", "imageId", "snapshotId", "snapshot"]) {
 		const v = b[k];
 		if (typeof v === "string" && v.trim()) return { kind: k, ref: v.trim() };
 		if (v && typeof v === "object") {
@@ -100,7 +100,6 @@ function bootRefFrom(obj) {
 // Template ids kept in outer scope so the finally can bound cost + clean up.
 let tmplId;
 let buildId;
-let producedImageRef;
 
 try {
 	// ── Journey 1: ship-code red→green loop ─────────────────────────────────────
@@ -256,8 +255,7 @@ try {
 					if (!ref) {
 						record("skip", bootName, `build reached ${state} but no bootable image-ref field was found on the build/template (verification gap — field name unknown)`);
 					} else {
-						producedImageRef = /snapshot/i.test(ref.kind) ? undefined : ref.ref; // track for cleanup if it's a registry image
-						const bootArgs = /snapshot/i.test(ref.kind) ? { snapshot_id: ref.ref } : { registry_ref: ref.ref };
+						const bootArgs = /snapshot/i.test(ref.kind) ? { snapshot_id: ref.ref } : { image: ref.ref };
 						const dst = await h.createSandbox({ name: `qa-jny-tboot-${runid}`, ...bootArgs });
 						await waitRunning(dst.sessionId);
 						const ex = await h.call("tenki_exec", { session_id: dst.sessionId, command: "sh", args: ["-c", "echo warm"] });
@@ -289,7 +287,6 @@ try {
 	// Template-specific teardown FIRST (force-delete cascades the build; it may have
 	// dependents that the harness's non-force delete_template can't remove).
 	if (buildId) await h.call("tenki_cancel_template_build", { build_id: buildId }).catch(() => {});
-	if (producedImageRef) await h.call("tenki_delete_image", { reference: producedImageRef }).catch(() => {});
 	if (tmplId) {
 		await h.call("tenki_delete_template", { template_id: tmplId, force: true }).catch(() => {});
 		h.resources.template = h.resources.template.filter((x) => x !== tmplId);
