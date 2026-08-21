@@ -1,6 +1,6 @@
 {
   "name": "@tenkicloud/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "mcpName": "io.github.LuxorLabs/tenki-mcp",
   "description": "Model Context Protocol server for Tenki Cloud — disposable microVM sandboxes for AI agents. Create sandboxes, run code, read/write files, run git, expose preview URLs — from any MCP client.",
   "type": "module",
