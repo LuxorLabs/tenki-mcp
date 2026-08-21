@@ -6,6 +6,9 @@ All notable changes to `@tenkicloud/mcp`. This project follows semantic versioni
 
 - Remove standalone image management tools. Template images remain available through template builds and sandbox creation.
 - Use `image` when creating a sandbox from a template image; removed image-reference arguments are now rejected.
+- Cap `tenki_exec` / `tenki_run_code` inline output at 64 KB per stream (override with `max_output_bytes` on `tenki_exec`). Larger output returns a head+tail preview with `stdoutTruncated`/`stderrTruncated` set, and the full capture file is kept in the sandbox at the reported `stdoutPath`/`stderrPath`.
+- Remove the project-scoped surface — the `tenki_list_project_sandboxes`/`_templates`/`_volumes`/`_snapshots` tools (their API methods no longer exist) and the `project_id` arguments (ignored by the API). Use the workspace-scoped equivalents.
+- Document the template-image path end to end: `image_name` builds require a typed template (`builder_spec`), and `tenki_create_sandbox`'s `image` takes the ready build's `imageDigestRef`.
 
 ## [0.1.0] — 2026-08-03 — Initial release
 

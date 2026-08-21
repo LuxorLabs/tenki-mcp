@@ -23,9 +23,13 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 					allow_outbound: z.boolean().optional().describe("Allow outbound networking (off by default)."),
 					allow_inbound: z.boolean().optional().describe("Allow inbound networking (off by default)."),
 					snapshot_id: z.string().optional().describe("Boot from a snapshot."),
-					image: z.string().optional().describe("Boot from a reusable template image returned by tenki_build_template."),
+					image: z
+						.string()
+						.optional()
+						.describe(
+							"Boot from a template image, passed as a reference STRING: the imageDigestRef of a READY build from tenki_build_template / tenki_get_template_build (e.g. 'ws/name@sha256:...'), or 'workspace/name' for its latest version.",
+						),
 					tags: z.array(z.string()).optional().describe("Tags for later filtering."),
-					project_id: z.string().optional().describe("Project to create in (defaults to the key's first project)."),
 					workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
 					env: envSchema,
 					wait_ready: z.boolean().optional().describe("Poll until the sandbox is RUNNING before returning (default true)."),
@@ -34,13 +38,11 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 		},
 		async (a) => {
 			const owner = await client.resolveOwner();
-			const projectId = a.project_id ?? owner.projectId;
 			const workspaceId = a.workspace_id ?? owner.workspaceId;
 			const body: Record<string, unknown> = {
 				...(owner.ownerType ? { ownerType: owner.ownerType } : {}),
 				...(owner.ownerId ? { ownerId: owner.ownerId } : {}),
 				...(workspaceId ? { workspaceId } : {}),
-				...(projectId ? { projectId } : {}),
 				...(a.name ? { name: a.name } : {}),
 				...(a.cpu_cores ? { cpuCores: a.cpu_cores } : {}),
 				...(a.memory_mb ? { memoryMb: a.memory_mb } : {}),

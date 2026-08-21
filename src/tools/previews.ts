@@ -8,10 +8,10 @@
  *
  * All control-plane ConnectRPC calls on tenki.sandbox.v1.SandboxService.
  *
- * LIVE-VERIFIED shapes (2026-07-20): the preview-URL methods are PROJECT-scoped —
- * the server rejects them with `project_id: value is empty` unless a projectId is
- * sent, and CreatePreviewUrl additionally requires a `slug` (>=3 chars, [a-z0-9-]).
- * projectId defaults to the API key's first project; override with project_id.
+ * LIVE-VERIFIED shapes (2026-08-21): projects were REMOVED from the API (every
+ * project_id field is proto-reserved and unknown fields are silently discarded),
+ * so the preview-URL methods are workspace/id-scoped. CreatePreviewUrl requires
+ * a `slug` (>=3 chars, [a-z0-9-]).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -34,29 +34,25 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Create a shareable preview URL for a port ─────────────────────────────────
 	server.tool(
 		"tenki_create_preview_url",
-		"Create a shareable public preview URL for a port in a sandbox. The sandbox must have inbound networking enabled (create it with allow_inbound). Project-scoped; defaults to the key's first project.",
+		"Create a shareable public preview URL for a port in a sandbox. The sandbox must have inbound networking enabled (create it with allow_inbound).",
 		{
 			session_id: sessionIdSchema.describe("The sandbox session serving the port."),
 			port: portSchema.describe("The TCP port inside the sandbox to create a preview URL for (1-65535)."),
 			slug: slugSchema,
-			project_id: z.string().optional().describe("Project the preview URL belongs to (defaults to the key's first project)."),
 			expires_at: z
 				.string()
 				.optional()
 				.describe("Optional RFC-3339 timestamp at which the preview URL auto-expires. Omit to keep it until the sandbox ends."),
 		},
-		async ({ session_id, port, slug, project_id, expires_at }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(
+		async ({ session_id, port, slug, expires_at }) =>
+			ok(
 				await client.control("CreatePreviewUrl", {
 					sessionId: session_id,
 					port,
 					slug,
-					...(projectId ? { projectId } : {}),
 					...(expires_at !== undefined ? { expiresAt: expires_at } : {}),
 				}),
-			);
-		},
+			),
 	);
 
 	// ── Open (get) a live preview for a port ──────────────────────────────────────
@@ -66,23 +62,19 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 		{
 			session_id: sessionIdSchema.describe("The sandbox session serving the port."),
 			port: portSchema.describe("The TCP port inside the sandbox to open a preview for (1-65535)."),
-			project_id: z.string().optional().describe("Project scope (defaults to the key's first project)."),
 			expires_at: z
 				.string()
 				.optional()
 				.describe("Optional RFC-3339 timestamp at which the preview auto-expires. Omit to keep it until the sandbox ends."),
 		},
-		async ({ session_id, port, project_id, expires_at }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(
+		async ({ session_id, port, expires_at }) =>
+			ok(
 				await client.control("OpenPreview", {
 					sessionId: session_id,
 					port,
-					...(projectId ? { projectId } : {}),
 					...(expires_at !== undefined ? { expiresAt: expires_at } : {}),
 				}),
-			);
-		},
+			),
 	);
 
 	// ── List the preview URLs bound to a sandbox / project ────────────────────────
@@ -99,7 +91,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 		},
 		async ({ session_id, workspace_id, page_size, page_token }) => {
 			// The RPC has no sessionId field (ListPreviewUrlsRequest: workspace_id,
-			// page_size, page_token, and a deprecated project_id), so a sessionId sent
+			// page_size, page_token), so a sessionId sent
 			// on the wire is silently discarded and every session's rows come back.
 			// Filter here instead of advertising a filter that does nothing.
 			const workspaceId = workspace_id ?? (await client.resolveOwner()).workspaceId;
@@ -121,28 +113,16 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Get / delete a specific preview URL ───────────────────────────────────────
 	server.tool(
 		"tenki_get_preview_url",
-		"Fetch a specific preview URL's details by id (project-scoped).",
-		{
-			preview_url_id: z.string().describe("The preview URL id."),
-			project_id: z.string().optional().describe("Project scope (defaults to the key's first project)."),
-		},
-		async ({ preview_url_id, project_id }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(await client.control("GetPreviewUrl", { previewUrlId: preview_url_id, ...(projectId ? { projectId } : {}) }));
-		},
+		"Fetch a specific preview URL's details by id.",
+		{ preview_url_id: z.string().describe("The preview URL id.") },
+		async ({ preview_url_id }) => ok(await client.control("GetPreviewUrl", { previewUrlId: preview_url_id })),
 	);
 
 	server.tool(
 		"tenki_delete_preview_url",
-		"Delete a preview URL by id, taking it permanently offline (project-scoped).",
-		{
-			preview_url_id: z.string().describe("The preview URL id to delete."),
-			project_id: z.string().optional().describe("Project scope (defaults to the key's first project)."),
-		},
-		async ({ preview_url_id, project_id }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(await client.control("DeletePreviewUrl", { previewUrlId: preview_url_id, ...(projectId ? { projectId } : {}) }));
-		},
+		"Delete a preview URL by id, taking it permanently offline.",
+		{ preview_url_id: z.string().describe("The preview URL id to delete.") },
+		async ({ preview_url_id }) => ok(await client.control("DeletePreviewUrl", { previewUrlId: preview_url_id })),
 	);
 
 	// ── Touch (keep-alive) a preview ──────────────────────────────────────────────

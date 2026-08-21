@@ -28,7 +28,7 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	// ── Create ──────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_create_template",
-		"Create a custom-image template (a reusable sandbox-image spec: base image + setup script + default resources). Build it into a bootable image later with tenki_build_template.",
+		"Create a custom-image template (a reusable sandbox-image spec: base image + setup script + default resources). Build it into a bootable image later with tenki_build_template. NOTE: only a TYPED template (created with builder_spec, no legacy fields) can build a named, publishable image (image_name) that tenki_create_sandbox boots via its `image` arg.",
 		{
 			name: z.string().describe("Human-readable template name."),
 			base_image_id: z.string().optional().describe("Base image ID to build on top of."),
@@ -41,14 +41,17 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			tags: z.array(z.string()).optional().describe("Tags for later filtering."),
 			parent_template_id: z.string().optional().describe("Derive this template from an existing template."),
 			parent_image: z.string().optional().describe("Derive this template from an existing built image reference."),
-			builder_spec: z.record(z.string(), z.unknown()).optional().describe("Advanced structured build spec (TemplateBuildSpec); passed through as-is."),
+			builder_spec: z
+				.record(z.string(), z.unknown())
+				.optional()
+				.describe(
+					"Typed template spec, passed through as-is — e.g. {specVersion:'tenki.template.v1', base:{image:'sandbox'}, workdir:'/home/tenki', steps:[{run:{command:'...'}}], resources:{cpuCores,memoryMb,diskSizeGb}}. Mutually exclusive with base_image_id/setup_script/start_cmd/env_vars/cpu_cores/memory_mb/disk_size_gb/parent_* (the API rejects mixing). Required if the template's builds should publish an image (tenki_build_template image_name).",
+				),
 			workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
-			project_id: z.string().optional().describe("Project to create in (defaults to the key's first project)."),
 		},
 		async (a) => {
 			const owner = await client.resolveOwner();
 			const workspaceId = a.workspace_id ?? owner.workspaceId;
-			const projectId = a.project_id ?? owner.projectId;
 			const resources = resourcesFrom(a.cpu_cores, a.memory_mb, a.disk_size_gb);
 			const body: Record<string, unknown> = {
 				...(workspaceId ? { workspaceId } : {}),
@@ -58,7 +61,6 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 				...(a.start_cmd !== undefined ? { startCmd: a.start_cmd } : {}),
 				...(a.env_vars && Object.keys(a.env_vars).length ? { envVars: a.env_vars } : {}),
 				...(Object.keys(resources).length ? { resources } : {}),
-				...(projectId ? { projectId } : {}),
 				...(a.tags && a.tags.length ? { tags: a.tags } : {}),
 				...(a.parent_template_id ? { parentTemplateId: a.parent_template_id } : {}),
 				...(a.parent_image ? { parentImage: a.parent_image } : {}),
@@ -156,10 +158,13 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	// ── Build ───────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_build_template",
-		"Trigger a build for a template, producing a bootable image. Returns the created build (poll it with tenki_get_template_build).",
+		"Trigger a build for a template, producing a bootable image. Returns the created build — poll it with tenki_get_template_build until READY; the ready build's imageDigestRef is what tenki_create_sandbox's `image` arg takes.",
 		{
 			template_id: z.string().describe("The template ID to build."),
-			image_name: z.string().optional().describe("Name for the resulting image."),
+			image_name: z
+				.string()
+				.optional()
+				.describe("Name for the resulting image. Requires a TYPED template (created with builder_spec) — the API rejects it for legacy setup-script templates."),
 			publish_raw_image: z.boolean().optional().describe("Publish the raw rootfs image alongside the build snapshot."),
 			build_secrets: z.record(z.string(), z.string()).optional().describe("Build-time secrets as a key→value object (not persisted into the image)."),
 			build_env: z.record(z.string(), z.string()).optional().describe("Per-build environment overrides frozen into this build only."),
@@ -187,7 +192,7 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	// ── Get build ─────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_get_template_build",
-		"Retrieve one template build by its build ID (state, progress, and result image).",
+		"Retrieve one template build by its build ID (state, progress, and result image). A READY build's imageDigestRef is the reference tenki_create_sandbox's `image` arg takes.",
 		{ build_id: z.string().describe("The template build ID.") },
 		async ({ build_id }) => ok(await client.control("GetTemplateBuild", { buildId: build_id })),
 	);
@@ -200,23 +205,4 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 		async ({ template_id }) => ok(await client.control("ListActiveTemplateBuilds", { templateId: template_id })),
 	);
 
-	server.tool(
-		"tenki_list_project_templates",
-		"List templates in a project (defaults to the key's first project). Supports pagination.",
-		{
-			project_id: z.string().optional().describe("Project to list (defaults to the key's first project)."),
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
-		},
-		async ({ project_id, page_size, page_token }) => {
-			const projectId = project_id ?? (await client.resolveOwner()).projectId;
-			return ok(
-				await client.control("ListProjectTemplates", {
-					...(projectId ? { projectId } : {}),
-					...(page_size ? { pageSize: page_size } : {}),
-					...(page_token ? { pageToken: page_token } : {}),
-				}),
-			);
-		},
-	);
 }

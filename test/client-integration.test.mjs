@@ -6,7 +6,7 @@
  * Covers the client-integration scenarios:
  *   • mcp-handshake-toolslist        — handshake + protocol negotiation (latest AND an
  *                                       older pinned version) + tools/list advertises all
- *                                       75 tools with valid, unique, described object schemas.
+ *                                       71 tools with valid, unique, described object schemas.
  *   • stdout-purity-and-clean-shutdown — stdout carries ONLY JSON-RPC frames (0 bytes idle,
  *                                       banner/logs on stderr); client.close / stdin-EOF /
  *                                       SIGTERM each exit fast with no orphaned pid.
@@ -173,7 +173,7 @@ try {
 	});
 
 	await h.check(`tools/list: exactly ${h.tools.length} unique tenki_* tools, all described with object schemas`, async () => {
-		must(h.tools.length === 75, `advertised ${h.tools.length} tools (documented surface = 75 (74 workflow tools + tenki_auth_status); any drift is a regression)`);
+		must(h.tools.length === 71, `advertised ${h.tools.length} tools (documented surface = 71 (70 workflow tools + tenki_auth_status); any drift is a regression)`);
 		const names = h.tools.map((t) => t.name);
 		const dupes = names.filter((n, i) => names.indexOf(n) !== i);
 		must(dupes.length === 0, `duplicate tool names: ${JSON.stringify([...new Set(dupes)])}`);

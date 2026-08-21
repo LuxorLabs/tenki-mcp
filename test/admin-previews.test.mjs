@@ -14,7 +14,7 @@
  *                                 issue_ssh_cert wire-contract + ghost-session guard.
  *   • previews                    on an allow_inbound sandbox: expose → create_preview_url
  *                                 (slug) → get → list → delete → unexpose, plus the
- *                                 non-inbound + bad-project + invalid-slug guardrails.
+ *                                 non-inbound + invalid-slug guardrails.
  *
  * Resource discipline: creates SANDBOXES ONLY (auto-tracked + torn down). Preview
  * URLs and port exposures are cleaned explicitly in finally. Every workspace-level
@@ -333,16 +333,6 @@ try {
 		if (!inboundSid) throw new Error("no inbound sandbox (create step failed)");
 		await h.expectError("tenki_create_preview_url", { session_id: inboundSid, port: 8083, slug: "ab" }); // too short
 		await h.expectError("tenki_create_preview_url", { session_id: inboundSid, port: 8083, slug: "Has Space" }); // bad chars
-	});
-
-	await h.check("previews: create_preview_url with a bogus project_id → clean isError", async () => {
-		if (!inboundSid) throw new Error("no inbound sandbox (create step failed)");
-		await h.expectError("tenki_create_preview_url", {
-			session_id: inboundSid,
-			port: 8082,
-			slug: `admbp-${rand()}`,
-			project_id: "proj_bogus_admprev",
-		});
 	});
 
 	// The tool description says a preview URL needs allow_inbound. Whether that's

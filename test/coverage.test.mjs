@@ -38,12 +38,11 @@ try {
 	});
 
 	// ── sessions admin ─────────────────────────────────────────────────────────────
-	await h.check("sessions-admin: extend → update → report → list workspace/project", async () => {
+	await h.check("sessions-admin: extend → update → report → list workspace", async () => {
 		await h.call("tenki_extend_sandbox", { session_id: mainSid, additional_duration_seconds: 60 });
 		await h.call("tenki_update_sandbox", { session_id: mainSid, name: "cov-main-2" });
 		await h.call("tenki_report_sandbox_activity", { session_id: mainSid });
 		await h.call("tenki_list_workspace_sandboxes", { page_size: 5 });
-		await h.call("tenki_list_project_sandboxes", { page_size: 5 });
 	});
 
 	// A ready sandbox with networking for data-plane / git / preview / artifact checks.

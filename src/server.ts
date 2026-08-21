@@ -201,7 +201,7 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
  * start — which MCP clients report as an opaque "server failed to start" —
  * the server boots with ONLY tenki_auth_status registered, so an agent can
  * discover and explain the missing credential. Registering the other tools in
- * that state would offer 84 tools that can only fail.
+ * that state would offer 70 tools that can only fail.
  */
 export function createServer(client: TenkiClient | null): McpServer {
 	const server = new McpServer({ name: "tenki", version: VERSION });

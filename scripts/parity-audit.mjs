@@ -23,10 +23,13 @@ const toolsDir = path.join(here, "..", "src", "tools");
 // TOOL   → must be covered by a tool for v1.0 parity
 // V2     → streaming/interactive, deferred to v2.0 (a Connect-streaming transport)
 // INTERNAL → transport plumbing, never a user tool
+// The ListProject* methods were REMOVED from the API (projects no longer exist:
+// every project_id field is proto-reserved and the RPCs 404 in production,
+// live-verified 2026-08-21), so they are gone from this surface too.
 const SURFACE = {
 	SandboxService: {
 		CreateSession: "TOOL", GetSession: "TOOL", ListSessions: "TOOL", ListWorkspaceSandboxes: "TOOL",
-		ListProjectSandboxes: "TOOL", UpdateSession: "TOOL", PauseSession: "TOOL", ResumeSession: "TOOL",
+		UpdateSession: "TOOL", PauseSession: "TOOL", ResumeSession: "TOOL",
 		ExtendSession: "TOOL", TerminateSession: "TOOL", TerminateSessions: "TOOL", ReportSessionActivity: "TOOL",
 		WaitSession: "V2", CreateSessionCredential: "INTERNAL",
 		ExecuteCommand: "TOOL", StreamCommandOutput: "V2", GitOperation: "TOOL",
@@ -35,12 +38,12 @@ const SURFACE = {
 		CreatePreviewUrl: "TOOL", DeletePreviewUrl: "TOOL", GetPreviewUrl: "TOOL", ListPreviewUrls: "TOOL",
 		BindPreviewUrl: "TOOL", UnbindPreviewUrl: "TOOL", ResolvePreviewToken: "TOOL",
 		UpdateSSHAuthorizedKeys: "TOOL",
-		CreateVolume: "TOOL", GetVolume: "TOOL", ListVolumes: "TOOL", ListProjectVolumes: "TOOL", UpdateVolume: "TOOL",
+		CreateVolume: "TOOL", GetVolume: "TOOL", ListVolumes: "TOOL", UpdateVolume: "TOOL",
 		DeleteVolume: "TOOL", ResizeVolume: "TOOL", AttachVolume: "TOOL", DetachVolume: "TOOL",
 		CreateSnapshot: "TOOL", GetSnapshot: "TOOL", GetSnapshotDownloadURL: "TOOL", UpdateSnapshot: "TOOL",
 		DeleteSnapshot: "TOOL", ListSnapshots: "TOOL", ListSessionSnapshots: "TOOL", ListDanglingSnapshots: "TOOL",
-		ListWorkspaceSnapshots: "TOOL", ListProjectSnapshots: "TOOL",
-		CreateTemplate: "TOOL", GetTemplate: "TOOL", ListTemplates: "TOOL", ListProjectTemplates: "TOOL",
+		ListWorkspaceSnapshots: "TOOL",
+		CreateTemplate: "TOOL", GetTemplate: "TOOL", ListTemplates: "TOOL",
 		UpdateTemplate: "TOOL", DeleteTemplate: "TOOL", BuildTemplate: "TOOL", CancelTemplateBuild: "TOOL",
 		GetTemplateBuild: "TOOL", ListActiveTemplateBuilds: "TOOL",
 		PublishRegistryImage: "INTERNAL", GetRegistryImage: "INTERNAL", ListRegistryImages: "INTERNAL",
