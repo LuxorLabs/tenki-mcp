@@ -43,7 +43,7 @@ export function describeCredential(env: NodeJS.ProcessEnv = process.env): Creden
 }
 
 const CREDENTIAL_HELP: Record<CredentialKind, string> = {
-	none: "No credential found. Set TENKI_API_KEY (a tk_… API key) or TENKI_AUTH_TOKEN (an ory_st_… session token) in the server's environment, then restart it — MCP clients pass env through their server config, e.g. `claude mcp add tenki --env TENKI_API_KEY=tk_… -- npx -y tenki-mcp`, or the \"env\" block in claude_desktop_config.json / .cursor/mcp.json.",
+	none: "No credential found. Set TENKI_API_KEY (a tk_… API key) or TENKI_AUTH_TOKEN (an ory_st_… session token) in the server's environment, then restart it — MCP clients pass env through their server config, e.g. `claude mcp add tenki --env TENKI_API_KEY=tk_… -- npx -y @tenkicloud/mcp`, or the \"env\" block in claude_desktop_config.json / .cursor/mcp.json.",
 	api_key: "Authenticated with a tk_… API key (Authorization: Bearer).",
 	oauth_session_token: "Authenticated with an ory_st_… session token (X-Session-Token). Session tokens expire; an API key is the stabler choice for a long-running server.",
 	session_cookie: "Authenticated with a session cookie (the token matched neither the tk_ nor ory_st_ prefix, so it is sent as a tenki_session cookie). If that is not what you intended, check the value.",
