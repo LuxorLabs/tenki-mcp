@@ -12,11 +12,9 @@
  *   • ssh                         list_ssh_gateways (separate SSHGatewayClientService),
  *                                 update_ssh_keys on a sandbox (throwaway TEST pubkey),
  *                                 issue_ssh_cert wire-contract + ghost-session guard.
- *   • registry                    list_images + list_image_share_grants (ACL read),
- *                                 get/resolve NotFound guards. NO publish / NO share.
  *   • previews                    on an allow_inbound sandbox: expose → create_preview_url
  *                                 (slug) → get → list → delete → unexpose, plus the
- *                                 non-inbound + bad-project + invalid-slug guardrails.
+ *                                 non-inbound + invalid-slug guardrails.
  *
  * Resource discipline: creates SANDBOXES ONLY (auto-tracked + torn down). Preview
  * URLs and port exposures are cleaned explicitly in finally. Every workspace-level
@@ -292,35 +290,6 @@ try {
 		await h.expectError("tenki_issue_ssh_cert", { session_id: "sess_ghost_admprev", public_key: TEST_SSH_PUBKEY });
 	});
 
-	// ── registry: read surface + ACL (list share grants). NO publish, NO share. ──────
-	await h.check("registry: list_images (read)", async () => {
-		const r = await h.call("tenki_list_images", {});
-		if (r === undefined || r === null || typeof r !== "object")
-			throw new Error(`malformed images payload: ${JSON.stringify(r).slice(0, 80)}`);
-	});
-	await h.check("registry: list_image_share_grants (ACL surface read)", async () => {
-		// FIXED (v1.0.2): the tool now sends `ref` (a tag-free reference), not the
-		// ignored `reference`. For an absent image a tag-free ref returns a clean
-		// NotFound/empty — proof the ACL-read surface is reachable. A "ref required"
-		// 400 here would be a regression.
-		try {
-			const r = await h.call("tenki_list_image_share_grants", { reference: "admprev/nope" });
-			if (r === undefined || r === null || typeof r !== "object")
-				throw new Error(`malformed grants payload: ${JSON.stringify(r).slice(0, 80)}`);
-		} catch (e) {
-			const m = e?.message ?? String(e);
-			if (/one of image_id or ref is required/i.test(m)) throw new Error("REGRESSION: sends `reference` not `ref`");
-			if (/not.?found|failed \(404|does not exist|no such|unknown image/i.test(m)) return; // reachable; image just absent
-			throw e;
-		}
-	});
-	await h.check("registry: get_image on nonexistent ref → clean isError", async () => {
-		await h.expectError("tenki_get_image", { reference: "noone/nothere-admprev:latest" });
-	});
-	await h.check("registry: resolve_image_ref on nonexistent ref → clean isError", async () => {
-		await h.expectError("tenki_resolve_image_ref", { registry_ref: "noone/nothere-admprev:latest" });
-	});
-
 	// ── previews: full lifecycle on the allow_inbound sandbox ────────────────────────
 	await h.check("previews: expose → create_preview_url(slug) → get → list → delete → unexpose", async () => {
 		if (!inboundSid) throw new Error("no inbound sandbox (create step failed)");
@@ -364,16 +333,6 @@ try {
 		if (!inboundSid) throw new Error("no inbound sandbox (create step failed)");
 		await h.expectError("tenki_create_preview_url", { session_id: inboundSid, port: 8083, slug: "ab" }); // too short
 		await h.expectError("tenki_create_preview_url", { session_id: inboundSid, port: 8083, slug: "Has Space" }); // bad chars
-	});
-
-	await h.check("previews: create_preview_url with a bogus project_id → clean isError", async () => {
-		if (!inboundSid) throw new Error("no inbound sandbox (create step failed)");
-		await h.expectError("tenki_create_preview_url", {
-			session_id: inboundSid,
-			port: 8082,
-			slug: `admbp-${rand()}`,
-			project_id: "proj_bogus_admprev",
-		});
 	});
 
 	// The tool description says a preview URL needs allow_inbound. Whether that's

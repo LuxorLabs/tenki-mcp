@@ -169,5 +169,40 @@ const baseResult = {
 	check("exec cwd keeps trailing whitespace verbatim inside quotes", script.includes("'/home/tenki/dir with space '"), script.slice(0, 80));
 }
 
+// 8) output capping: an oversized capture file returns a head+tail preview and
+// KEEPS the original in the sandbox (its path surfaced), so nothing is lost;
+// the under-cap stream is untouched. (Tests 5 and 7 double as the Stat-failure
+// fallback path: their stubs make data() throw, so execCaptured reads whole.)
+{
+	class TruncStub extends TenkiClient {
+		constructor() { super("tk_offline_dummy_key"); this.scripts = []; this.removed = []; }
+		async control(method, body) {
+			if (method === "ExecuteCommand") {
+				if (body?.command === "sh") this.scripts.push(body?.args?.[1] ?? "");
+				if (body?.command === "rm") this.removed = (body?.args ?? []).slice(1);
+				return { execution: { exitCode: 0 } };
+			}
+			return {};
+		}
+		async data(_sid, method, req) {
+			if (method === "Stat") return { size: req.path.endsWith(".out") ? "999999" : "10" };
+			return {};
+		}
+		async readTextFile(_sid, path) { return path.endsWith(".preview") ? "HEAD[...]TAIL" : "small"; }
+	}
+	const stub = new TruncStub();
+	const r = await stub.execCaptured("s1", "echo", { maxOutputBytes: 2048 });
+	check("oversized stdout → stdoutTruncated + preview text", r.stdoutTruncated === true && r.stdout === "HEAD[...]TAIL", JSON.stringify(r).slice(0, 160));
+	check("stdoutPath names the RETAINED capture file", typeof r.stdoutPath === "string" && r.stdoutPath.endsWith(".out"), r.stdoutPath);
+	check("under-cap stderr read whole, no truncation fields", r.stderr === "small" && r.stderrTruncated === undefined && r.stderrPath === undefined);
+	check("preview script slices head (75%) + tail (25%) of the cap", stub.scripts.some((s) => s.includes("head -c 1536") && s.includes("tail -c 512")), stub.scripts.join(" | ").slice(0, 160));
+	check(
+		"cleanup removes preview + untruncated err, keeps the truncated original",
+		stub.removed.some((p) => p.endsWith(".out.preview")) && stub.removed.some((p) => p.endsWith(".err")) && !stub.removed.includes(r.stdoutPath),
+		JSON.stringify(stub.removed),
+	);
+	check("truncation does not affect ok", r.ok === true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -78,6 +78,18 @@ const MIN_CRED_TTL_MS = 5_000; // floor for the skewed expiry of a short-lived c
 /** Home directory of the sandbox's `tenki` user; run-code scripts and capture files live here. */
 const SANDBOX_HOME = "/home/tenki";
 
+// Inline-output budget per stream (stdout / stderr), in bytes. Outputs at or
+// under the cap return whole; larger ones return a head+tail preview and the
+// full capture file is KEPT in the sandbox so the caller can page through it.
+// The cap exists for the consumer (an LLM context) and for this process: the
+// data plane's ReadFile has no range support, so the only alternative to a
+// server-side preview would be pulling the entire body over the wire.
+const DEFAULT_MAX_OUTPUT_BYTES = 65_536;
+const MIN_OUTPUT_BYTES = 1_024;
+// Head-heavy split: the start of a log names the command/failure context; the
+// tail carries the final error. 3:1 mirrors how people read build output.
+const TRUNCATE_HEAD_FRACTION = 0.75;
+
 export type Language = "shell" | "python" | "javascript";
 
 export interface ExecResult {
@@ -88,6 +100,12 @@ export interface ExecResult {
 	exitCode: number;
 	ok: boolean;
 	captureError?: string;
+	stdoutTruncated?: boolean;
+	stderrTruncated?: boolean;
+	/** Sandbox path holding the FULL stdout, present only when stdout was truncated. */
+	stdoutPath?: string;
+	/** Sandbox path holding the FULL stderr, present only when stderr was truncated. */
+	stderrPath?: string;
 }
 
 interface CachedCredential {
@@ -393,9 +411,10 @@ export class TenkiClient {
 	}
 
 	/**
-	 * Resolve the calling identity + a default workspace/project for CreateSession
-	 * (which requires a projectId). Picks the first workspace that has a project so
-	 * the (workspace, project) pair stays consistent.
+	 * Resolve the calling identity + a default workspace for CreateSession and
+	 * other workspace-scoped calls. (Projects were removed from the API — the
+	 * proto reserves every project_id field and WhoAmI no longer lists projects —
+	 * so there is nothing narrower than a workspace to resolve.)
 	 *
 	 * CreateSession validates owner_type ∈ {SERVICE, USER} and requires a
 	 * non-empty owner_id, but derives the real owner from the authenticated
@@ -403,11 +422,10 @@ export class TenkiClient {
 	 * for workspace-scoped keys), which the validator rejects — so for those we
 	 * send the same placeholder the first-party SDKs hardcode ("SERVICE"/"self").
 	 */
-	async resolveOwner(): Promise<{ ownerType?: string; ownerId?: string; workspaceId?: string; projectId?: string }> {
+	async resolveOwner(): Promise<{ ownerType?: string; ownerId?: string; workspaceId?: string }> {
 		const resp = await this.control("WhoAmI", {});
 		const workspaces: any[] = Array.isArray(resp.workspaces) ? resp.workspaces : [];
-		const ws = workspaces.find((w) => Array.isArray(w?.projects) && w.projects.length > 0) ?? workspaces[0];
-		const proj = Array.isArray(ws?.projects) ? ws.projects[0] : undefined;
+		const ws = workspaces[0];
 		let ownerType = resp.ownerType as string | undefined;
 		let ownerId = resp.ownerId as string | undefined;
 		// Substitute the placeholder only when WhoAmI returned a type CreateSession
@@ -421,7 +439,6 @@ export class TenkiClient {
 			ownerType,
 			ownerId,
 			workspaceId: ws?.workspaceId ?? ws?.id,
-			projectId: proj?.projectId ?? proj?.id,
 		};
 	}
 
@@ -459,6 +476,41 @@ export class TenkiClient {
 	}
 
 	/**
+	 * Read a capture file back, capping what crosses the wire. Stat first: a
+	 * file at or under the cap is read whole; a larger one gets a server-side
+	 * head+tail preview (assembled by `sh` in the sandbox, so the full body
+	 * never leaves it — ReadFile has no range support). The preview file is the
+	 * caller's to clean up (returned as previewPath); the ORIGINAL is theirs to
+	 * keep, so the user can page through the full output afterwards.
+	 */
+	private async readCaptureFile(
+		sessionId: string,
+		path: string,
+		capBytes: number,
+	): Promise<{ text: string; truncated: boolean; previewPath?: string }> {
+		// Stat is an optimization (skip pulling a body we'd mostly discard), not a
+		// gate: if it fails, fall back to the plain whole read — whose own failure
+		// still surfaces as captureError in the caller.
+		let size: number | undefined;
+		try {
+			const stat = await this.data(sessionId, "Stat", { path });
+			size = Number(stat.size ?? 0); // int64 arrives as a JSON string
+		} catch {
+			size = undefined;
+		}
+		if (size === undefined || !Number.isFinite(size) || size <= capBytes) {
+			return { text: await this.readTextFile(sessionId, path), truncated: false };
+		}
+		const head = Math.floor(capBytes * TRUNCATE_HEAD_FRACTION);
+		const tail = capBytes - head;
+		const previewPath = `${path}.preview`;
+		const marker = `\n[... output truncated: ${size} bytes total, showing the first ${head} and last ${tail}. Full output kept in the sandbox at ${path} ...]\n`;
+		const script = `{ head -c ${head} ${shellQuote(path)}; printf %s ${shellQuote(marker)}; tail -c ${tail} ${shellQuote(path)}; } > ${shellQuote(previewPath)}`;
+		await this.control("ExecuteCommand", { sessionId, command: "sh", args: ["-c", script] });
+		return { text: await this.readTextFile(sessionId, previewPath), truncated: true, previewPath };
+	}
+
+	/**
 	 * Run a command in a session and return stdout/stderr inline.
 	 *
 	 * We wrap the command in `sh -c '<cmd> > out 2> err'`, then read the capture
@@ -466,12 +518,20 @@ export class TenkiClient {
 	 * client. Capture-read failures degrade gracefully into `captureError` rather
 	 * than losing the run — but the result is marked NOT ok, because empty
 	 * stdout/stderr next to a zero exit code would otherwise read as a clean,
-	 * silent success.
+	 * silent success. Streams over maxOutputBytes come back truncated
+	 * (head+tail) with the full capture file retained in the sandbox — see
+	 * readCaptureFile; truncation does not affect `ok`.
 	 */
 	async execCaptured(
 		sessionId: string,
 		command: string,
-		opts: { args?: string[]; cwd?: string; env?: Record<string, string>; timeoutSeconds?: number } = {},
+		opts: {
+			args?: string[];
+			cwd?: string;
+			env?: Record<string, string>;
+			timeoutSeconds?: number;
+			maxOutputBytes?: number;
+		} = {},
 	): Promise<ExecResult> {
 		const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 		const outPath = `${SANDBOX_HOME}/.mcp-exec-${suffix}.out`;
@@ -499,17 +559,34 @@ export class TenkiClient {
 		const rawExit = typeof execution.exitCode === "number" ? execution.exitCode : Number(execution.exitCode ?? 0);
 		const exitCode = Number.isFinite(rawExit) ? Math.trunc(rawExit) : -1;
 
+		const cap = Math.max(MIN_OUTPUT_BYTES, Math.floor(opts.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES));
 		let stdout = "";
 		let stderr = "";
 		let captureError: string | undefined;
+		let stdoutTruncated = false;
+		let stderrTruncated = false;
+		// Truncated originals are KEPT (their path is returned) so the caller can
+		// page through them; everything else — untruncated captures, previews — is
+		// removed.
+		const toRemove: string[] = [];
 		try {
-			stdout = await this.readTextFile(sessionId, outPath);
-			stderr = await this.readTextFile(sessionId, errPath);
+			const [out, err] = await Promise.all([
+				this.readCaptureFile(sessionId, outPath, cap),
+				this.readCaptureFile(sessionId, errPath, cap),
+			]);
+			stdout = out.text;
+			stderr = err.text;
+			stdoutTruncated = out.truncated;
+			stderrTruncated = err.truncated;
+			if (out.previewPath) toRemove.push(out.previewPath);
+			if (err.previewPath) toRemove.push(err.previewPath);
 		} catch (e) {
 			captureError = (e as Error).message;
 		}
+		if (!stdoutTruncated) toRemove.push(outPath);
+		if (!stderrTruncated) toRemove.push(errPath);
 		try {
-			await this.control("ExecuteCommand", { sessionId, command: "rm", args: ["-f", outPath, errPath] });
+			await this.control("ExecuteCommand", { sessionId, command: "rm", args: ["-f", ...toRemove] });
 		} catch {
 			// Session may have gone away; capture files die with it.
 		}
@@ -522,6 +599,8 @@ export class TenkiClient {
 			exitCode,
 			ok: exitCode === 0 && !captureError,
 			...(captureError ? { captureError } : {}),
+			...(stdoutTruncated ? { stdoutTruncated: true, stdoutPath: outPath } : {}),
+			...(stderrTruncated ? { stderrTruncated: true, stderrPath: errPath } : {}),
 		};
 	}
 
@@ -544,7 +623,6 @@ export class TenkiClient {
 			...(owner.ownerType ? { ownerType: owner.ownerType } : {}),
 			...(owner.ownerId ? { ownerId: owner.ownerId } : {}),
 			...(owner.workspaceId ? { workspaceId: owner.workspaceId } : {}),
-			...(owner.projectId ? { projectId: owner.projectId } : {}),
 			...(opts.env && Object.keys(opts.env).length ? { env: opts.env } : {}),
 		});
 		const session = (create.session as Record<string, any>) ?? create;

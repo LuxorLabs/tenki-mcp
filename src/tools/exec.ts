@@ -20,6 +20,22 @@ const execOutputSchema = {
 		.string()
 		.optional()
 		.describe("Present when the command ran but its output could not be read back; stdout/stderr are unknown, not empty."),
+	stdoutTruncated: z
+		.boolean()
+		.optional()
+		.describe("Present (true) when stdout exceeded the output cap and carries only a head+tail preview."),
+	stderrTruncated: z
+		.boolean()
+		.optional()
+		.describe("Present (true) when stderr exceeded the output cap and carries only a head+tail preview."),
+	stdoutPath: z
+		.string()
+		.optional()
+		.describe("Sandbox path holding the FULL stdout, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c)."),
+	stderrPath: z
+		.string()
+		.optional()
+		.describe("Sandbox path holding the FULL stderr, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c)."),
 };
 
 /**
@@ -54,8 +70,9 @@ function sanitizeForTerminal(s: string): string {
 
 /**
  * Render an ExecResult as plain text for clients that don't consume
- * structuredContent. Carries the FULL stdout/stderr (control chars escaped) —
- * output capping is a separate concern and must not silently drop data here.
+ * structuredContent. Carries the streams as returned (control chars escaped);
+ * any capping happened upstream in execCaptured, which marks it explicitly —
+ * a truncated stream carries an inline marker and its full-output path.
  */
 function execText(r: ExecResult): string {
 	const head = `exit ${r.exitCode}${r.ok ? "" : " (failed)"}`;
@@ -64,7 +81,9 @@ function execText(r: ExecResult): string {
 		: "";
 	const stdout = sanitizeForTerminal(r.stdout);
 	const stderr = sanitizeForTerminal(r.stderr);
-	return `${head}${capture}\n--- stdout (${r.stdout.length} chars, control chars escaped) ---\n${stdout}\n--- stderr (${r.stderr.length} chars, control chars escaped) ---\n${stderr}`;
+	const outTag = r.stdoutTruncated ? ", TRUNCATED — full output at " + r.stdoutPath : "";
+	const errTag = r.stderrTruncated ? ", TRUNCATED — full output at " + r.stderrPath : "";
+	return `${head}${capture}\n--- stdout (${r.stdout.length} chars, control chars escaped${outTag}) ---\n${stdout}\n--- stderr (${r.stderr.length} chars, control chars escaped${errTag}) ---\n${stderr}`;
 }
 
 /** Command execution inside an existing sandbox. */
@@ -72,7 +91,8 @@ export function registerExec(server: McpServer, client: TenkiClient): void {
 	server.registerTool(
 		"tenki_exec",
 		{
-			description: "Run a command in an existing sandbox and return stdout, stderr, and exit code inline.",
+			description:
+				"Run a command in an existing sandbox and return stdout, stderr, and exit code inline. Streams over max_output_bytes (default 64KB) come back as a head+tail preview with the full output retained at stdoutPath/stderrPath in the sandbox.",
 			inputSchema: {
 				session_id: sessionIdSchema,
 				command: z.string().describe("Executable, e.g. 'npm' or 'python3'."),
@@ -80,11 +100,24 @@ export function registerExec(server: McpServer, client: TenkiClient): void {
 				cwd: z.string().optional().describe("Working directory (honored in-script)."),
 				env: envSchema,
 				timeout_seconds: z.number().int().positive().optional(),
+				max_output_bytes: z
+					.number()
+					.int()
+					.min(1024)
+					.max(10_000_000)
+					.optional()
+					.describe("Per-stream inline output cap in bytes (default 65536). Larger output is truncated head+tail and kept in the sandbox at stdoutPath/stderrPath."),
 			},
 			outputSchema: execOutputSchema,
 		},
-		async ({ session_id, command, args, cwd, env, timeout_seconds }) => {
-			const result = await client.execCaptured(session_id, command, { args, cwd, env, timeoutSeconds: timeout_seconds });
+		async ({ session_id, command, args, cwd, env, timeout_seconds, max_output_bytes }) => {
+			const result = await client.execCaptured(session_id, command, {
+				args,
+				cwd,
+				env,
+				timeoutSeconds: timeout_seconds,
+				maxOutputBytes: max_output_bytes,
+			});
 			return {
 				structuredContent: { ...result },
 				// Two text blocks: serialized JSON first (the MCP spec's

@@ -28,7 +28,7 @@ export function registerGit(server: McpServer, client: TenkiClient): void {
 			// accepted here and coerced — a client-side rejection of `create: true`
 			// for a call that would serialize identically helps nobody.
 			args: z
-				.record(z.union([z.string(), z.number(), z.boolean()]))
+				.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
 				.optional()
 				.describe(
 					"Operation args as a key→value object (values are sent as strings; numbers/booleans are coerced). clone: {repo, branch?, depth?, directory?}; checkout: {ref, create?: 'true'}; diff: {range?} or {base?, head?}, {path?}; log: {max_count?, range?, path?}.",
