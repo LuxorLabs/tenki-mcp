@@ -38,7 +38,11 @@ concurrency:
 
 jobs:
   release:
-    runs-on: tenki-standard-small-2c-4g
+    # GitHub-hosted on purpose: npm rejects `--provenance` from self-hosted
+    # runners ("Only github-hosted runners are supported when publishing with
+    # provenance" — live-hit on the v0.2.0 run). Sigstore only attests
+    # GitHub-hosted OIDC claims, and this job needs no Tenki infrastructure.
+    runs-on: ubuntu-latest
     # A GitHub environment turns each publish into a one-click human approval once
     # you add required reviewers to it. The npm trusted-publisher config for
     # @tenkicloud/mcp is set to workflow npm-publish.yml + environment npm-publish
