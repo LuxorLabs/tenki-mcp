@@ -26,6 +26,15 @@ Nothing to clone or build. The package installs one command, `tenki-mcp`.
 claude mcp add tenki --env TENKI_API_KEY=tk_your_key_here -- npx -y @tenkicloud/mcp
 ```
 
+### Or install it as a Claude Code plugin
+
+The repo doubles as a plugin marketplace. This prompts for your API key on install and stores it in your OS keychain — no env var to manage:
+
+```
+/plugin marketplace add LuxorLabs/tenki-mcp
+/plugin install tenki@tenki
+```
+
 ### Use it in Claude Desktop
 
 Add to `claude_desktop_config.json`:
