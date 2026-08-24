@@ -1,0 +1,29 @@
+{
+  "name": "tenki",
+  "displayName": "Tenki Sandbox",
+  "version": "0.2.0",
+  "description": "Disposable microVM sandboxes for AI agents: create sandboxes, run code, read/write files, run git, expose preview URLs.",
+  "author": { "name": "Tenki Cloud", "url": "https://tenki.cloud" },
+  "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
+  "repository": "https://github.com/LuxorLabs/tenki-mcp",
+  "license": "MIT",
+  "keywords": ["tenki", "sandbox", "microvm", "code-execution", "mcp"],
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "Tenki API key",
+      "description": "Your Tenki API key (starts with tk_). Create one at https://tenki.cloud.",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "tenki": {
+      "command": "npx",
+      "args": ["-y", "@tenkicloud/mcp"],
+      "env": {
+        "TENKI_API_KEY": "${user_config.api_key}"
+      }
+    }
+  }
+}

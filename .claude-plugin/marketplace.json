@@ -1,0 +1,26 @@
+{
+  "name": "tenki",
+  "owner": {
+    "name": "Tenki Cloud",
+    "url": "https://tenki.cloud"
+  },
+  "metadata": {
+    "description": "Tenki Cloud plugins for Claude Code — disposable microVM sandboxes for agents.",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "tenki",
+      "source": "./plugins/tenki",
+      "description": "Disposable microVM sandboxes for AI agents: create sandboxes, run code, read/write files, run git, expose preview URLs.",
+      "version": "0.2.0",
+      "author": { "name": "Tenki Cloud", "url": "https://tenki.cloud" },
+      "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
+      "repository": "https://github.com/LuxorLabs/tenki-mcp",
+      "license": "MIT",
+      "category": "development",
+      "tags": ["sandbox", "microvm", "code-execution", "mcp"],
+      "keywords": ["tenki", "sandbox", "microvm", "code-execution"]
+    }
+  ]
+}
