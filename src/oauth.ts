@@ -177,8 +177,56 @@ function escapeHtml(value: unknown): string {
 		.replaceAll("'", "&#39;");
 }
 
+const tenkiMark = `<svg viewBox="0 0 31 32" role="img" aria-label="Tenki"><path d="M23.0501 10.0904 14.7539 4.65703c-.8249-.54024-.7734-1.76746.0939-2.23639L18.9798.186532c.4198-.226983.93-.205482 1.3293.05602l9.4763 6.206188c.368.24104.5895.65207.5887 1.09254l-.0204 11.34092c-.0009.4778-.2629.9168-.6827 1.1438l-4.132 2.2341c-.8673.469-1.9198-.1613-1.918-1.1485l.0179-9.9287c.0008-.4404-.2207-.8515-.5888-1.0925Z"/><path d="m12.1862 17.4882-.0237 13.1749c-.0018.9872 1.0508 1.6175 1.918 1.1485l5.8372-3.156c.4198-.227.6818-.666.6827-1.1439l.0262-14.5871c.0008-.4404-.2207-.8515-.5887-1.0925L7.84912 3.84947c-.39929-.26151-.90947-.28301-1.32928-.05602L.682712 6.94949c-.867289.46893-.918838 1.69615-.093938 2.23639L11.5975 16.3957c.368.241.5895.6521.5887 1.0925Z"/><path d="M4.65476 20.6463c-.0007.3854.19503.7451.52013.956l4.05117 2.6278c.17295.1122.27704.3035.27666.5085l-.0075 4.0899c-.00089.4813-.53944.7697-.94542.5063l-8.016264-5.2c-.32513-.2109-.520829-.5706-.520129-.956l.017251-10.036c.000878-.4812.539426-.7697.945409-.5052L4.3867 14.8489c.17294.1122.27703.3035.27665.5085l-.00859 5.2889Z"/></svg>`;
+
 function page(title: string, content: string): string {
-	return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{margin:0;background:#07101f;color:#f8fafc;font:16px system-ui,sans-serif;display:grid;min-height:100vh;place-items:center}.card{width:min(34rem,calc(100% - 3rem));background:#0f172a;border:1px solid #334155;border-radius:16px;padding:2rem;box-shadow:0 24px 80px #0008}h1{margin:0 0 .75rem;font-size:1.6rem}p{color:#cbd5e1;line-height:1.5}.choice{display:block;border:1px solid #475569;border-radius:10px;padding:.9rem;margin:.75rem 0}.choice:has(input:checked){border-color:#38bdf8;background:#082f49}button{width:100%;margin-top:1rem;padding:.8rem;border:0;border-radius:9px;background:#0ea5e9;color:white;font-weight:700;font-size:1rem}code{color:#7dd3fc}</style></head><body><main class="card">${content}</main></body></html>`;
+	return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000a15"><title>${escapeHtml(title)}</title><style>
+:root{color-scheme:dark;--tenki-blue:#047bff;--tenki-blue-dark:#00369f;--background:#000a15;--surface:#07111f;--surface-raised:#0b1626;--border:#1b3048;--border-active:#4c9dff;--text:#f8fafc;--muted:#8b97a7;--soft:#c8d2df}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(70rem 34rem at 50% -8%,#073a724d 0%,transparent 62%),var(--background);color:var(--text);font:15px/1.5 Geist,Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:grid;place-items:center;padding:2rem 1rem}
+.shell{width:min(35rem,100%)}
+.brand{display:flex;align-items:center;gap:.7rem;margin:0 0 1.25rem .25rem;color:#fff;font-size:1.05rem;font-weight:700;letter-spacing:-.02em}
+.brand svg{width:25px;height:26px;fill:var(--tenki-blue);filter:drop-shadow(0 0 12px #047bff55)}
+.card{position:relative;overflow:hidden;background:linear-gradient(145deg,#0b1626f5,#06101df7);border:1px solid var(--border);border-radius:20px;padding:2rem;box-shadow:0 28px 80px #0009,0 1px 0 #ffffff0a inset}
+.card:before{content:"";position:absolute;inset:0 0 auto;height:1px;background:linear-gradient(90deg,transparent,#4c9dff88,transparent)}
+.eyebrow{display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;color:#72b5ff;font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.eyebrow:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tenki-blue);box-shadow:0 0 12px #047bff}
+h1{margin:0;color:#fff;font-size:clamp(1.65rem,5vw,2rem);line-height:1.18;letter-spacing:-.035em}
+.lead{margin:.8rem 0 0;color:var(--soft);font-size:1rem}
+.identity{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:1.35rem 0 1.25rem;padding:.8rem .9rem;background:#ffffff08;border:1px solid #ffffff0d;border-radius:10px}
+.identity span{color:var(--muted);font-size:.8rem}
+.identity strong{overflow:hidden;color:#d9e9fb;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem;text-overflow:ellipsis;white-space:nowrap}
+.section-label{margin-bottom:.65rem;color:#dce8f5;font-size:.8rem;font-weight:650}
+.workspace-list{display:grid;gap:.65rem}
+.choice{display:grid;grid-template-columns:20px minmax(0,1fr);gap:.75rem;align-items:center;padding:.9rem;background:#ffffff05;border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+.choice:hover{border-color:#315578;background:#0c1c30;transform:translateY(-1px)}
+.choice:has(input:checked){border-color:var(--border-active);background:linear-gradient(90deg,#047bff1f,#047bff0a);box-shadow:0 0 0 1px #047bff22 inset}
+.choice input{appearance:none;width:18px;height:18px;margin:0;border:1.5px solid #58718e;border-radius:50%;display:grid;place-items:center}
+.choice input:before{content:"";width:8px;height:8px;border-radius:50%;background:#fff;transform:scale(0);transition:transform .12s}
+.choice input:checked{border:5px solid var(--tenki-blue);background:#fff}
+.choice input:checked:before{transform:scale(1)}
+.workspace-name{display:block;color:#f8fbff;font-weight:650}
+.workspace-id{display:block;overflow:hidden;margin-top:.15rem;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;text-overflow:ellipsis;white-space:nowrap}
+.permission{display:flex;gap:.75rem;margin:1rem 0 0;padding:.8rem .9rem;background:#047bff0c;border:1px solid #047bff1f;border-radius:10px;color:#9fb0c3;font-size:.8rem}
+.permission svg{flex:0 0 auto;width:17px;height:17px;color:#72b5ff}
+.permission strong{display:block;margin-bottom:.1rem;color:#cfdeef;font-weight:650}
+button{width:100%;margin-top:1.25rem;padding:.82rem 1rem;border:1px solid #3b94f5;border-radius:10px;background:linear-gradient(180deg,#1687ff,var(--tenki-blue-dark));box-shadow:0 8px 24px #047bff2b;color:#fff;font:inherit;font-weight:700;cursor:pointer;transition:filter .15s,transform .15s,box-shadow .15s}
+button:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 10px 28px #047bff40}
+button:focus-visible,.choice:has(input:focus-visible){outline:2px solid #89c4ff;outline-offset:3px}
+.error-symbol{display:grid;width:42px;height:42px;margin-bottom:1rem;border:1px solid #f8717140;border-radius:12px;background:#ef444418;color:#fca5a5;place-items:center;font-size:1.25rem;font-weight:700}
+.error-note{margin-top:1.25rem;padding:.8rem .9rem;background:#ffffff07;border:1px solid #ffffff0d;border-radius:10px;color:var(--muted);font-size:.82rem}
+.footer{margin:1rem 0 0;color:#5f7187;text-align:center;font-size:.72rem}
+@media(max-width:520px){body{padding:1rem}.card{padding:1.35rem}.identity{align-items:flex-start;flex-direction:column;gap:.2rem}}
+</style></head><body><div class="shell"><header class="brand">${tenkiMark}<span>tenki</span></header><main class="card">${content}</main><p class="footer">Secure authorization powered by Tenki</p></div></body></html>`;
+}
+
+export function requestOriginAllowed(origin: string | undefined, publicUrl: string): boolean {
+	if (!origin) return true;
+	try {
+		return new URL(origin).origin === new URL(publicUrl).origin;
+	} catch {
+		return false;
+	}
 }
 
 function readBody(req: http.IncomingMessage): Promise<Buffer> {
@@ -400,7 +448,7 @@ export class OAuthBrowserFlow {
 			const clientName = request.client?.client_name || request.client?.client_id || "Claude";
 			const choices = workspaces
 				.map(
-					(workspace, index) => `<label class="choice"><input type="radio" name="workspace_id" value="${escapeHtml(workspace.id)}"${index === 0 ? " checked" : ""}> <strong>${escapeHtml(workspace.name)}</strong><br><small>${escapeHtml(workspace.id)}</small></label>`,
+					(workspace, index) => `<label class="choice"><input type="radio" name="workspace_id" value="${escapeHtml(workspace.id)}"${index === 0 ? " checked" : ""}><span><span class="workspace-name">${escapeHtml(workspace.name)}</span><span class="workspace-id">${escapeHtml(workspace.id)}</span></span></label>`,
 				)
 				.join("");
 			html(
@@ -408,7 +456,7 @@ export class OAuthBrowserFlow {
 				200,
 				page(
 					"Authorize Tenki MCP",
-					`<h1>Connect ${escapeHtml(clientName)} to Tenki</h1><p>Signed in as <code>${escapeHtml(identity.email || identity.id)}</code>. Choose the workspace Claude may use to create and manage sandboxes.</p><form method="post" action="/oauth/consent"><input type="hidden" name="consent_challenge" value="${escapeHtml(challenge)}">${choices}<button type="submit">Authorize workspace</button></form>`,
+					`<div class="eyebrow">MCP authorization</div><h1>Connect ${escapeHtml(clientName)} to Tenki</h1><p class="lead">Choose the workspace this connection may use.</p><div class="identity"><span>Signed in as</span><strong>${escapeHtml(identity.email || identity.id)}</strong></div><form method="post" action="/oauth/consent"><input type="hidden" name="consent_challenge" value="${escapeHtml(challenge)}"><div class="section-label">Workspace access</div><div class="workspace-list">${choices}</div><div class="permission"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Z"/><path d="m9.2 12 1.8 1.8 3.8-4"/></svg><span><strong>Workspace-scoped access</strong>${escapeHtml(clientName)} can create and manage sandboxes only in the workspace you authorize.</span></div><button type="submit">Authorize workspace</button></form>`,
 				),
 			);
 		} catch (error) {
@@ -418,7 +466,8 @@ export class OAuthBrowserFlow {
 
 	private async acceptConsent(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
 		this.requireUiConfig();
-		if (req.headers.origin && req.headers.origin !== new URL(this.config.publicUrl).origin) {
+		if (!requestOriginAllowed(req.headers.origin, this.config.publicUrl)) {
+			console.warn(`tenki-mcp: rejected OAuth consent origin ${JSON.stringify(req.headers.origin)}`);
 			return this.error(res, 403, "Invalid request origin.");
 		}
 		const identity = await this.browserIdentity(req);
@@ -515,7 +564,14 @@ export class OAuthBrowserFlow {
 	}
 
 	private error(res: http.ServerResponse, status: number, message: string): void {
-		html(res, status, page("Tenki OAuth error", `<h1>Could not authorize Tenki</h1><p>${escapeHtml(message)}</p>`));
+		html(
+			res,
+			status,
+			page(
+				"Tenki OAuth error",
+				`<div class="error-symbol" aria-hidden="true">!</div><div class="eyebrow">Authorization stopped</div><h1>Could not connect to Tenki</h1><p class="lead">${escapeHtml(message)}</p><div class="error-note">Return to Claude Code and run <strong>claude mcp login</strong> again. If the problem continues, contact your Tenki administrator.</div>`,
+			),
+		);
 	}
 }
 

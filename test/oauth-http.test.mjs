@@ -72,6 +72,7 @@ process.env.TENKI_MCP_HYDRA_PUBLIC_URL = `http://127.0.0.1:${introspectionAddres
 process.env.TENKI_MCP_PUBLIC_URL = "http://127.0.0.1";
 process.env.TENKI_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp";
 
+const { requestOriginAllowed } = await import("../dist/oauth.js");
 const { startHttp } = await import("../dist/http.js");
 const server = startHttp(null, 0);
 if (!server.listening) await once(server, "listening");
@@ -110,6 +111,20 @@ try {
 	if (!oauthErrorBody.includes("Invalid &lt;request&gt;") || oauthErrorBody.includes("Invalid <request>")) {
 		throw new Error("OAuth error page did not escape its message");
 	}
+	if (!oauthErrorBody.includes('aria-label="Tenki"') || !oauthErrorBody.includes("--tenki-blue:#047bff")) {
+		throw new Error("OAuth error page omitted Tenki branding");
+	}
+
+	for (const allowed of [undefined, "https://fabric.tenki.test", "https://fabric.tenki.test/", "https://fabric.tenki.test:443"]) {
+		if (!requestOriginAllowed(allowed, "https://fabric.tenki.test")) {
+			throw new Error(`OAuth consent rejected equivalent origin ${allowed}`);
+		}
+	}
+	for (const rejected of ["null", "http://fabric.tenki.test", "https://evil.tenki.test", "https://fabric.tenki.test.evil.test"]) {
+		if (requestOriginAllowed(rejected, "https://fabric.tenki.test")) {
+			throw new Error(`OAuth consent allowed hostile origin ${rejected}`);
+		}
+	}
 
 	const logout = await fetch(`${base}/oauth/logout?logout_challenge=${logoutChallenge}`, { redirect: "manual" });
 	if (logout.status !== 302 || logout.headers.get("location") !== "https://oauth.tenki.test/logged-out") {
@@ -129,7 +144,8 @@ try {
 	console.log("✓ RFC 9728 protected-resource metadata is public");
 	console.log("✓ unauthenticated MCP requests return an OAuth challenge");
 	console.log("✓ Hydra dynamic registration responses are normalized for MCP clients");
-	console.log("✓ OAuth errors are safely rendered and Hydra logout challenges are accepted");
+	console.log("✓ branded OAuth errors are safely rendered and Hydra logout challenges are accepted");
+	console.log("✓ OAuth consent accepts equivalent public origins and rejects cross-origin submissions");
 	console.log("✓ an introspected workspace-bound token initializes MCP");
 } finally {
 	await new Promise((resolve) => server.close(resolve));
