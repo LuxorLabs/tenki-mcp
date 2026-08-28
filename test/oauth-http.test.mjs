@@ -11,6 +11,8 @@ const sourceToken = "ory_at_test";
 const refreshedSourceToken = "ory_at_refreshed";
 const delegationSecret = "0123456789abcdef0123456789abcdef";
 let delegatedRequests = 0;
+let authorizationProxyRequests = 0;
+let registrationAudienceBound = false;
 
 function verifyDelegation(header, audience) {
 	if (!header?.startsWith("Bearer ")) throw new Error("backend request omitted Bearer delegation");
@@ -50,17 +52,35 @@ const apiAddress = api.address();
 const hydra = http.createServer((req, res) => {
 	const url = new URL(req.url, "http://127.0.0.1");
 	if (req.method === "POST" && url.pathname === "/oauth2/register") {
-		res.writeHead(201, { "Content-Type": "application/json" });
-		res.end(
-			JSON.stringify({
-				client_id: "claude-dynamic",
-				client_uri: "",
-				policy_uri: "",
-				contacts: null,
-				registration_access_token: "registration-token",
-				registration_client_uri: "https://oauth.tenki.test/oauth2/register/claude-dynamic",
-			}),
-		);
+		let body = "";
+		req.setEncoding("utf8");
+		req.on("data", (chunk) => (body += chunk));
+		req.on("end", () => {
+			registrationAudienceBound = JSON.parse(body).audience?.[0] === "http://127.0.0.1/mcp";
+			res.writeHead(201, { "Content-Type": "application/json" });
+			res.end(
+				JSON.stringify({
+					client_id: "claude-dynamic",
+					client_uri: "",
+					policy_uri: "",
+					contacts: null,
+					registration_access_token: "registration-token",
+					registration_client_uri: "https://oauth.tenki.test/oauth2/register/claude-dynamic",
+				}),
+			);
+		});
+		return;
+	}
+	if (req.method === "GET" && url.pathname === "/oauth2/auth") {
+		if (url.searchParams.get("audience") !== "http://127.0.0.1/mcp" || url.searchParams.has("resource")) {
+			throw new Error("authorization adapter did not translate the resource into Hydra's audience parameter");
+		}
+		authorizationProxyRequests++;
+		res.writeHead(302, {
+			Location: "https://app.tenki.test/mcp/oauth/login?login_challenge=test",
+			"Set-Cookie": "oauth_session=test; Path=/; HttpOnly; Secure; SameSite=Lax",
+		});
+		res.end();
 		return;
 	}
 
@@ -119,6 +139,13 @@ try {
 		throw new Error("401 challenge omitted resource_metadata");
 	}
 
+	const authorizationMetadata = await fetch(`${base}/.well-known/oauth-authorization-server`);
+	if (!authorizationMetadata.ok) throw new Error(`authorization metadata returned ${authorizationMetadata.status}`);
+	const authorizationServer = await authorizationMetadata.json();
+	if (authorizationServer.authorization_endpoint !== "https://oauth.tenki.test/mcp/oauth2/auth") {
+		throw new Error("authorization metadata did not advertise the resource adapter");
+	}
+
 	const registration = await fetch(`${base}/oauth/register`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -131,6 +158,25 @@ try {
 	}
 	if ("client_uri" in registeredClient || "policy_uri" in registeredClient || "contacts" in registeredClient) {
 		throw new Error("OAuth registration adapter retained invalid optional fields");
+	}
+	if (!registrationAudienceBound) throw new Error("dynamic registration was not restricted to the MCP resource audience");
+
+	const authorize = await fetch(
+		`${base}/mcp/oauth2/auth?client_id=claude-dynamic&response_type=code&resource=${encodeURIComponent("http://127.0.0.1/mcp")}`,
+		{ redirect: "manual" },
+	);
+	if (authorize.status !== 302 || authorizationProxyRequests !== 1) {
+		throw new Error("resource-bound authorization was not forwarded to Hydra");
+	}
+	if (!authorize.headers.get("set-cookie")?.includes("oauth_session=")) {
+		throw new Error("authorization adapter dropped Hydra's session cookie");
+	}
+	const invalidTarget = await fetch(
+		`${base}/mcp/oauth2/auth?client_id=claude-dynamic&response_type=code&resource=https%3A%2F%2Fapi.attacker.test`,
+		{ redirect: "manual" },
+	);
+	if (invalidTarget.status !== 400 || authorizationProxyRequests !== 1) {
+		throw new Error("authorization adapter forwarded an invalid OAuth resource");
 	}
 
 	const oldConsentRoute = await fetch(`${base}/oauth/consent`);
@@ -168,6 +214,7 @@ try {
 	await client.close();
 
 	console.log("✓ RFC 9728 protected-resource metadata is public");
+	console.log("✓ RFC 8707 resources are translated into Hydra-bound token audiences");
 	console.log("✓ unauthenticated MCP requests return an OAuth challenge");
 	console.log("✓ Hydra dynamic registration responses are normalized for MCP clients");
 	console.log("✓ browser login and consent are no longer hosted by tenki-mcp");

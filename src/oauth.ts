@@ -245,9 +245,29 @@ export class OAuthCompatibilityRoutes {
 		};
 	}
 
+	authorizationServerMetadata(): JsonRecord {
+		return {
+			issuer: this.config.issuer,
+			authorization_endpoint: `${this.config.issuer}/mcp/oauth2/auth`,
+			token_endpoint: `${this.config.issuer}/oauth2/token`,
+			registration_endpoint: `${this.config.publicUrl}/oauth/register`,
+			jwks_uri: `${this.config.issuer}/.well-known/jwks.json`,
+			response_types_supported: ["code"],
+			response_modes_supported: ["query"],
+			grant_types_supported: ["authorization_code", "refresh_token"],
+			token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
+			code_challenge_methods_supported: ["S256"],
+			scopes_supported: [this.config.scope, "offline_access"],
+		};
+	}
+
 	async handle(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> {
 		if (url.pathname === "/.well-known/oauth-protected-resource/mcp" || url.pathname === "/.well-known/oauth-protected-resource") {
 			json(res, 200, this.protectedResourceMetadata());
+			return true;
+		}
+		if (url.pathname === "/.well-known/oauth-authorization-server") {
+			json(res, 200, this.authorizationServerMetadata());
 			return true;
 		}
 		if (url.pathname === "/healthz") {
@@ -258,7 +278,51 @@ export class OAuthCompatibilityRoutes {
 			await this.registerClient(req, res);
 			return true;
 		}
+		if (url.pathname === "/mcp/oauth2/auth" && (req.method === "GET" || req.method === "HEAD")) {
+			await this.authorize(req, res, url);
+			return true;
+		}
 		return false;
+	}
+
+	private async authorize(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<void> {
+		if (!this.config.hydraPublicUrl) {
+			json(res, 503, { error: "temporarily_unavailable", error_description: "OAuth authorization is not configured." });
+			return;
+		}
+		const resources = url.searchParams.getAll("resource");
+		if (resources.length !== 1 || resources[0] !== this.config.resource) {
+			json(res, 400, { error: "invalid_target", error_description: "The requested OAuth resource is not available." });
+			return;
+		}
+
+		const upstreamUrl = new URL("/oauth2/auth", this.config.hydraPublicUrl);
+		upstreamUrl.search = url.search;
+		upstreamUrl.searchParams.delete("resource");
+		upstreamUrl.searchParams.set("audience", this.config.resource);
+		try {
+			const upstream = await fetch(upstreamUrl, {
+				method: req.method,
+				headers: {
+					...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
+					...(req.headers.accept ? { Accept: req.headers.accept } : {}),
+					...(req.headers["user-agent"] ? { "User-Agent": req.headers["user-agent"] } : {}),
+				},
+				redirect: "manual",
+				signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+			});
+			const body = req.method === "HEAD" ? "" : await upstream.text();
+			const setCookie = upstream.headers.getSetCookie();
+			res.writeHead(upstream.status, {
+				...(upstream.headers.get("content-type") ? { "Content-Type": upstream.headers.get("content-type")! } : {}),
+				"Cache-Control": "no-store",
+				...(upstream.headers.get("location") ? { Location: upstream.headers.get("location")! } : {}),
+				...(setCookie.length ? { "Set-Cookie": setCookie } : {}),
+			});
+			res.end(body);
+		} catch {
+			json(res, 502, { error: "temporarily_unavailable", error_description: "OAuth authorization failed." });
+		}
 	}
 
 	private async registerClient(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -268,10 +332,16 @@ export class OAuthCompatibilityRoutes {
 		}
 
 		try {
+			const raw = (await readBody(req)).toString("utf8");
+			const registration = JSON.parse(raw) as JsonRecord;
+			if (!registration || typeof registration !== "object" || Array.isArray(registration)) {
+				throw new Error("invalid registration document");
+			}
+			registration.audience = [this.config.resource];
 			const upstream = await fetch(`${this.config.hydraPublicUrl}/oauth2/register`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: (await readBody(req)).toString("utf8"),
+				body: JSON.stringify(registration),
 				signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 			});
 			const text = await upstream.text();
