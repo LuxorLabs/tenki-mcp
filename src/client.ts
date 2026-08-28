@@ -126,6 +126,8 @@ export interface TenkiClientOptions {
 	credTtlMs?: number;
 	/** Workspace selected by an upstream delegated authorization grant. */
 	workspaceId?: string;
+	/** Supplies a short-lived Bearer credential for hosted delegated calls. */
+	bearerTokenProvider?: () => string;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -176,6 +178,7 @@ export class TenkiClient {
 	private readonly slowTimeoutMs: number;
 	private readonly credTtlMs: number;
 	private readonly workspaceId?: string;
+	private readonly bearerTokenProvider?: () => string;
 
 	constructor(private readonly token: string, baseUrl: string = DEFAULT_BASE_URL, opts: TenkiClientOptions = {}) {
 		this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -184,6 +187,12 @@ export class TenkiClient {
 		this.slowTimeoutMs = opts.slowTimeoutMs ?? DEFAULT_SLOW_TIMEOUT_MS;
 		this.credTtlMs = opts.credTtlMs ?? DEFAULT_CRED_TTL_MS;
 		this.workspaceId = opts.workspaceId?.trim() || undefined;
+		this.bearerTokenProvider = opts.bearerTokenProvider;
+	}
+
+	private controlAuthHeaders(): Record<string, string> {
+		if (this.bearerTokenProvider) return { Authorization: `Bearer ${this.bearerTokenProvider()}` };
+		return authHeaders(this.token);
 	}
 
 	/**
@@ -263,7 +272,7 @@ export class TenkiClient {
 					url,
 					{
 						method: "POST",
-						headers: { "Content-Type": "application/json", "Connect-Protocol-Version": "1", ...authHeaders(this.token) },
+						headers: { "Content-Type": "application/json", "Connect-Protocol-Version": "1", ...this.controlAuthHeaders() },
 						body: JSON.stringify(body ?? {}),
 					},
 					deadline - Date.now(),

@@ -1,29 +1,54 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { once } from "node:events";
+import http from "node:http";
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import http from "node:http";
-import { once } from "node:events";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const workspaceId = "22222222-2222-4222-8222-222222222222";
-const token = "ory_at_test";
-const logoutChallenge = "logout-test";
-let logoutRequestRead = false;
-let logoutAccepted = false;
+const sourceToken = "ory_at_test";
+const refreshedSourceToken = "ory_at_refreshed";
+const delegationSecret = "0123456789abcdef0123456789abcdef";
+let delegatedRequests = 0;
 
-const introspection = http.createServer((req, res) => {
+function verifyDelegation(header, audience) {
+	if (!header?.startsWith("Bearer ")) throw new Error("backend request omitted Bearer delegation");
+	const token = header.slice("Bearer ".length);
+	if ([sourceToken, refreshedSourceToken].some((source) => token === source || token.includes(source))) {
+		throw new Error("MCP access token was passed through to the backend");
+	}
+	const parts = token.split(".");
+	if (parts.length !== 3) throw new Error("backend credential is not a JWT");
+	const expected = createHmac("sha256", delegationSecret).update(`${parts[0]}.${parts[1]}`).digest();
+	const actual = Buffer.from(parts[2], "base64url");
+	if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error("backend delegation signature is invalid");
+	const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+	if (payload.iss !== "http://127.0.0.1" || payload.aud !== audience) throw new Error("backend delegation issuer/audience is invalid");
+	if (payload.sub !== userId || payload.workspace_id !== workspaceId || payload.client_id !== "claude-test") {
+		throw new Error("backend delegation lost its user, workspace, or client binding");
+	}
+	if (!String(payload.scope).split(" ").includes("mcp") || payload.exp - payload.iat > 60) {
+		throw new Error("backend delegation has invalid scope or lifetime");
+	}
+	delegatedRequests++;
+}
+
+const api = http.createServer((req, res) => {
+	verifyDelegation(req.headers.authorization, `http://127.0.0.1:${api.address().port}`);
+	res.writeHead(200, { "Content-Type": "application/json" });
+	if (req.url?.endsWith("/WhoAmI")) {
+		res.end(JSON.stringify({ ownerType: "USER", ownerId: userId, workspaces: [{ workspaceId, name: "Test" }] }));
+		return;
+	}
+	res.end(JSON.stringify({ usage: {} }));
+});
+api.listen(0, "127.0.0.1");
+await once(api, "listening");
+const apiAddress = api.address();
+
+const hydra = http.createServer((req, res) => {
 	const url = new URL(req.url, "http://127.0.0.1");
-	if (req.method === "GET" && url.pathname === "/admin/oauth2/auth/requests/logout") {
-		logoutRequestRead = url.searchParams.get("logout_challenge") === logoutChallenge;
-		res.writeHead(logoutRequestRead ? 200 : 400, { "Content-Type": "application/json" });
-		res.end(JSON.stringify(logoutRequestRead ? { challenge: logoutChallenge, subject: userId } : { error: "bad challenge" }));
-		return;
-	}
-	if (req.method === "PUT" && url.pathname === "/admin/oauth2/auth/requests/logout/accept") {
-		logoutAccepted = url.searchParams.get("logout_challenge") === logoutChallenge;
-		res.writeHead(logoutAccepted ? 200 : 400, { "Content-Type": "application/json" });
-		res.end(JSON.stringify(logoutAccepted ? { redirect_to: "https://oauth.tenki.test/logged-out" } : { error: "bad challenge" }));
-		return;
-	}
 	if (req.method === "POST" && url.pathname === "/oauth2/register") {
 		res.writeHead(201, { "Content-Type": "application/json" });
 		res.end(
@@ -43,7 +68,8 @@ const introspection = http.createServer((req, res) => {
 	req.setEncoding("utf8");
 	req.on("data", (chunk) => (body += chunk));
 	req.on("end", () => {
-		const valid = new URLSearchParams(body).get("token") === token;
+		const presentedToken = new URLSearchParams(body).get("token");
+		const valid = presentedToken === sourceToken || presentedToken === refreshedSourceToken;
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(
 			JSON.stringify(
@@ -54,6 +80,7 @@ const introspection = http.createServer((req, res) => {
 							client_id: "claude-test",
 							scope: "mcp",
 							aud: ["http://127.0.0.1/mcp"],
+							exp: Math.floor(Date.now() / 1000) + 3600,
 							ext: { workspace_id: workspaceId },
 						}
 					: { active: false },
@@ -61,18 +88,19 @@ const introspection = http.createServer((req, res) => {
 		);
 	});
 });
-introspection.listen(0, "127.0.0.1");
-await once(introspection, "listening");
-const introspectionAddress = introspection.address();
+hydra.listen(0, "127.0.0.1");
+await once(hydra, "listening");
+const hydraAddress = hydra.address();
 
 process.env.TENKI_MCP_OAUTH_ISSUER = "https://oauth.tenki.test";
-process.env.TENKI_MCP_OAUTH_INTROSPECTION_URL = `http://127.0.0.1:${introspectionAddress.port}/admin/oauth2/introspect`;
-process.env.TENKI_MCP_HYDRA_ADMIN_URL = `http://127.0.0.1:${introspectionAddress.port}`;
-process.env.TENKI_MCP_HYDRA_PUBLIC_URL = `http://127.0.0.1:${introspectionAddress.port}`;
+process.env.TENKI_MCP_OAUTH_INTROSPECTION_URL = `http://127.0.0.1:${hydraAddress.port}/admin/oauth2/introspect`;
+process.env.TENKI_MCP_HYDRA_PUBLIC_URL = `http://127.0.0.1:${hydraAddress.port}`;
 process.env.TENKI_MCP_PUBLIC_URL = "http://127.0.0.1";
 process.env.TENKI_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp";
+process.env.TENKI_MCP_API_DELEGATION_SECRET = delegationSecret;
+process.env.TENKI_API_ENDPOINT = `http://127.0.0.1:${apiAddress.port}`;
 
-const { requestOriginAllowed } = await import("../dist/oauth.js");
+const { authorizationBinding } = await import("../dist/oauth.js");
 const { startHttp } = await import("../dist/http.js");
 const server = startHttp(null, 0);
 if (!server.listening) await once(server, "listening");
@@ -105,49 +133,48 @@ try {
 		throw new Error("OAuth registration adapter retained invalid optional fields");
 	}
 
-	const oauthError = await fetch(`${base}/oauth/error?error_description=${encodeURIComponent("Invalid <request>")}`);
-	if (oauthError.status !== 400) throw new Error(`OAuth error page returned ${oauthError.status}`);
-	const oauthErrorBody = await oauthError.text();
-	if (!oauthErrorBody.includes("Invalid &lt;request&gt;") || oauthErrorBody.includes("Invalid <request>")) {
-		throw new Error("OAuth error page did not escape its message");
-	}
-	if (!oauthErrorBody.includes('aria-label="Tenki"') || !oauthErrorBody.includes("--tenki-blue:#047bff")) {
-		throw new Error("OAuth error page omitted Tenki branding");
-	}
+	const oldConsentRoute = await fetch(`${base}/oauth/consent`);
+	if (oldConsentRoute.status !== 404) throw new Error("MCP server still hosts the browser consent route");
 
-	for (const allowed of [undefined, "https://fabric.tenki.test", "https://fabric.tenki.test/", "https://fabric.tenki.test:443"]) {
-		if (!requestOriginAllowed(allowed, "https://fabric.tenki.test")) {
-			throw new Error(`OAuth consent rejected equivalent origin ${allowed}`);
-		}
-	}
-	for (const rejected of ["null", "http://fabric.tenki.test", "https://evil.tenki.test", "https://fabric.tenki.test.evil.test"]) {
-		if (requestOriginAllowed(rejected, "https://fabric.tenki.test")) {
-			throw new Error(`OAuth consent allowed hostile origin ${rejected}`);
-		}
-	}
-
-	const logout = await fetch(`${base}/oauth/logout?logout_challenge=${logoutChallenge}`, { redirect: "manual" });
-	if (logout.status !== 302 || logout.headers.get("location") !== "https://oauth.tenki.test/logged-out") {
-		throw new Error(`OAuth logout returned ${logout.status} ${logout.headers.get("location")}`);
-	}
-	if (!logoutRequestRead || !logoutAccepted) throw new Error("OAuth logout did not validate and accept the Hydra challenge");
-
+	const requestHeaders = new Headers({ Authorization: `Bearer ${sourceToken}` });
 	const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
-		requestInit: { headers: { Authorization: `Bearer ${token}` } },
+		requestInit: { headers: requestHeaders },
 	});
 	const client = new Client({ name: "oauth-http-test", version: "1.0.0" });
 	await client.connect(transport);
 	const { tools } = await client.listTools();
 	if (tools.length !== 71) throw new Error(`OAuth MCP advertised ${tools.length} tools; expected 71`);
+	requestHeaders.set("Authorization", `Bearer ${refreshedSourceToken}`);
+	await client.callTool({ name: "tenki_get_workspace_usage", arguments: {} });
+	if (delegatedRequests < 2) throw new Error("tool call did not reach the backend with delegated authentication");
+	if (
+		authorizationBinding({
+			tokenDigest: "first",
+			subject: userId,
+			workspaceId,
+			clientId: "claude-test",
+			scope: ["mcp"],
+		}) !==
+		authorizationBinding({
+			tokenDigest: "refreshed",
+			subject: userId,
+			workspaceId,
+			clientId: "claude-test",
+			scope: ["mcp"],
+		})
+	) {
+		throw new Error("an OAuth token refresh changes the MCP session binding");
+	}
 	await client.close();
 
 	console.log("✓ RFC 9728 protected-resource metadata is public");
 	console.log("✓ unauthenticated MCP requests return an OAuth challenge");
 	console.log("✓ Hydra dynamic registration responses are normalized for MCP clients");
-	console.log("✓ branded OAuth errors are safely rendered and Hydra logout challenges are accepted");
-	console.log("✓ OAuth consent accepts equivalent public origins and rejects cross-origin submissions");
-	console.log("✓ an introspected workspace-bound token initializes MCP");
+	console.log("✓ browser login and consent are no longer hosted by tenki-mcp");
+	console.log("✓ MCP tokens are translated into short-lived, workspace-bound API delegations");
+	console.log("✓ OAuth token refresh preserves the authenticated MCP session binding");
 } finally {
 	await new Promise((resolve) => server.close(resolve));
-	await new Promise((resolve) => introspection.close(resolve));
+	await new Promise((resolve) => hydra.close(resolve));
+	await new Promise((resolve) => api.close(resolve));
 }

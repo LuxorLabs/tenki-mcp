@@ -131,6 +131,11 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | `TENKI_MCP_OAUTH_RESOURCE` | `<public URL>/mcp` | RFC 8707 resource identifier accepted in access-token audiences. |
 | `TENKI_MCP_OAUTH_SCOPE` | `mcp` | Required delegated scope. |
 | `TENKI_MCP_OAUTH_INTROSPECTION_URL` | — | Internal Hydra token-introspection endpoint. |
+| `TENKI_MCP_HYDRA_PUBLIC_URL` | — | Internal Hydra public endpoint used to proxy dynamic client registration. |
+| `TENKI_MCP_API_DELEGATION_SECRET` | — | Shared secret (at least 32 bytes) for signing short-lived Tenki API delegations. |
+| `TENKI_MCP_API_DELEGATION_ISSUER` | public URL | Issuer on Tenki API delegation JWTs. |
+| `TENKI_MCP_API_DELEGATION_AUDIENCE` | API endpoint | Audience on Tenki API delegation JWTs. |
+| `TENKI_MCP_API_DELEGATION_TTL_SECONDS` | `60` | Delegation lifetime; must not exceed 300 seconds. |
 
 ## Tools
 
@@ -185,7 +190,7 @@ TENKI_MCP_TRANSPORT=http TENKI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
 
 Point an HTTP-capable MCP client at `/mcp`. Static-key mode uses one shared `TENKI_API_KEY` for all sessions. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
 
-Hosted multi-tenant deployments instead configure Hydra OAuth. The server publishes RFC 9728 protected-resource metadata, dynamically registers public clients, verifies the requested audience and scope, and binds each MCP session to the workspace chosen during consent. Hydra's admin and introspection endpoints must remain cluster-internal.
+Hosted multi-tenant deployments instead configure Hydra OAuth. The server publishes RFC 9728 protected-resource metadata, dynamically registers public clients, verifies the requested audience and scope, and binds each MCP session to the workspace chosen on the Tenki consent page. The Hydra access token terminates at `tenki-mcp`; API calls use signed, short-lived, workspace-bound delegation JWTs instead. Hydra's admin and introspection endpoints and the delegation secret must remain cluster-internal.
 
 ## How it works
 

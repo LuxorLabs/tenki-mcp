@@ -8,11 +8,9 @@
  *   TENKI_MCP_HTTP_HOST    — bind host (default 127.0.0.1, loopback-only)
  *   TENKI_MCP_HTTP_TOKEN   — required Bearer token for the /mcp endpoint
  *
- * Security posture (the process holds one shared TENKI_API_KEY and exposes all
- * tools, incl. arbitrary code execution + credit spend, so the endpoint is a
- * capability): loopback-only by default; DNS-rebinding protection on (Host
- * allowlist); optional bearer auth; and it REFUSES to bind to a non-loopback
- * host without a token set. Per-session/global DoS caps are applied.
+ * Security posture: loopback-only by default; DNS-rebinding protection on
+ * (Host allowlist); static bearer auth or OAuth required for non-loopback
+ * binds; and per-session/global DoS caps are applied.
  */
 import http from "node:http";
 import { randomUUID, timingSafeEqual } from "node:crypto";
@@ -22,10 +20,11 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 import { TenkiClient } from "./client.js";
 import {
-	OAuthBrowserFlow,
+	APIDelegationSigner,
+	OAuthCompatibilityRoutes,
 	OAuthTokenVerifier,
 	type DelegatedAuthorization,
-	authorizationDigest,
+	authorizationBinding,
 	bearerToken,
 	loadOAuthConfig,
 } from "./oauth.js";
@@ -151,7 +150,8 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 	const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
 	const oauthConfig = loadOAuthConfig();
 	const oauthVerifier = oauthConfig ? new OAuthTokenVerifier(oauthConfig) : null;
-	const oauthBrowser = oauthConfig ? new OAuthBrowserFlow(oauthConfig) : null;
+	const oauthRoutes = oauthConfig ? new OAuthCompatibilityRoutes(oauthConfig) : null;
+	const delegationSigner = oauthConfig ? new APIDelegationSigner(oauthConfig.delegation) : null;
 
 	// Refuse to expose an unauthenticated capability to the network.
 	if (!isLoopback && !httpToken && !oauthConfig) {
@@ -164,7 +164,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 
 	const sessions = new Map<
 		string,
-		{ transport: StreamableHTTPServerTransport; lastSeen: number; authorizationDigest?: string }
+		{ transport: StreamableHTTPServerTransport; lastSeen: number; authorizationBinding?: string }
 	>();
 	const sweep = setInterval(() => {
 		const now = Date.now();
@@ -184,7 +184,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 	const httpServer = http.createServer(async (req, res) => {
 		try {
 			const url = new URL(req.url || "/", `http://${host}`);
-			if (oauthBrowser && (await oauthBrowser.handle(req, res, url))) return;
+			if (oauthRoutes && (await oauthRoutes.handle(req, res, url))) return;
 			if (url.pathname !== "/mcp") {
 				res.writeHead(404, { "Content-Type": "text/plain" }).end("not found — MCP endpoint is /mcp");
 				return;
@@ -205,9 +205,9 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 			const sid = req.headers["mcp-session-id"] as string | undefined;
 			const existingEntry = sid ? sessions.get(sid) : undefined;
 			if (
-				existingEntry?.authorizationDigest &&
+				existingEntry?.authorizationBinding &&
 				delegated &&
-				existingEntry.authorizationDigest !== authorizationDigest(delegated)
+				existingEntry.authorizationBinding !== authorizationBinding(delegated)
 			) {
 				oauthUnauthorized(res, oauthConfig!.metadataUrl, oauthConfig!.scope);
 				return;
@@ -246,7 +246,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 							sessions.set(id, {
 								transport,
 								lastSeen: Date.now(),
-								...(delegated ? { authorizationDigest: authorizationDigest(delegated) } : {}),
+								...(delegated ? { authorizationBinding: authorizationBinding(delegated) } : {}),
 							});
 						},
 					});
@@ -254,16 +254,17 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 						const id = transport.sessionId;
 						if (id) sessions.delete(id);
 					};
-					const sessionClient = delegated
-						? new TenkiClient(delegated.token, process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined, {
+					const sessionClient = delegated && delegationSigner
+						? new TenkiClient("", process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined, {
 								workspaceId: delegated.workspaceId,
+								bearerTokenProvider: () => delegationSigner.sign(delegated),
 							})
 						: client;
 					await createServer(sessionClient).connect(transport);
 					entry = {
 						transport,
 						lastSeen: Date.now(),
-						...(delegated ? { authorizationDigest: authorizationDigest(delegated) } : {}),
+						...(delegated ? { authorizationBinding: authorizationBinding(delegated) } : {}),
 					};
 				}
 				if (!entry) {
