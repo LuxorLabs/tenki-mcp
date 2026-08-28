@@ -124,6 +124,8 @@ export interface TenkiClientOptions {
 	slowTimeoutMs?: number;
 	/** Assumed session-credential lifetime when the API returns no parseable expiry (default 5min). */
 	credTtlMs?: number;
+	/** Workspace selected by an upstream delegated authorization grant. */
+	workspaceId?: string;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -173,6 +175,7 @@ export class TenkiClient {
 	private readonly execTimeoutMs: number;
 	private readonly slowTimeoutMs: number;
 	private readonly credTtlMs: number;
+	private readonly workspaceId?: string;
 
 	constructor(private readonly token: string, baseUrl: string = DEFAULT_BASE_URL, opts: TenkiClientOptions = {}) {
 		this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -180,6 +183,7 @@ export class TenkiClient {
 		this.execTimeoutMs = opts.execTimeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
 		this.slowTimeoutMs = opts.slowTimeoutMs ?? DEFAULT_SLOW_TIMEOUT_MS;
 		this.credTtlMs = opts.credTtlMs ?? DEFAULT_CRED_TTL_MS;
+		this.workspaceId = opts.workspaceId?.trim() || undefined;
 	}
 
 	/**
@@ -425,7 +429,9 @@ export class TenkiClient {
 	async resolveOwner(): Promise<{ ownerType?: string; ownerId?: string; workspaceId?: string }> {
 		const resp = await this.control("WhoAmI", {});
 		const workspaces: any[] = Array.isArray(resp.workspaces) ? resp.workspaces : [];
-		const ws = workspaces[0];
+		const ws = this.workspaceId
+			? workspaces.find((candidate) => (candidate?.workspaceId ?? candidate?.id) === this.workspaceId)
+			: workspaces[0];
 		let ownerType = resp.ownerType as string | undefined;
 		let ownerId = resp.ownerId as string | undefined;
 		// Substitute the placeholder only when WhoAmI returned a type CreateSession
@@ -438,7 +444,7 @@ export class TenkiClient {
 		return {
 			ownerType,
 			ownerId,
-			workspaceId: ws?.workspaceId ?? ws?.id,
+			workspaceId: this.workspaceId ?? ws?.workspaceId ?? ws?.id,
 		};
 	}
 

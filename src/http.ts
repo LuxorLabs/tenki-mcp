@@ -20,7 +20,15 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
-import type { TenkiClient } from "./client.js";
+import { TenkiClient } from "./client.js";
+import {
+	OAuthBrowserFlow,
+	OAuthTokenVerifier,
+	type DelegatedAuthorization,
+	authorizationDigest,
+	bearerToken,
+	loadOAuthConfig,
+} from "./oauth.js";
 import { createServer } from "./server.js";
 
 const MAX_BODY_BYTES = 1 << 20; // 1 MiB — reject larger POST bodies (memory-DoS guard)
@@ -111,30 +119,53 @@ function authOk(header: string | undefined, expected: string): boolean {
  * an ephemeral `port: 0` bind still accepts its own address). Anything else —
  * e.g. a rebound attacker domain — is rejected by the transport.
  */
-function allowedHostsFor(server: http.Server, host: string, port: number): string[] {
+function allowedHostsFor(server: http.Server, host: string, port: number, publicUrl?: string): string[] {
 	const addr = server.address();
 	const bound = addr && typeof addr === "object" ? addr.port : port;
 	const ports = Array.from(new Set([port, bound]));
 	const hosts = Array.from(new Set([host, "127.0.0.1", "localhost", "[::1]", "::1"]));
-	return hosts.flatMap((h) => ports.map((p) => `${h}:${p}`));
+	const configured = (process.env.TENKI_MCP_ALLOWED_HOSTS || "")
+		.split(",")
+		.map((value) => value.trim())
+		.filter(Boolean);
+	if (publicUrl) {
+		const url = new URL(publicUrl);
+		configured.push(url.host, url.hostname);
+	}
+	return Array.from(new Set([...hosts.flatMap((h) => ports.map((p) => `${h}:${p}`)), ...configured]));
+}
+
+function oauthUnauthorized(res: http.ServerResponse, metadataUrl: string, scope: string): void {
+	res
+		.writeHead(401, {
+			"Content-Type": "application/json",
+			"Cache-Control": "no-store",
+			"WWW-Authenticate": `Bearer resource_metadata="${metadataUrl}", scope="${scope}"`,
+		})
+		.end(JSON.stringify({ error: "unauthorized" }));
 }
 
 export function startHttp(client: TenkiClient | null, port: number): http.Server {
 	const host = process.env.TENKI_MCP_HTTP_HOST || "127.0.0.1";
 	const httpToken = process.env.TENKI_MCP_HTTP_TOKEN || "";
 	const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
+	const oauthConfig = loadOAuthConfig();
+	const oauthVerifier = oauthConfig ? new OAuthTokenVerifier(oauthConfig) : null;
+	const oauthBrowser = oauthConfig ? new OAuthBrowserFlow(oauthConfig) : null;
 
 	// Refuse to expose an unauthenticated capability to the network.
-	if (!isLoopback && !httpToken) {
+	if (!isLoopback && !httpToken && !oauthConfig) {
 		console.error(
 			"tenki-mcp: refusing to bind HTTP to a non-loopback host without TENKI_MCP_HTTP_TOKEN " +
-				"(the /mcp endpoint would be unauthenticated and can spend credits / run code). " +
-				"Set TENKI_MCP_HTTP_TOKEN, or bind to 127.0.0.1.",
+				"or OAuth configuration (the /mcp endpoint would be unauthenticated and can spend credits / run code).",
 		);
 		process.exit(1);
 	}
 
-	const sessions = new Map<string, { transport: StreamableHTTPServerTransport; lastSeen: number }>();
+	const sessions = new Map<
+		string,
+		{ transport: StreamableHTTPServerTransport; lastSeen: number; authorizationDigest?: string }
+	>();
 	const sweep = setInterval(() => {
 		const now = Date.now();
 		for (const [id, s] of sessions) {
@@ -152,16 +183,35 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 
 	const httpServer = http.createServer(async (req, res) => {
 		try {
-			if (!authOk(req.headers["authorization"], httpToken)) {
-				res.writeHead(401, { "Content-Type": "text/plain" }).end("unauthorized");
-				return;
-			}
 			const url = new URL(req.url || "/", `http://${host}`);
+			if (oauthBrowser && (await oauthBrowser.handle(req, res, url))) return;
 			if (url.pathname !== "/mcp") {
 				res.writeHead(404, { "Content-Type": "text/plain" }).end("not found — MCP endpoint is /mcp");
 				return;
 			}
+
+			let delegated: DelegatedAuthorization | null | undefined;
+			if (oauthConfig && oauthVerifier) {
+				const token = bearerToken(req.headers["authorization"]);
+				delegated = token ? await oauthVerifier.verify(token) : null;
+				if (!delegated) {
+					oauthUnauthorized(res, oauthConfig.metadataUrl, oauthConfig.scope);
+					return;
+				}
+			} else if (!authOk(req.headers["authorization"], httpToken)) {
+				res.writeHead(401, { "Content-Type": "text/plain" }).end("unauthorized");
+				return;
+			}
 			const sid = req.headers["mcp-session-id"] as string | undefined;
+			const existingEntry = sid ? sessions.get(sid) : undefined;
+			if (
+				existingEntry?.authorizationDigest &&
+				delegated &&
+				existingEntry.authorizationDigest !== authorizationDigest(delegated)
+			) {
+				oauthUnauthorized(res, oauthConfig!.metadataUrl, oauthConfig!.scope);
+				return;
+			}
 
 			if (req.method === "POST") {
 				let body: unknown;
@@ -180,7 +230,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 					return;
 				}
 
-				let entry = sid ? sessions.get(sid) : undefined;
+				let entry = existingEntry;
 				if (!entry && isInitializeRequest(body)) {
 					if (sessions.size >= MAX_SESSIONS) {
 						res.writeHead(503, { "Content-Type": "text/plain" }).end("too many sessions");
@@ -191,17 +241,30 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 						// DNS-rebinding defense: only accept these Host headers, so a rebound
 						// attacker-domain request from a browser is rejected.
 						enableDnsRebindingProtection: true,
-						allowedHosts: allowedHostsFor(httpServer, host, port),
+						allowedHosts: allowedHostsFor(httpServer, host, port, oauthConfig?.publicUrl),
 						onsessioninitialized: (id) => {
-							sessions.set(id, { transport, lastSeen: Date.now() });
+							sessions.set(id, {
+								transport,
+								lastSeen: Date.now(),
+								...(delegated ? { authorizationDigest: authorizationDigest(delegated) } : {}),
+							});
 						},
 					});
 					transport.onclose = () => {
 						const id = transport.sessionId;
 						if (id) sessions.delete(id);
 					};
-					await createServer(client).connect(transport);
-					entry = { transport, lastSeen: Date.now() };
+					const sessionClient = delegated
+						? new TenkiClient(delegated.token, process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined, {
+								workspaceId: delegated.workspaceId,
+							})
+						: client;
+					await createServer(sessionClient).connect(transport);
+					entry = {
+						transport,
+						lastSeen: Date.now(),
+						...(delegated ? { authorizationDigest: authorizationDigest(delegated) } : {}),
+					};
 				}
 				if (!entry) {
 					res.writeHead(400, { "Content-Type": "application/json" }).end(
@@ -239,7 +302,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 	httpServer.listen(port, host, () => {
 		console.error(
 			`tenki-mcp running on http://${host}:${port}/mcp (Streamable HTTP)` +
-				(httpToken ? " [bearer auth required]" : " [loopback only, no auth]"),
+				(oauthConfig ? " [OAuth required]" : httpToken ? " [bearer auth required]" : " [loopback only, no auth]"),
 		);
 	});
 	return httpServer;

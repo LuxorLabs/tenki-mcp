@@ -25,7 +25,8 @@ import { startHttp } from "./http.js";
 // tenki_auth_status registered (see createServer), so an agent can ask what is
 // wrong and relay the fix.
 const token = process.env.TENKI_AUTH_TOKEN || process.env.TENKI_API_KEY;
-if (!token) {
+const oauthHttp = Boolean(process.env.TENKI_MCP_OAUTH_ISSUER);
+if (!token && !oauthHttp) {
 	console.error(
 		"tenki-mcp: no credential — starting in unauthenticated mode (only tenki_auth_status is available). " +
 			"Set TENKI_API_KEY (tk_…) or TENKI_AUTH_TOKEN (ory_st_…) in the server's env and restart, " +
