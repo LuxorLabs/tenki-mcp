@@ -93,8 +93,8 @@ env = { TENKI_API_KEY = "tk_your_key_here" }
 
 After adding the server, **start a fresh session** so the client loads it, then ask your agent one of:
 
-- *"Check tenki auth status."* — confirms your credential was picked up.
-- *"Run `print(2+2)` in a fresh Tenki sandbox."* — a full boot → run → teardown round-trip.
+- _"Check tenki auth status."_ — confirms your credential was picked up.
+- _"Run `print(2+2)` in a fresh Tenki sandbox."_ — a full boot → run → teardown round-trip.
 
 If the `tenki_*` tools don't show up, restart the client so it re-reads its config.
 
@@ -114,50 +114,51 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 
 ### Environment variables
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `TENKI_API_KEY` | — | API key (`tk_…`). One of this or `TENKI_AUTH_TOKEN` is required. |
-| `TENKI_AUTH_TOKEN` | — | Session token (`ory_st_…` or cookie value). **Takes precedence over `TENKI_API_KEY`** when both are set. |
-| `TENKI_API_ENDPOINT` | `https://api.tenki.cloud` | Control-plane base URL (`TENKI_API_URL` is an alias). |
-| `TENKI_MCP_READONLY` | off | `1` registers only read tools (no create/run/delete/spend). |
-| `TENKI_MCP_DISABLED_TOOLS` | — | Comma-separated tool names to skip registering. |
-| `TENKI_MCP_AUDIT` | off | `1` logs each tool call name + arg keys to stderr. |
-| `TENKI_MCP_TRANSPORT` | `stdio` | `http` serves Streamable HTTP instead (see below). |
-| `PORT` | `3000` | HTTP transport port. |
-| `TENKI_MCP_HTTP_HOST` | `127.0.0.1` | HTTP bind host; non-loopback requires `TENKI_MCP_HTTP_TOKEN`. |
-| `TENKI_MCP_HTTP_TOKEN` | — | Bearer token for the HTTP endpoint; optional on loopback, required on a non-loopback host. |
-| `TENKI_MCP_PUBLIC_URL` | — | Public base URL for an OAuth-protected hosted server. |
-| `TENKI_MCP_OAUTH_ISSUER` | — | OAuth authorization-server issuer. Enables delegated OAuth HTTP mode. |
-| `TENKI_MCP_OAUTH_RESOURCE` | `<public URL>/mcp` | RFC 8707 resource identifier accepted in access-token audiences. |
-| `TENKI_MCP_OAUTH_SCOPE` | `mcp` | Required delegated scope. |
-| `TENKI_MCP_OAUTH_INTROSPECTION_URL` | — | Internal Hydra token-introspection endpoint. |
-| `TENKI_MCP_HYDRA_PUBLIC_URL` | — | Internal Hydra public endpoint used to proxy dynamic client registration. |
-| `TENKI_MCP_API_DELEGATION_SECRET` | — | Shared secret (at least 32 bytes) for signing short-lived Tenki API delegations. |
-| `TENKI_MCP_API_DELEGATION_ISSUER` | public URL | Issuer on Tenki API delegation JWTs. |
-| `TENKI_MCP_API_DELEGATION_AUDIENCE` | API endpoint | Audience on Tenki API delegation JWTs. |
-| `TENKI_MCP_API_DELEGATION_TTL_SECONDS` | `60` | Delegation lifetime; must not exceed 300 seconds. |
+| Variable                               | Default                   | Purpose                                                                                                            |
+| -------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `TENKI_API_KEY`                        | —                         | API key (`tk_…`). One of this or `TENKI_AUTH_TOKEN` is required.                                                   |
+| `TENKI_AUTH_TOKEN`                     | —                         | Session token (`ory_st_…` or cookie value). **Takes precedence over `TENKI_API_KEY`** when both are set.           |
+| `TENKI_API_ENDPOINT`                   | `https://api.tenki.cloud` | Control-plane base URL (`TENKI_API_URL` is an alias).                                                              |
+| `TENKI_MCP_READONLY`                   | off                       | `1` registers only read tools (no create/run/delete/spend).                                                        |
+| `TENKI_MCP_DISABLED_TOOLS`             | —                         | Comma-separated tool names to skip registering.                                                                    |
+| `TENKI_MCP_AUDIT`                      | off                       | `1` logs each tool call name + arg keys to stderr.                                                                 |
+| `TENKI_MCP_TRANSPORT`                  | `stdio`                   | `http` serves Streamable HTTP instead (see below).                                                                 |
+| `PORT`                                 | `3000`                    | HTTP transport port.                                                                                               |
+| `TENKI_MCP_HTTP_HOST`                  | `127.0.0.1`               | HTTP bind host; non-loopback requires `TENKI_MCP_HTTP_TOKEN`.                                                      |
+| `TENKI_MCP_HTTP_TOKEN`                 | —                         | Bearer token for the HTTP endpoint; optional on loopback, required on a non-loopback host.                         |
+| `TENKI_MCP_ALLOWED_ORIGINS`            | endpoint hostnames        | Comma-separated browser Origin hostnames accepted by the HTTP endpoint. Requests without an Origin are unaffected. |
+| `TENKI_MCP_PUBLIC_URL`                 | —                         | Public base URL for an OAuth-protected hosted server.                                                              |
+| `TENKI_MCP_OAUTH_ISSUER`               | —                         | OAuth authorization-server issuer. Enables delegated OAuth HTTP mode.                                              |
+| `TENKI_MCP_OAUTH_RESOURCE`             | `<public URL>/mcp`        | RFC 8707 resource identifier accepted in access-token audiences.                                                   |
+| `TENKI_MCP_OAUTH_SCOPE`                | `mcp`                     | Required delegated scope.                                                                                          |
+| `TENKI_MCP_OAUTH_INTROSPECTION_URL`    | —                         | Internal Hydra token-introspection endpoint.                                                                       |
+| `TENKI_MCP_HYDRA_PUBLIC_URL`           | —                         | Internal Hydra public endpoint used to proxy dynamic client registration.                                          |
+| `TENKI_MCP_API_DELEGATION_SECRET`      | —                         | Shared secret (at least 32 bytes) for signing short-lived Tenki API delegations.                                   |
+| `TENKI_MCP_API_DELEGATION_ISSUER`      | public URL                | Issuer on Tenki API delegation JWTs.                                                                               |
+| `TENKI_MCP_API_DELEGATION_AUDIENCE`    | API endpoint              | Audience on Tenki API delegation JWTs.                                                                             |
+| `TENKI_MCP_API_DELEGATION_TTL_SECONDS` | `60`                      | Delegation lifetime; must not exceed 300 seconds.                                                                  |
 
 ## Tools
 
 **71 tools** — all 68 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs)), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
-| Domain | Tools |
-|---|---|
-| **Auth** | `tenki_auth_status` (which credential is configured, and does it work — the only tool available when none is) |
-| **Identity** | `tenki_whoami` |
-| **Run** | `tenki_run_code` (one-shot: boot → run shell/python/js → tear down) |
-| **Sandboxes** | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox` |
-| **Session admin** | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes` |
-| **Exec** | `tenki_exec` (stdout/stderr/exit inline) |
-| **Files** | `tenki_read_file` · `tenki_write_file` · `tenki_list_files` · `tenki_stat_path` · `tenki_make_dir` · `tenki_remove_path` · `tenki_move_path` |
-| **Git** | `tenki_git` (clone/checkout/diff/log — the API supports exactly these four; run other git commands via `tenki_exec`) |
-| **Ports & previews** | expose · list-exposed · unexpose · create-preview-url · open-preview · list/get/delete-preview-url · touch-preview · bind/unbind-preview-url · resolve-preview-token |
-| **Artifacts** (binary transfer) | `tenki_get_upload_url` · `tenki_get_download_url` (signed URLs for binary PUT/GET) |
-| **SSH** | `tenki_update_ssh_keys` · `tenki_issue_ssh_cert` · `tenki_list_ssh_gateways` |
-| **Snapshots** | create · get · list · list-session · list-workspace · list-dangling · update · delete · get-download-url |
-| **Volumes** | create · get · list · update · delete · resize · attach · detach |
-| **Templates** | create · get · list · update · delete · build · cancel-build · get-build · list-active-builds |
-| **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_settings` · `tenki_update_workspace_settings` · `tenki_get_snapshot_retention_settings` · `tenki_update_snapshot_retention_settings` |
+| Domain                          | Tools                                                                                                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**                        | `tenki_auth_status` (which credential is configured, and does it work — the only tool available when none is)                                                                           |
+| **Identity**                    | `tenki_whoami`                                                                                                                                                                          |
+| **Run**                         | `tenki_run_code` (one-shot: boot → run shell/python/js → tear down)                                                                                                                     |
+| **Sandboxes**                   | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox`                                      |
+| **Session admin**               | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes`                               |
+| **Exec**                        | `tenki_exec` (stdout/stderr/exit inline)                                                                                                                                                |
+| **Files**                       | `tenki_read_file` · `tenki_write_file` · `tenki_list_files` · `tenki_stat_path` · `tenki_make_dir` · `tenki_remove_path` · `tenki_move_path`                                            |
+| **Git**                         | `tenki_git` (clone/checkout/diff/log — the API supports exactly these four; run other git commands via `tenki_exec`)                                                                    |
+| **Ports & previews**            | expose · list-exposed · unexpose · create-preview-url · open-preview · list/get/delete-preview-url · touch-preview · bind/unbind-preview-url · resolve-preview-token                    |
+| **Artifacts** (binary transfer) | `tenki_get_upload_url` · `tenki_get_download_url` (signed URLs for binary PUT/GET)                                                                                                      |
+| **SSH**                         | `tenki_update_ssh_keys` · `tenki_issue_ssh_cert` · `tenki_list_ssh_gateways`                                                                                                            |
+| **Snapshots**                   | create · get · list · list-session · list-workspace · list-dangling · update · delete · get-download-url                                                                                |
+| **Volumes**                     | create · get · list · update · delete · resize · attach · detach                                                                                                                        |
+| **Templates**                   | create · get · list · update · delete · build · cancel-build · get-build · list-active-builds                                                                                           |
+| **Workspace**                   | `tenki_get_workspace_usage` · `tenki_get_workspace_settings` · `tenki_update_workspace_settings` · `tenki_get_snapshot_retention_settings` · `tenki_update_snapshot_retention_settings` |
 
 Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 
@@ -167,7 +168,7 @@ Set one of `TENKI_API_KEY` or `TENKI_AUTH_TOKEN` — when both are set, `TENKI_A
 
 **Without a credential the server still starts**, registering only `tenki_auth_status` — so instead of an MCP client reporting an opaque "server failed to start", the agent can call that tool and get told what to set. Ask it "check tenki auth status" any time other tools return auth errors: it reports the credential kind (API key vs session token), the endpoint, and whether a live identity probe succeeded — never the token itself. It reports status only; get a credential with `tenki login` or from the dashboard.
 
-## Host it over HTTP (v2.0-beta)
+## Host it over HTTP
 
 Besides stdio, the server speaks **Streamable HTTP** so it can be hosted for remote MCP clients:
 
@@ -190,6 +191,8 @@ TENKI_MCP_TRANSPORT=http TENKI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
 
 Point an HTTP-capable MCP client at `/mcp`. Static-key mode uses one shared `TENKI_API_KEY` for all sessions. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
 
+HTTP and stdio negotiate MCP `2026-07-28` with clients that support `server/discover`, while continuing to serve 2024/2025-era clients. HTTP keeps the existing stateful transport for legacy clients and uses stateless per-request handling for `2026-07-28` on the same `/mcp` URL.
+
 Hosted multi-tenant deployments instead configure Hydra OAuth. The server publishes RFC 9728 protected-resource metadata, dynamically registers public clients, verifies the requested audience and scope, and binds each MCP session to the workspace chosen on the Tenki consent page. The Hydra access token terminates at `tenki-mcp`; API calls use signed, short-lived, workspace-bound delegation JWTs instead. Hydra's admin and introspection endpoints and the delegation secret must remain cluster-internal.
 
 ## How it works
@@ -205,7 +208,7 @@ The wire details are ported from the live-verified [n8n community node](https://
 This server holds a Tenki API key and can run code + spend credits, so treat it as a capability. Full model + [CSA MCP Server Top-10](https://modelcontextprotocol-security.io/top10/server/) mapping in **[SECURITY.md](SECURITY.md)**. Quick controls:
 
 - **Least privilege:** every tool carries MCP annotations (`readOnlyHint` / `destructiveHint`). Run `TENKI_MCP_READONLY=1` for an inspection-only server (read tools only), or `TENKI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
-- **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http-v20-beta)).
+- **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http)).
 - **Audit:** `TENKI_MCP_AUDIT=1` logs each tool call's name to stderr.
 - **Untrusted output:** `tenki_run_code`/`tenki_exec`/`tenki_read_file` return output from untrusted code — clients should treat tool results as data, not instructions.
 

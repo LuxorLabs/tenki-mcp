@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
@@ -15,9 +15,16 @@ import { ok, envSchema } from "./common.js";
  * ({ cpuCores, memoryMb, diskSizeGb }); the env map is `envVars`; a build is
  * addressed by `buildId`; and ListActiveTemplateBuilds is scoped by `templateId`.
  */
-export function registerTemplates(server: McpServer, client: TenkiClient): void {
+export function registerTemplates(
+	server: McpServer,
+	client: TenkiClient,
+): void {
 	/** Assemble the nested TemplateResources object from flat sizing params (omitting any unset). */
-	const resourcesFrom = (cpuCores?: number, memoryMb?: number, diskSizeGb?: number): Record<string, number> => {
+	const resourcesFrom = (
+		cpuCores?: number,
+		memoryMb?: number,
+		diskSizeGb?: number,
+	): Record<string, number> => {
 		const r: Record<string, number> = {};
 		if (cpuCores !== undefined) r.cpuCores = cpuCores;
 		if (memoryMb !== undefined) r.memoryMb = memoryMb;
@@ -26,28 +33,76 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	};
 
 	// ── Create ──────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_create_template",
-		"Create a custom-image template (a reusable sandbox-image spec: base image + setup script + default resources). Build it into a bootable image later with tenki_build_template. NOTE: only a TYPED template (created with builder_spec, no legacy fields) can build a named, publishable image (image_name) that tenki_create_sandbox boots via its `image` arg.",
 		{
-			name: z.string().describe("Human-readable template name."),
-			base_image_id: z.string().optional().describe("Base image ID to build on top of."),
-			setup_script: z.string().optional().describe("Shell script run at build time to provision the image. Required for a from-scratch template (the API rejects a create without it unless you derive from a parent template/image)."),
-			start_cmd: z.string().optional().describe("Command run when a sandbox boots from this template."),
-			cpu_cores: z.number().int().min(1).max(16).optional().describe("Default vCPUs for sandboxes from this template (1-16)."),
-			memory_mb: z.number().int().min(512).max(65536).optional().describe("Default memory in MB (512-65536)."),
-			disk_size_gb: z.number().int().min(5).max(100).optional().describe("Default disk in GB (5-100)."),
-			env_vars: envSchema,
-			tags: z.array(z.string()).optional().describe("Tags for later filtering."),
-			parent_template_id: z.string().optional().describe("Derive this template from an existing template."),
-			parent_image: z.string().optional().describe("Derive this template from an existing built image reference."),
-			builder_spec: z
-				.record(z.string(), z.unknown())
-				.optional()
-				.describe(
-					"Typed template spec, passed through as-is — e.g. {specVersion:'tenki.template.v1', base:{image:'sandbox'}, workdir:'/home/tenki', steps:[{run:{command:'...'}}], resources:{cpuCores,memoryMb,diskSizeGb}}. Mutually exclusive with base_image_id/setup_script/start_cmd/env_vars/cpu_cores/memory_mb/disk_size_gb/parent_* (the API rejects mixing). Required if the template's builds should publish an image (tenki_build_template image_name).",
-				),
-			workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
+			description:
+				"Create a custom-image template (a reusable sandbox-image spec: base image + setup script + default resources). Build it into a bootable image later with tenki_build_template. NOTE: only a TYPED template (created with builder_spec, no legacy fields) can build a named, publishable image (image_name) that tenki_create_sandbox boots via its `image` arg.",
+			inputSchema: z.object({
+				name: z.string().describe("Human-readable template name."),
+				base_image_id: z
+					.string()
+					.optional()
+					.describe("Base image ID to build on top of."),
+				setup_script: z
+					.string()
+					.optional()
+					.describe(
+						"Shell script run at build time to provision the image. Required for a from-scratch template (the API rejects a create without it unless you derive from a parent template/image).",
+					),
+				start_cmd: z
+					.string()
+					.optional()
+					.describe("Command run when a sandbox boots from this template."),
+				cpu_cores: z
+					.number()
+					.int()
+					.min(1)
+					.max(16)
+					.optional()
+					.describe("Default vCPUs for sandboxes from this template (1-16)."),
+				memory_mb: z
+					.number()
+					.int()
+					.min(512)
+					.max(65536)
+					.optional()
+					.describe("Default memory in MB (512-65536)."),
+				disk_size_gb: z
+					.number()
+					.int()
+					.min(5)
+					.max(100)
+					.optional()
+					.describe("Default disk in GB (5-100)."),
+				env_vars: envSchema,
+				tags: z
+					.array(z.string())
+					.optional()
+					.describe("Tags for later filtering."),
+				parent_template_id: z
+					.string()
+					.optional()
+					.describe("Derive this template from an existing template."),
+				parent_image: z
+					.string()
+					.optional()
+					.describe(
+						"Derive this template from an existing built image reference.",
+					),
+				builder_spec: z
+					.record(z.string(), z.unknown())
+					.optional()
+					.describe(
+						"Typed template spec, passed through as-is — e.g. {specVersion:'tenki.template.v1', base:{image:'sandbox'}, workdir:'/home/tenki', steps:[{run:{command:'...'}}], resources:{cpuCores,memoryMb,diskSizeGb}}. Mutually exclusive with base_image_id/setup_script/start_cmd/env_vars/cpu_cores/memory_mb/disk_size_gb/parent_* (the API rejects mixing). Required if the template's builds should publish an image (tenki_build_template image_name).",
+					),
+				workspace_id: z
+					.string()
+					.optional()
+					.describe(
+						"Workspace to create in (defaults to the key's first workspace).",
+					),
+			}),
 		},
 		async (a) => {
 			const owner = await client.resolveOwner();
@@ -57,12 +112,18 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 				...(workspaceId ? { workspaceId } : {}),
 				name: a.name,
 				...(a.base_image_id ? { baseImageId: a.base_image_id } : {}),
-				...(a.setup_script !== undefined ? { setupScript: a.setup_script } : {}),
+				...(a.setup_script !== undefined
+					? { setupScript: a.setup_script }
+					: {}),
 				...(a.start_cmd !== undefined ? { startCmd: a.start_cmd } : {}),
-				...(a.env_vars && Object.keys(a.env_vars).length ? { envVars: a.env_vars } : {}),
+				...(a.env_vars && Object.keys(a.env_vars).length
+					? { envVars: a.env_vars }
+					: {}),
 				...(Object.keys(resources).length ? { resources } : {}),
 				...(a.tags && a.tags.length ? { tags: a.tags } : {}),
-				...(a.parent_template_id ? { parentTemplateId: a.parent_template_id } : {}),
+				...(a.parent_template_id
+					? { parentTemplateId: a.parent_template_id }
+					: {}),
 				...(a.parent_image ? { parentImage: a.parent_image } : {}),
 				...(a.builder_spec ? { builderSpec: a.builder_spec } : {}),
 			};
@@ -71,22 +132,38 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	);
 
 	// ── Get ─────────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_get_template",
-		"Retrieve one template by ID.",
-		{ template_id: z.string().describe("The template ID.") },
-		async ({ template_id }) => ok(await client.control("GetTemplate", { templateId: template_id })),
+		{
+			description: "Retrieve one template by ID.",
+			inputSchema: z.object({
+				template_id: z.string().describe("The template ID."),
+			}),
+		},
+		async ({ template_id }) =>
+			ok(await client.control("GetTemplate", { templateId: template_id })),
 	);
 
 	// ── List ────────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_list_templates",
-		"List templates for the workspace, optionally filtered by tags.",
 		{
-			tags: z.array(z.string()).optional().describe("Only return templates that carry all of these tags."),
-			workspace_id: z.string().optional().describe("Workspace to list from (defaults to the key's first workspace)."),
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
+			description:
+				"List templates for the workspace, optionally filtered by tags.",
+			inputSchema: z.object({
+				tags: z
+					.array(z.string())
+					.optional()
+					.describe("Only return templates that carry all of these tags."),
+				workspace_id: z
+					.string()
+					.optional()
+					.describe(
+						"Workspace to list from (defaults to the key's first workspace).",
+					),
+				page_size: z.number().int().positive().optional(),
+				page_token: z.string().optional(),
+			}),
 		},
 		async ({ tags, workspace_id, page_size, page_token }) => {
 			const owner = await client.resolveOwner();
@@ -103,32 +180,73 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	);
 
 	// ── Update ──────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_update_template",
-		"Update mutable fields on a template. Only the fields you provide are changed; pass clear_tags to remove all tags.",
 		{
-			template_id: z.string().describe("The template ID to update."),
-			name: z.string().optional().describe("New human-readable name."),
-			base_image_id: z.string().optional().describe("New base image ID."),
-			setup_script: z.string().optional().describe("New build-time provisioning script."),
-			start_cmd: z.string().optional().describe("New boot command."),
-			cpu_cores: z.number().int().min(1).max(16).optional().describe("New default vCPUs (1-16)."),
-			memory_mb: z.number().int().min(512).max(65536).optional().describe("New default memory in MB (512-65536)."),
-			disk_size_gb: z.number().int().min(5).max(100).optional().describe("New default disk in GB (5-100)."),
-			env_vars: envSchema,
-			tags: z.array(z.string()).optional().describe("Replacement set of tags."),
-			clear_tags: z.boolean().optional().describe("Remove all tags from the template."),
-			builder_spec: z.record(z.string(), z.unknown()).optional().describe("Advanced structured build spec (TemplateBuildSpec); passed through as-is."),
+			description:
+				"Update mutable fields on a template. Only the fields you provide are changed; pass clear_tags to remove all tags.",
+			inputSchema: z.object({
+				template_id: z.string().describe("The template ID to update."),
+				name: z.string().optional().describe("New human-readable name."),
+				base_image_id: z.string().optional().describe("New base image ID."),
+				setup_script: z
+					.string()
+					.optional()
+					.describe("New build-time provisioning script."),
+				start_cmd: z.string().optional().describe("New boot command."),
+				cpu_cores: z
+					.number()
+					.int()
+					.min(1)
+					.max(16)
+					.optional()
+					.describe("New default vCPUs (1-16)."),
+				memory_mb: z
+					.number()
+					.int()
+					.min(512)
+					.max(65536)
+					.optional()
+					.describe("New default memory in MB (512-65536)."),
+				disk_size_gb: z
+					.number()
+					.int()
+					.min(5)
+					.max(100)
+					.optional()
+					.describe("New default disk in GB (5-100)."),
+				env_vars: envSchema,
+				tags: z
+					.array(z.string())
+					.optional()
+					.describe("Replacement set of tags."),
+				clear_tags: z
+					.boolean()
+					.optional()
+					.describe("Remove all tags from the template."),
+				builder_spec: z
+					.record(z.string(), z.unknown())
+					.optional()
+					.describe(
+						"Advanced structured build spec (TemplateBuildSpec); passed through as-is.",
+					),
+			}),
 		},
 		async (a) => {
 			const resources = resourcesFrom(a.cpu_cores, a.memory_mb, a.disk_size_gb);
 			const body: Record<string, unknown> = {
 				templateId: a.template_id,
 				...(a.name !== undefined ? { name: a.name } : {}),
-				...(a.base_image_id !== undefined ? { baseImageId: a.base_image_id } : {}),
-				...(a.setup_script !== undefined ? { setupScript: a.setup_script } : {}),
+				...(a.base_image_id !== undefined
+					? { baseImageId: a.base_image_id }
+					: {}),
+				...(a.setup_script !== undefined
+					? { setupScript: a.setup_script }
+					: {}),
 				...(a.start_cmd !== undefined ? { startCmd: a.start_cmd } : {}),
-				...(a.env_vars && Object.keys(a.env_vars).length ? { envVars: a.env_vars } : {}),
+				...(a.env_vars && Object.keys(a.env_vars).length
+					? { envVars: a.env_vars }
+					: {}),
 				...(Object.keys(resources).length ? { resources } : {}),
 				...(a.tags && a.tags.length ? { tags: a.tags } : {}),
 				...(a.clear_tags ? { clearTags: true } : {}),
@@ -139,12 +257,18 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	);
 
 	// ── Delete ──────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_delete_template",
-		"Delete a template by ID. Pass force to delete even when builds or dependents exist.",
 		{
-			template_id: z.string().describe("The template ID to delete."),
-			force: z.boolean().optional().describe("Force deletion despite dependents (default false)."),
+			description:
+				"Delete a template by ID. Pass force to delete even when builds or dependents exist.",
+			inputSchema: z.object({
+				template_id: z.string().describe("The template ID to delete."),
+				force: z
+					.boolean()
+					.optional()
+					.describe("Force deletion despite dependents (default false)."),
+			}),
 		},
 		async ({ template_id, force }) =>
 			ok(
@@ -156,53 +280,107 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	);
 
 	// ── Build ───────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_build_template",
-		"Trigger a build for a template, producing a bootable image. Returns the created build — poll it with tenki_get_template_build until READY; the ready build's imageDigestRef is what tenki_create_sandbox's `image` arg takes.",
 		{
-			template_id: z.string().describe("The template ID to build."),
-			image_name: z
-				.string()
-				.optional()
-				.describe("Name for the resulting image. Requires a TYPED template (created with builder_spec) — the API rejects it for legacy setup-script templates."),
-			publish_raw_image: z.boolean().optional().describe("Publish the raw rootfs image alongside the build snapshot."),
-			build_secrets: z.record(z.string(), z.string()).optional().describe("Build-time secrets as a key→value object (not persisted into the image)."),
-			build_env: z.record(z.string(), z.string()).optional().describe("Per-build environment overrides frozen into this build only."),
+			description:
+				"Trigger a build for a template, producing a bootable image. Returns the created build — poll it with tenki_get_template_build until READY; the ready build's imageDigestRef is what tenki_create_sandbox's `image` arg takes.",
+			inputSchema: z.object({
+				template_id: z.string().describe("The template ID to build."),
+				image_name: z
+					.string()
+					.optional()
+					.describe(
+						"Name for the resulting image. Requires a TYPED template (created with builder_spec) — the API rejects it for legacy setup-script templates.",
+					),
+				publish_raw_image: z
+					.boolean()
+					.optional()
+					.describe(
+						"Publish the raw rootfs image alongside the build snapshot.",
+					),
+				build_secrets: z
+					.record(z.string(), z.string())
+					.optional()
+					.describe(
+						"Build-time secrets as a key→value object (not persisted into the image).",
+					),
+				build_env: z
+					.record(z.string(), z.string())
+					.optional()
+					.describe(
+						"Per-build environment overrides frozen into this build only.",
+					),
+			}),
 		},
-		async ({ template_id, image_name, publish_raw_image, build_secrets, build_env }) =>
+		async ({
+			template_id,
+			image_name,
+			publish_raw_image,
+			build_secrets,
+			build_env,
+		}) =>
 			ok(
 				await client.control("BuildTemplate", {
 					templateId: template_id,
 					...(image_name !== undefined ? { imageName: image_name } : {}),
-					...(publish_raw_image !== undefined ? { publishRawImage: publish_raw_image } : {}),
-					...(build_secrets && Object.keys(build_secrets).length ? { buildSecrets: build_secrets } : {}),
-					...(build_env && Object.keys(build_env).length ? { buildEnv: build_env } : {}),
+					...(publish_raw_image !== undefined
+						? { publishRawImage: publish_raw_image }
+						: {}),
+					...(build_secrets && Object.keys(build_secrets).length
+						? { buildSecrets: build_secrets }
+						: {}),
+					...(build_env && Object.keys(build_env).length
+						? { buildEnv: build_env }
+						: {}),
 				}),
 			),
 	);
 
 	// ── Cancel build ──────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_cancel_template_build",
-		"Cancel an in-progress template build by its build ID.",
-		{ build_id: z.string().describe("The template build ID to cancel.") },
-		async ({ build_id }) => ok(await client.control("CancelTemplateBuild", { buildId: build_id })),
+		{
+			description: "Cancel an in-progress template build by its build ID.",
+			inputSchema: z.object({
+				build_id: z.string().describe("The template build ID to cancel."),
+			}),
+		},
+		async ({ build_id }) =>
+			ok(await client.control("CancelTemplateBuild", { buildId: build_id })),
 	);
 
 	// ── Get build ─────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_get_template_build",
-		"Retrieve one template build by its build ID (state, progress, and result image). A READY build's imageDigestRef is the reference tenki_create_sandbox's `image` arg takes.",
-		{ build_id: z.string().describe("The template build ID.") },
-		async ({ build_id }) => ok(await client.control("GetTemplateBuild", { buildId: build_id })),
+		{
+			description:
+				"Retrieve one template build by its build ID (state, progress, and result image). A READY build's imageDigestRef is the reference tenki_create_sandbox's `image` arg takes.",
+			inputSchema: z.object({
+				build_id: z.string().describe("The template build ID."),
+			}),
+		},
+		async ({ build_id }) =>
+			ok(await client.control("GetTemplateBuild", { buildId: build_id })),
 	);
 
 	// ── List active builds ──────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_list_active_template_builds",
-		"List the currently active (in-progress) builds for a given template.",
-		{ template_id: z.string().describe("The template ID whose active builds to list.") },
-		async ({ template_id }) => ok(await client.control("ListActiveTemplateBuilds", { templateId: template_id })),
+		{
+			description:
+				"List the currently active (in-progress) builds for a given template.",
+			inputSchema: z.object({
+				template_id: z
+					.string()
+					.describe("The template ID whose active builds to list."),
+			}),
+		},
+		async ({ template_id }) =>
+			ok(
+				await client.control("ListActiveTemplateBuilds", {
+					templateId: template_id,
+				}),
+			),
 	);
-
 }

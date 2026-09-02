@@ -2,6 +2,11 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
+## Unreleased
+
+- Support MCP `2026-07-28` over HTTP and stdio while continuing to serve existing 2024/2025-era clients from the same endpoint.
+- Validate browser Origin headers on HTTP requests; deployments can set `TENKI_MCP_ALLOWED_ORIGINS` when additional origins are required.
+
 ## [0.2.0] — 2026-08-21
 
 - Remove standalone image management tools. Template images remain available through template builds and sandbox creation.

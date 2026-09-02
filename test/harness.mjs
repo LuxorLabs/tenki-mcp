@@ -1,25 +1,5 @@
-/**
- * Shared test harness for tenki-mcp.
- *
- * Drives the server the way a real MCP client (Claude / Cursor) does: spawns
- * `dist/index.js` over stdio via the official MCP SDK client, calls tools, and
- * parses results. Tracks every created resource and tears it ALL down on
- * cleanup() — even when a check fails — so a test run never leaks sandboxes,
- * volumes, snapshots, or templates (or blows the volume quota).
- *
- *   import { Harness } from "../harness.mjs";
- *   const h = await Harness.connect();
- *   await h.check("create sandbox", async () => {
- *     const s = await h.createSandbox({ cpu_cores: 1 });   // auto-tracked
- *     if (!s.session?.id) throw new Error("no session id");
- *   });
- *   await h.cleanup();
- *   const report = h.report();   // { suite, passed, failed, skipped, results }
- *   await h.close();
- */
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { Client } from "@modelcontextprotocol/client";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -46,7 +26,9 @@ export function loadToken() {
  */
 export function isDataPlaneOutage(err) {
 	const m = (err?.message ?? String(err)).toLowerCase();
-	return /fetch failed|connect timeout|timeout|econn|could not resolve|resolve host|network is unreachable|temporary failure in name resolution/.test(m);
+	return /fetch failed|connect timeout|timeout|econn|could not resolve|resolve host|network is unreachable|temporary failure in name resolution/.test(
+		m,
+	);
 }
 
 export class Harness {
@@ -60,7 +42,8 @@ export class Harness {
 
 	static async connect(suiteName = "tenki-mcp") {
 		const token = loadToken();
-		if (!token) throw new Error("No token. Set TENKI_API_KEY or run `tenki login`.");
+		if (!token)
+			throw new Error("No token. Set TENKI_API_KEY or run `tenki login`.");
 		const transport = new StdioClientTransport({
 			command: process.execPath,
 			args: [SERVER],
@@ -82,7 +65,10 @@ export class Harness {
 	 * exceed the MCP client's 60s default — a real integration note for hosts.
 	 */
 	async call(name, args = {}) {
-		const res = await this.client.callTool({ name, arguments: args }, CallToolResultSchema, { timeout: 120000 });
+		const res = await this.client.callTool(
+			{ name, arguments: args },
+			{ timeout: 120000 },
+		);
 		const text = res.content?.find((c) => c.type === "text")?.text ?? "";
 		if (res.isError) throw new Error(`${name}: ${text.slice(0, 300)}`);
 		if (res.structuredContent !== undefined) return res.structuredContent;
@@ -110,7 +96,14 @@ export class Harness {
 
 	/** Create a sandbox and auto-track it for cleanup. */
 	async createSandbox(args = {}) {
-		const r = await this.call("tenki_create_sandbox", { cpu_cores: 1, memory_mb: 1024, max_duration_seconds: 600, idle_timeout_minutes: 5, wait_ready: false, ...args });
+		const r = await this.call("tenki_create_sandbox", {
+			cpu_cores: 1,
+			memory_mb: 1024,
+			max_duration_seconds: 600,
+			idle_timeout_minutes: 5,
+			wait_ready: false,
+			...args,
+		});
 		const id = r.session?.id ?? r.session?.sessionId ?? r.sessionId;
 		this.track("sandbox", id);
 		return { ...r, sessionId: id };
@@ -123,8 +116,14 @@ export class Harness {
 			this.results.push({ name, status: "pass" });
 			console.log(`  ✓ ${name}`);
 		} catch (e) {
-			this.results.push({ name, status: "fail", error: (e?.message ?? String(e)).slice(0, 300) });
-			console.log(`  ✗ ${name}\n      ${(e?.message ?? e).toString().replace(/\s+/g, " ").slice(0, 240)}`);
+			this.results.push({
+				name,
+				status: "fail",
+				error: (e?.message ?? String(e)).slice(0, 300),
+			});
+			console.log(
+				`  ✗ ${name}\n      ${(e?.message ?? e).toString().replace(/\s+/g, " ").slice(0, 240)}`,
+			);
 		}
 	}
 
@@ -136,11 +135,21 @@ export class Harness {
 			console.log(`  ✓ ${name}`);
 		} catch (e) {
 			if (isDataPlaneOutage(e)) {
-				this.results.push({ name, status: "skip", error: "data-plane endpoint unreachable" });
+				this.results.push({
+					name,
+					status: "skip",
+					error: "data-plane endpoint unreachable",
+				});
 				console.log(`  … ${name} — skipped (data-plane unreachable)`);
 			} else {
-				this.results.push({ name, status: "fail", error: (e?.message ?? String(e)).slice(0, 300) });
-				console.log(`  ✗ ${name}\n      ${(e?.message ?? e).toString().replace(/\s+/g, " ").slice(0, 240)}`);
+				this.results.push({
+					name,
+					status: "fail",
+					error: (e?.message ?? String(e)).slice(0, 300),
+				});
+				console.log(
+					`  ✗ ${name}\n      ${(e?.message ?? e).toString().replace(/\s+/g, " ").slice(0, 240)}`,
+				);
 			}
 		}
 	}
@@ -152,17 +161,33 @@ export class Harness {
 	 * ("snapshot is referenced by one or more resources"), which would leak it.
 	 */
 	async cleanup() {
-		for (const id of this.resources.sandbox) await this.call("tenki_terminate_sandbox", { session_id: id }).catch(() => {});
-		for (const id of this.resources.snapshot) await this.call("tenki_delete_snapshot", { snapshot_id: id }).catch(() => {});
-		for (const id of this.resources.volume) await this.call("tenki_delete_volume", { volume_id: id }).catch(() => {});
-		for (const id of this.resources.template) await this.call("tenki_delete_template", { template_id: id }).catch(() => {});
+		for (const id of this.resources.sandbox)
+			await this.call("tenki_terminate_sandbox", { session_id: id }).catch(
+				() => {},
+			);
+		for (const id of this.resources.snapshot)
+			await this.call("tenki_delete_snapshot", { snapshot_id: id }).catch(
+				() => {},
+			);
+		for (const id of this.resources.volume)
+			await this.call("tenki_delete_volume", { volume_id: id }).catch(() => {});
+		for (const id of this.resources.template)
+			await this.call("tenki_delete_template", { template_id: id }).catch(
+				() => {},
+			);
 	}
 
 	report() {
 		const passed = this.results.filter((r) => r.status === "pass").length;
 		const failed = this.results.filter((r) => r.status === "fail").length;
 		const skipped = this.results.filter((r) => r.status === "skip").length;
-		return { suite: this.suite, passed, failed, skipped, results: this.results };
+		return {
+			suite: this.suite,
+			passed,
+			failed,
+			skipped,
+			results: this.results,
+		};
 	}
 
 	async close() {

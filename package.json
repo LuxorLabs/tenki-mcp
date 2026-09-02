@@ -21,7 +21,7 @@
     "prepack": "npm run build",
     "prepublishOnly": "npm run build",
     "pretest": "npm run build",
-    "test": "node test/offline.test.mjs && node test/public-shapes.test.mjs && node test/exec-output.test.mjs && node test/http-input.test.mjs && node test/oauth-http.test.mjs && node test/security.test.mjs && node test/client-net.test.mjs",
+    "test": "node test/offline.test.mjs && node test/stdio-v2.test.mjs && node test/public-shapes.test.mjs && node test/exec-output.test.mjs && node test/http-input.test.mjs && node test/oauth-http.test.mjs && node test/security.test.mjs && node test/client-net.test.mjs",
     "test:all": "npm run build && node test/run.mjs",
     "test:offline": "npm run build && node test/offline.test.mjs"
   },
@@ -43,10 +43,12 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2"
   },

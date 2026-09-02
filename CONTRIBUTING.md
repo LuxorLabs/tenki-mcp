@@ -38,7 +38,7 @@ It requires **no secrets** — the live suites are local-only by design.
 ## Adding a tool
 
 Tools live in `src/tools/<domain>.ts`; each module exports a `register<Domain>(server, client)`
-that calls `server.tool(name, description, zodShape, handler)`. Add new modules to the
+that calls `server.registerTool(name, config, handler)`. Add new modules to the
 `modules` array in `src/server.ts`. The parity audit will fail the build if an API method
 has no tool. The expected tool count is asserted in the offline suites — update those if you
 add or remove a tool.
