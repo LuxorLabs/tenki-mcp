@@ -20,8 +20,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 import { TenkiClient } from "./client.js";
 import {
-	APIDelegationSigner,
-	OAuthCompatibilityRoutes,
+	OAuthResourceRoutes,
 	OAuthTokenVerifier,
 	type DelegatedAuthorization,
 	authorizationBinding,
@@ -150,8 +149,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 	const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
 	const oauthConfig = loadOAuthConfig();
 	const oauthVerifier = oauthConfig ? new OAuthTokenVerifier(oauthConfig) : null;
-	const oauthRoutes = oauthConfig ? new OAuthCompatibilityRoutes(oauthConfig) : null;
-	const delegationSigner = oauthConfig ? new APIDelegationSigner(oauthConfig.delegation) : null;
+	const oauthRoutes = oauthConfig ? new OAuthResourceRoutes(oauthConfig) : null;
 
 	// Refuse to expose an unauthenticated capability to the network.
 	if (!isLoopback && !httpToken && !oauthConfig) {
@@ -162,10 +160,13 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 		process.exit(1);
 	}
 
-	const sessions = new Map<
-		string,
-		{ transport: StreamableHTTPServerTransport; lastSeen: number; authorizationBinding?: string }
-	>();
+	type SessionAuthorization = { binding: string; apiDelegationToken: string };
+	type SessionEntry = {
+		transport: StreamableHTTPServerTransport;
+		lastSeen: number;
+		authorization?: SessionAuthorization;
+	};
+	const sessions = new Map<string, SessionEntry>();
 	const sweep = setInterval(() => {
 		const now = Date.now();
 		for (const [id, s] of sessions) {
@@ -205,12 +206,15 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 			const sid = req.headers["mcp-session-id"] as string | undefined;
 			const existingEntry = sid ? sessions.get(sid) : undefined;
 			if (
-				existingEntry?.authorizationBinding &&
+				existingEntry?.authorization &&
 				delegated &&
-				existingEntry.authorizationBinding !== authorizationBinding(delegated)
+				existingEntry.authorization.binding !== authorizationBinding(delegated)
 			) {
 				oauthUnauthorized(res, oauthConfig!.metadataUrl, oauthConfig!.scope);
 				return;
+			}
+			if (existingEntry?.authorization && delegated) {
+				existingEntry.authorization.apiDelegationToken = delegated.apiDelegationToken;
 			}
 
 			if (req.method === "POST") {
@@ -236,6 +240,12 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 						res.writeHead(503, { "Content-Type": "text/plain" }).end("too many sessions");
 						return;
 					}
+					const sessionAuthorization = delegated
+						? {
+								binding: authorizationBinding(delegated),
+								apiDelegationToken: delegated.apiDelegationToken,
+							}
+						: undefined;
 					const transport = new StreamableHTTPServerTransport({
 						sessionIdGenerator: () => randomUUID(),
 						// DNS-rebinding defense: only accept these Host headers, so a rebound
@@ -246,7 +256,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 							sessions.set(id, {
 								transport,
 								lastSeen: Date.now(),
-								...(delegated ? { authorizationBinding: authorizationBinding(delegated) } : {}),
+								...(sessionAuthorization ? { authorization: sessionAuthorization } : {}),
 							});
 						},
 					});
@@ -254,17 +264,17 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 						const id = transport.sessionId;
 						if (id) sessions.delete(id);
 					};
-					const sessionClient = delegated && delegationSigner
+					const sessionClient = delegated
 						? new TenkiClient("", process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined, {
 								workspaceId: delegated.workspaceId,
-								bearerTokenProvider: () => delegationSigner.sign(delegated),
+								bearerTokenProvider: () => sessionAuthorization!.apiDelegationToken,
 							})
 						: client;
 					await createServer(sessionClient).connect(transport);
 					entry = {
 						transport,
 						lastSeen: Date.now(),
-						...(delegated ? { authorizationBinding: authorizationBinding(delegated) } : {}),
+						...(sessionAuthorization ? { authorization: sessionAuthorization } : {}),
 					};
 				}
 				if (!entry) {

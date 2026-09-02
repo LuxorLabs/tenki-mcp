@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { once } from "node:events";
 import http from "node:http";
 
@@ -9,10 +9,32 @@ const userId = "11111111-1111-4111-8111-111111111111";
 const workspaceId = "22222222-2222-4222-8222-222222222222";
 const sourceToken = "ory_at_test";
 const refreshedSourceToken = "ory_at_refreshed";
+const identityServiceToken = "identity-service-token";
 const delegationSecret = "0123456789abcdef0123456789abcdef";
 let delegatedRequests = 0;
-let authorizationProxyRequests = 0;
-let registrationAudienceBound = false;
+let refreshedDelegatedRequests = 0;
+let identityExchanges = 0;
+
+function signDelegation(audience, generation) {
+	const now = Math.floor(Date.now() / 1000);
+	const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "tenki-mcp-delegation+jwt" })).toString("base64url");
+	const payload = Buffer.from(
+		JSON.stringify({
+			iss: "http://127.0.0.1",
+			aud: audience,
+			sub: userId,
+			workspace_id: workspaceId,
+			client_id: "claude-test",
+			scope: "mcp",
+			generation,
+			iat: now,
+			exp: now + 60,
+			jti: randomUUID(),
+		}),
+	).toString("base64url");
+	const signature = createHmac("sha256", delegationSecret).update(`${header}.${payload}`).digest("base64url");
+	return `${header}.${payload}.${signature}`;
+}
 
 function verifyDelegation(header, audience) {
 	if (!header?.startsWith("Bearer ")) throw new Error("backend request omitted Bearer delegation");
@@ -24,15 +46,20 @@ function verifyDelegation(header, audience) {
 	if (parts.length !== 3) throw new Error("backend credential is not a JWT");
 	const expected = createHmac("sha256", delegationSecret).update(`${parts[0]}.${parts[1]}`).digest();
 	const actual = Buffer.from(parts[2], "base64url");
-	if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error("backend delegation signature is invalid");
+	if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+		throw new Error("backend delegation signature is invalid");
+	}
 	const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
-	if (payload.iss !== "http://127.0.0.1" || payload.aud !== audience) throw new Error("backend delegation issuer/audience is invalid");
+	if (payload.iss !== "http://127.0.0.1" || payload.aud !== audience) {
+		throw new Error("backend delegation issuer/audience is invalid");
+	}
 	if (payload.sub !== userId || payload.workspace_id !== workspaceId || payload.client_id !== "claude-test") {
 		throw new Error("backend delegation lost its user, workspace, or client binding");
 	}
 	if (!String(payload.scope).split(" ").includes("mcp") || payload.exp - payload.iat > 60) {
 		throw new Error("backend delegation has invalid scope or lifetime");
 	}
+	if (payload.generation === "refreshed") refreshedDelegatedRequests++;
 	delegatedRequests++;
 }
 
@@ -49,75 +76,54 @@ api.listen(0, "127.0.0.1");
 await once(api, "listening");
 const apiAddress = api.address();
 
-const hydra = http.createServer((req, res) => {
-	const url = new URL(req.url, "http://127.0.0.1");
-	if (req.method === "POST" && url.pathname === "/oauth2/register") {
-		let body = "";
-		req.setEncoding("utf8");
-		req.on("data", (chunk) => (body += chunk));
-		req.on("end", () => {
-			registrationAudienceBound = JSON.parse(body).audience?.[0] === "http://127.0.0.1/mcp";
-			res.writeHead(201, { "Content-Type": "application/json" });
-			res.end(
-				JSON.stringify({
-					client_id: "claude-dynamic",
-					client_uri: "",
-					policy_uri: "",
-					contacts: null,
-					registration_access_token: "registration-token",
-					registration_client_uri: "https://oauth.tenki.test/oauth2/register/claude-dynamic",
-				}),
-			);
-		});
+const identity = http.createServer((req, res) => {
+	if (
+		req.method !== "POST" ||
+		req.url !== "/tenki.cloud.identity.private.v1beta1.IdentityPrivateService/ExchangeMcpOAuthToken"
+	) {
+		res.writeHead(404).end();
 		return;
 	}
-	if (req.method === "GET" && url.pathname === "/oauth2/auth") {
-		if (url.searchParams.get("audience") !== "http://127.0.0.1/mcp" || url.searchParams.has("resource")) {
-			throw new Error("authorization adapter did not translate the resource into Hydra's audience parameter");
-		}
-		authorizationProxyRequests++;
-		res.writeHead(302, {
-			Location: "https://app.tenki.test/mcp/oauth/login?login_challenge=test",
-			"Set-Cookie": "oauth_session=test; Path=/; HttpOnly; Secure; SameSite=Lax",
-		});
-		res.end();
+	if (req.headers["x-service-token"] !== identityServiceToken) {
+		res.writeHead(401).end();
 		return;
 	}
-
-	let body = "";
+	let raw = "";
 	req.setEncoding("utf8");
-	req.on("data", (chunk) => (body += chunk));
+	req.on("data", (chunk) => (raw += chunk));
 	req.on("end", () => {
-		const presentedToken = new URLSearchParams(body).get("token");
-		const valid = presentedToken === sourceToken || presentedToken === refreshedSourceToken;
+		const presentedToken = JSON.parse(raw).accessToken;
+		if (presentedToken !== sourceToken && presentedToken !== refreshedSourceToken) {
+			res.writeHead(401, { "Content-Type": "application/json" });
+			res.end(JSON.stringify({ code: "unauthenticated", message: "invalid token" }));
+			return;
+		}
+		identityExchanges++;
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(
-			JSON.stringify(
-				valid
-					? {
-							active: true,
-							sub: userId,
-							client_id: "claude-test",
-							scope: "mcp",
-							aud: ["http://127.0.0.1/mcp"],
-							exp: Math.floor(Date.now() / 1000) + 3600,
-							ext: { workspace_id: workspaceId },
-						}
-					: { active: false },
-			),
+			JSON.stringify({
+				subject: userId,
+				workspaceId,
+				clientId: "claude-test",
+				scopes: ["mcp"],
+				expiresAtUnix: Math.floor(Date.now() / 1000) + 3600,
+				apiDelegationToken: signDelegation(
+					`http://127.0.0.1:${apiAddress.port}`,
+					presentedToken === refreshedSourceToken ? "refreshed" : "initial",
+				),
+			}),
 		);
 	});
 });
-hydra.listen(0, "127.0.0.1");
-await once(hydra, "listening");
-const hydraAddress = hydra.address();
+identity.listen(0, "127.0.0.1");
+await once(identity, "listening");
+const identityAddress = identity.address();
 
 process.env.TENKI_MCP_OAUTH_ISSUER = "https://oauth.tenki.test";
-process.env.TENKI_MCP_OAUTH_INTROSPECTION_URL = `http://127.0.0.1:${hydraAddress.port}/admin/oauth2/introspect`;
-process.env.TENKI_MCP_HYDRA_PUBLIC_URL = `http://127.0.0.1:${hydraAddress.port}`;
+process.env.TENKI_MCP_IDENTITY_URL = `http://127.0.0.1:${identityAddress.port}`;
+process.env.TENKI_MCP_IDENTITY_SERVICE_TOKEN = identityServiceToken;
 process.env.TENKI_MCP_PUBLIC_URL = "http://127.0.0.1";
 process.env.TENKI_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp";
-process.env.TENKI_MCP_API_DELEGATION_SECRET = delegationSecret;
 process.env.TENKI_API_ENDPOINT = `http://127.0.0.1:${apiAddress.port}`;
 
 const { authorizationBinding } = await import("../dist/oauth.js");
@@ -131,7 +137,9 @@ try {
 	const metadata = await fetch(`${base}/.well-known/oauth-protected-resource/mcp`);
 	if (!metadata.ok) throw new Error(`metadata returned ${metadata.status}`);
 	const resource = await metadata.json();
-	if (resource.resource !== "http://127.0.0.1/mcp") throw new Error("protected-resource metadata has wrong resource");
+	if (resource.resource !== "http://127.0.0.1/mcp") {
+		throw new Error("protected-resource metadata has wrong resource");
+	}
 
 	const unauthorized = await fetch(`${base}/mcp`, { method: "POST" });
 	if (unauthorized.status !== 401) throw new Error(`unauthorized request returned ${unauthorized.status}`);
@@ -139,48 +147,10 @@ try {
 		throw new Error("401 challenge omitted resource_metadata");
 	}
 
-	const authorizationMetadata = await fetch(`${base}/.well-known/oauth-authorization-server`);
-	if (!authorizationMetadata.ok) throw new Error(`authorization metadata returned ${authorizationMetadata.status}`);
-	const authorizationServer = await authorizationMetadata.json();
-	if (authorizationServer.authorization_endpoint !== "https://oauth.tenki.test/mcp/oauth2/auth") {
-		throw new Error("authorization metadata did not advertise the resource adapter");
+	for (const path of ["/.well-known/oauth-authorization-server", "/oauth/register", "/mcp/oauth2/auth"]) {
+		const response = await fetch(`${base}${path}`);
+		if (response.status !== 404) throw new Error(`MCP server still owns OAuth provider route ${path}`);
 	}
-
-	const registration = await fetch(`${base}/oauth/register`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ redirect_uris: ["http://127.0.0.1/callback"] }),
-	});
-	if (registration.status !== 201) throw new Error(`OAuth registration returned ${registration.status}`);
-	const registeredClient = await registration.json();
-	if (registeredClient.client_id !== "claude-dynamic" || registeredClient.registration_access_token !== "registration-token") {
-		throw new Error("OAuth registration adapter dropped required fields");
-	}
-	if ("client_uri" in registeredClient || "policy_uri" in registeredClient || "contacts" in registeredClient) {
-		throw new Error("OAuth registration adapter retained invalid optional fields");
-	}
-	if (!registrationAudienceBound) throw new Error("dynamic registration was not restricted to the MCP resource audience");
-
-	const authorize = await fetch(
-		`${base}/mcp/oauth2/auth?client_id=claude-dynamic&response_type=code&resource=${encodeURIComponent("http://127.0.0.1/mcp")}`,
-		{ redirect: "manual" },
-	);
-	if (authorize.status !== 302 || authorizationProxyRequests !== 1) {
-		throw new Error("resource-bound authorization was not forwarded to Hydra");
-	}
-	if (!authorize.headers.get("set-cookie")?.includes("oauth_session=")) {
-		throw new Error("authorization adapter dropped Hydra's session cookie");
-	}
-	const invalidTarget = await fetch(
-		`${base}/mcp/oauth2/auth?client_id=claude-dynamic&response_type=code&resource=https%3A%2F%2Fapi.attacker.test`,
-		{ redirect: "manual" },
-	);
-	if (invalidTarget.status !== 400 || authorizationProxyRequests !== 1) {
-		throw new Error("authorization adapter forwarded an invalid OAuth resource");
-	}
-
-	const oldConsentRoute = await fetch(`${base}/oauth/consent`);
-	if (oldConsentRoute.status !== 404) throw new Error("MCP server still hosts the browser consent route");
 
 	const requestHeaders = new Headers({ Authorization: `Bearer ${sourceToken}` });
 	const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
@@ -193,6 +163,8 @@ try {
 	requestHeaders.set("Authorization", `Bearer ${refreshedSourceToken}`);
 	await client.callTool({ name: "tenki_get_workspace_usage", arguments: {} });
 	if (delegatedRequests < 2) throw new Error("tool call did not reach the backend with delegated authentication");
+	if (refreshedDelegatedRequests < 1) throw new Error("the MCP session did not adopt its refreshed API delegation");
+	if (identityExchanges < 2) throw new Error("MCP access tokens were not exchanged through Tenki Identity");
 	if (
 		authorizationBinding({
 			tokenDigest: "first",
@@ -200,6 +172,7 @@ try {
 			workspaceId,
 			clientId: "claude-test",
 			scope: ["mcp"],
+			apiDelegationToken: "first-delegation",
 		}) !==
 		authorizationBinding({
 			tokenDigest: "refreshed",
@@ -207,6 +180,7 @@ try {
 			workspaceId,
 			clientId: "claude-test",
 			scope: ["mcp"],
+			apiDelegationToken: "refreshed-delegation",
 		})
 	) {
 		throw new Error("an OAuth token refresh changes the MCP session binding");
@@ -214,14 +188,13 @@ try {
 	await client.close();
 
 	console.log("✓ RFC 9728 protected-resource metadata is public");
-	console.log("✓ RFC 8707 resources are translated into Hydra-bound token audiences");
+	console.log("✓ OAuth provider routes are owned by Tenki Identity");
 	console.log("✓ unauthenticated MCP requests return an OAuth challenge");
-	console.log("✓ Hydra dynamic registration responses are normalized for MCP clients");
-	console.log("✓ browser login and consent are no longer hosted by tenki-mcp");
-	console.log("✓ MCP tokens are translated into short-lived, workspace-bound API delegations");
+	console.log("✓ MCP access tokens are exchanged through Tenki Identity");
+	console.log("✓ only short-lived, workspace-bound API delegations reach the backend");
 	console.log("✓ OAuth token refresh preserves the authenticated MCP session binding");
 } finally {
 	await new Promise((resolve) => server.close(resolve));
-	await new Promise((resolve) => hydra.close(resolve));
+	await new Promise((resolve) => identity.close(resolve));
 	await new Promise((resolve) => api.close(resolve));
 }
