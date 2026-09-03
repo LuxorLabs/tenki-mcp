@@ -30,8 +30,7 @@ import {
 } from "@modelcontextprotocol/node";
 import { TenkiClient } from "./client.js";
 import {
-	APIDelegationSigner,
-	OAuthCompatibilityRoutes,
+	OAuthResourceRoutes,
 	OAuthTokenVerifier,
 	type DelegatedAuthorization,
 	authorizationBinding,
@@ -218,10 +217,7 @@ export function startHttp(
 		? new OAuthTokenVerifier(oauthConfig)
 		: null;
 	const oauthRoutes = oauthConfig
-		? new OAuthCompatibilityRoutes(oauthConfig)
-		: null;
-	const delegationSigner = oauthConfig
-		? new APIDelegationSigner(oauthConfig.delegation)
+		? new OAuthResourceRoutes(oauthConfig)
 		: null;
 	const apiBaseUrl =
 		process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined;
@@ -230,16 +226,16 @@ export function startHttp(
 		({ authInfo }) => {
 			const delegated = authInfo?.extra?.delegatedAuthorization as
 				DelegatedAuthorization | undefined;
-			if (oauthConfig && (!delegated || !delegationSigner)) {
+			if (oauthConfig && !delegated) {
 				throw new Error(
 					"Hosted OAuth identity was not supplied to the MCP handler.",
 				);
 			}
 			const requestClient =
-				delegated && delegationSigner
+				delegated
 					? new TenkiClient("", apiBaseUrl, {
 							workspaceId: delegated.workspaceId,
-							bearerTokenProvider: () => delegationSigner.sign(delegated),
+							bearerTokenProvider: () => delegated.apiDelegationToken,
 						})
 					: client;
 			return createServer(requestClient);
@@ -270,14 +266,13 @@ export function startHttp(
 		process.exit(1);
 	}
 
-	const sessions = new Map<
-		string,
-		{
-			transport: NodeStreamableHTTPServerTransport;
-			lastSeen: number;
-			authorizationBinding?: string;
-		}
-	>();
+	type SessionAuthorization = { binding: string; apiDelegationToken: string };
+	type SessionEntry = {
+		transport: NodeStreamableHTTPServerTransport;
+		lastSeen: number;
+		authorization?: SessionAuthorization;
+	};
+	const sessions = new Map<string, SessionEntry>();
 	const sweep = setInterval(() => {
 		const now = Date.now();
 		for (const [id, s] of sessions) {
@@ -333,12 +328,16 @@ export function startHttp(
 			const sid = req.headers["mcp-session-id"] as string | undefined;
 			const existingEntry = sid ? sessions.get(sid) : undefined;
 			if (
-				existingEntry?.authorizationBinding &&
+				existingEntry?.authorization &&
 				delegated &&
-				existingEntry.authorizationBinding !== authorizationBinding(delegated)
+				existingEntry.authorization.binding !== authorizationBinding(delegated)
 			) {
 				oauthUnauthorized(res, oauthConfig!.metadataUrl, oauthConfig!.scope);
 				return;
+			}
+			if (existingEntry?.authorization && delegated) {
+				existingEntry.authorization.apiDelegationToken =
+					delegated.apiDelegationToken;
 			}
 
 			if (req.method === "POST") {
@@ -389,6 +388,12 @@ export function startHttp(
 							.end("too many sessions");
 						return;
 					}
+					const sessionAuthorization = delegated
+						? {
+								binding: authorizationBinding(delegated),
+								apiDelegationToken: delegated.apiDelegationToken,
+							}
+						: undefined;
 					const transport = new NodeStreamableHTTPServerTransport({
 						sessionIdGenerator: () => randomUUID(),
 						// DNS-rebinding defense: only accept these Host headers, so a rebound
@@ -404,8 +409,8 @@ export function startHttp(
 							sessions.set(id, {
 								transport,
 								lastSeen: Date.now(),
-								...(delegated
-									? { authorizationBinding: authorizationBinding(delegated) }
+								...(sessionAuthorization
+									? { authorization: sessionAuthorization }
 									: {}),
 							});
 						},
@@ -415,18 +420,19 @@ export function startHttp(
 						if (id) sessions.delete(id);
 					};
 					const sessionClient =
-						delegated && delegationSigner
+						delegated
 							? new TenkiClient("", apiBaseUrl, {
 									workspaceId: delegated.workspaceId,
-									bearerTokenProvider: () => delegationSigner.sign(delegated),
+									bearerTokenProvider: () =>
+										sessionAuthorization!.apiDelegationToken,
 								})
 							: client;
 					await createServer(sessionClient).connect(transport);
 					entry = {
 						transport,
 						lastSeen: Date.now(),
-						...(delegated
-							? { authorizationBinding: authorizationBinding(delegated) }
+						...(sessionAuthorization
+							? { authorization: sessionAuthorization }
 							: {}),
 					};
 				}

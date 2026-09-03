@@ -131,12 +131,8 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | `TENKI_MCP_OAUTH_ISSUER`               | —                         | OAuth authorization-server issuer. Enables delegated OAuth HTTP mode.                                              |
 | `TENKI_MCP_OAUTH_RESOURCE`             | `<public URL>/mcp`        | RFC 8707 resource identifier accepted in access-token audiences.                                                   |
 | `TENKI_MCP_OAUTH_SCOPE`                | `mcp`                     | Required delegated scope.                                                                                          |
-| `TENKI_MCP_OAUTH_INTROSPECTION_URL`    | —                         | Internal Hydra token-introspection endpoint.                                                                       |
-| `TENKI_MCP_HYDRA_PUBLIC_URL`           | —                         | Internal Hydra public endpoint used to proxy dynamic client registration.                                          |
-| `TENKI_MCP_API_DELEGATION_SECRET`      | —                         | Shared secret (at least 32 bytes) for signing short-lived Tenki API delegations.                                   |
-| `TENKI_MCP_API_DELEGATION_ISSUER`      | public URL                | Issuer on Tenki API delegation JWTs.                                                                               |
-| `TENKI_MCP_API_DELEGATION_AUDIENCE`    | API endpoint              | Audience on Tenki API delegation JWTs.                                                                             |
-| `TENKI_MCP_API_DELEGATION_TTL_SECONDS` | `60`                      | Delegation lifetime; must not exceed 300 seconds.                                                                  |
+| `TENKI_MCP_IDENTITY_URL`               | —                         | Internal Tenki Identity service endpoint used to exchange OAuth access tokens.                                     |
+| `TENKI_MCP_IDENTITY_SERVICE_TOKEN`     | —                         | Service credential for the private Identity token-exchange RPC.                                                    |
 
 ## Tools
 
@@ -193,7 +189,7 @@ Point an HTTP-capable MCP client at `/mcp`. Static-key mode uses one shared `TEN
 
 HTTP and stdio negotiate MCP `2026-07-28` with clients that support `server/discover`, while continuing to serve 2024/2025-era clients. HTTP keeps the existing stateful transport for legacy clients and uses stateless per-request handling for `2026-07-28` on the same `/mcp` URL.
 
-Hosted multi-tenant deployments instead configure Hydra OAuth. The server publishes RFC 9728 protected-resource metadata, dynamically registers public clients, verifies the requested audience and scope, and binds each MCP session to the workspace chosen on the Tenki consent page. The Hydra access token terminates at `tenki-mcp`; API calls use signed, short-lived, workspace-bound delegation JWTs instead. Hydra's admin and introspection endpoints and the delegation secret must remain cluster-internal.
+Hosted multi-tenant deployments instead use Tenki Identity's OAuth facade. The MCP server publishes RFC 9728 protected-resource metadata and exchanges each caller's access token through the private Identity service. Identity owns Hydra, validates the requested audience and scope, and issues a short-lived API delegation bound to the user, client, and workspace selected on the Tenki consent page. `tenki-mcp` has no Hydra Admin access and does not hold the delegation-signing secret.
 
 ## How it works
 
