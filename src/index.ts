@@ -13,8 +13,7 @@
  * Tools live in self-registering modules under ./tools; the server factory is in
  * ./server.ts. Auth: set TENKI_API_KEY (or TENKI_AUTH_TOKEN) in the environment.
  */
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { TenkiClient } from "./client.js";
 import { createServer } from "./server.js";
 import { startHttp } from "./http.js";
@@ -33,7 +32,8 @@ if (!token && !oauthHttp) {
 			"e.g. claude mcp add tenki --env TENKI_API_KEY=tk_… -- npx -y @tenkicloud/mcp",
 	);
 }
-const baseUrl = process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined;
+const baseUrl =
+	process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined;
 /** Positive integer from env, or undefined so the client keeps its own default. */
 const envMs = (name: string): number | undefined => {
 	const n = Number.parseInt(process.env[name] ?? "", 10);
@@ -54,9 +54,12 @@ async function main() {
 		}
 		return;
 	}
-	const server = createServer(client);
-	const transport = new StdioServerTransport();
-	await server.connect(transport);
+	const stdio = serveStdio(() => createServer(client), {
+		onerror: (error) => console.error("tenki-mcp stdio error:", error.message),
+	});
+	for (const sig of ["SIGINT", "SIGTERM"] as const) {
+		process.on(sig, () => void stdio.close().finally(() => process.exit(0)));
+	}
 	console.error("tenki-mcp running on stdio");
 }
 

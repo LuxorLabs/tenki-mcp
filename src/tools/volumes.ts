@@ -11,7 +11,7 @@
  *
  * CreateVolumeRequest is flat: { workspaceId, name, sizeBytes (int64) }.
  */
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
@@ -27,20 +27,31 @@ const sizeBytesSchema = z
 	.int()
 	.min(MIN_VOLUME_BYTES)
 	.max(MAX_VOLUME_BYTES)
-	.describe("Volume size in bytes. Must be between 1 MiB (1048576) and 100 GiB (107374182400).");
+	.describe(
+		"Volume size in bytes. Must be between 1 MiB (1048576) and 100 GiB (107374182400).",
+	);
 
 export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Create ────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_create_volume",
-		"Create a workspace-scoped persistent volume — durable block storage that survives sandbox teardown. Defaults the workspace to the API key's first; override with workspace_id.",
 		{
-			name: z.string().describe("Human-readable name for the volume."),
-			size_bytes: sizeBytesSchema,
-			workspace_id: z.string().optional().describe("Workspace to create the volume in (defaults to the key's first workspace)."),
+			description:
+				"Create a workspace-scoped persistent volume — durable block storage that survives sandbox teardown. Defaults the workspace to the API key's first; override with workspace_id.",
+			inputSchema: z.object({
+				name: z.string().describe("Human-readable name for the volume."),
+				size_bytes: sizeBytesSchema,
+				workspace_id: z
+					.string()
+					.optional()
+					.describe(
+						"Workspace to create the volume in (defaults to the key's first workspace).",
+					),
+			}),
 		},
 		async ({ name, size_bytes, workspace_id }) => {
-			const workspaceId = workspace_id ?? (await client.resolveOwner()).workspaceId;
+			const workspaceId =
+				workspace_id ?? (await client.resolveOwner()).workspaceId;
 			return ok(
 				await client.control("CreateVolume", {
 					...(workspaceId ? { workspaceId } : {}),
@@ -52,21 +63,43 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	);
 
 	// ── Get ───────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_get_volume",
-		"Fetch a single volume's metadata and current state by its id.",
-		{ volume_id: z.string().describe("The volume id, e.g. vol_….") },
-		async ({ volume_id }) => ok(await client.control("GetVolume", { volumeId: volume_id })),
+		{
+			description:
+				"Fetch a single volume's metadata and current state by its id.",
+			inputSchema: z.object({
+				volume_id: z.string().describe("The volume id, e.g. vol_…."),
+			}),
+		},
+		async ({ volume_id }) =>
+			ok(await client.control("GetVolume", { volumeId: volume_id })),
 	);
 
 	// ── List ──────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_list_volumes",
-		"List persistent volumes in a workspace (defaults to the key's first workspace). Supports pagination.",
 		{
-			workspace_id: z.string().optional().describe("Workspace to list volumes from (defaults to the key's first workspace)."),
-			page_size: z.number().int().positive().optional().describe("Max volumes to return per page."),
-			page_token: z.string().optional().describe("Page token from a previous response's nextPageToken."),
+			description:
+				"List persistent volumes in a workspace (defaults to the key's first workspace). Supports pagination.",
+			inputSchema: z.object({
+				workspace_id: z
+					.string()
+					.optional()
+					.describe(
+						"Workspace to list volumes from (defaults to the key's first workspace).",
+					),
+				page_size: z
+					.number()
+					.int()
+					.positive()
+					.optional()
+					.describe("Max volumes to return per page."),
+				page_token: z
+					.string()
+					.optional()
+					.describe("Page token from a previous response's nextPageToken."),
+			}),
 		},
 		async ({ workspace_id, page_size, page_token }) => {
 			const owner = await client.resolveOwner();
@@ -82,45 +115,73 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	);
 
 	// ── Update ────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_update_volume",
-		"Rename a volume (update its human-readable name). To change a volume's size use tenki_resize_volume instead.",
 		{
-			volume_id: z.string().describe("The volume id to update."),
-			name: z.string().describe("New human-readable name for the volume."),
+			description:
+				"Rename a volume (update its human-readable name). To change a volume's size use tenki_resize_volume instead.",
+			inputSchema: z.object({
+				volume_id: z.string().describe("The volume id to update."),
+				name: z.string().describe("New human-readable name for the volume."),
+			}),
 		},
-		async ({ volume_id, name }) => ok(await client.control("UpdateVolume", { volumeId: volume_id, name })),
+		async ({ volume_id, name }) =>
+			ok(await client.control("UpdateVolume", { volumeId: volume_id, name })),
 	);
 
 	// ── Delete ────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_delete_volume",
-		"Permanently delete a volume and destroy its data. Fails with VolumeInUse if the volume is still attached to a session — detach it first.",
-		{ volume_id: z.string().describe("The volume id to delete.") },
-		async ({ volume_id }) => ok(await client.control("DeleteVolume", { volumeId: volume_id })),
+		{
+			description:
+				"Permanently delete a volume and destroy its data. Fails with VolumeInUse if the volume is still attached to a session — detach it first.",
+			inputSchema: z.object({
+				volume_id: z.string().describe("The volume id to delete."),
+			}),
+		},
+		async ({ volume_id }) =>
+			ok(await client.control("DeleteVolume", { volumeId: volume_id })),
 	);
 
 	// ── Resize ────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_resize_volume",
-		"Grow a volume to a new size in bytes (1 MiB … 100 GiB). Volumes can grow but not shrink.",
 		{
-			volume_id: z.string().describe("The volume id to resize."),
-			size_bytes: sizeBytesSchema,
+			description:
+				"Grow a volume to a new size in bytes (1 MiB … 100 GiB). Volumes can grow but not shrink.",
+			inputSchema: z.object({
+				volume_id: z.string().describe("The volume id to resize."),
+				size_bytes: sizeBytesSchema,
+			}),
 		},
 		async ({ volume_id, size_bytes }) =>
-			ok(await client.control("ResizeVolume", { volumeId: volume_id, newSizeBytes: size_bytes })),
+			ok(
+				await client.control("ResizeVolume", {
+					volumeId: volume_id,
+					newSizeBytes: size_bytes,
+				}),
+			),
 	);
 
 	// ── Attach ────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_attach_volume",
-		"Mount a volume into a running sandbox at an absolute path. Set read_only to mount without write access.",
 		{
-			session_id: sessionIdSchema.describe("The sandbox session to attach the volume to."),
-			volume_id: z.string().describe("The volume id to attach."),
-			mount_path: pathSchema.describe("Absolute path inside the sandbox to mount at, e.g. /mnt/data."),
-			read_only: z.boolean().optional().describe("Mount the volume read-only (default false = read-write)."),
+			description:
+				"Mount a volume into a running sandbox at an absolute path. Set read_only to mount without write access.",
+			inputSchema: z.object({
+				session_id: sessionIdSchema.describe(
+					"The sandbox session to attach the volume to.",
+				),
+				volume_id: z.string().describe("The volume id to attach."),
+				mount_path: pathSchema.describe(
+					"Absolute path inside the sandbox to mount at, e.g. /mnt/data.",
+				),
+				read_only: z
+					.boolean()
+					.optional()
+					.describe("Mount the volume read-only (default false = read-write)."),
+			}),
 		},
 		async ({ session_id, volume_id, mount_path, read_only }) =>
 			ok(
@@ -138,15 +199,23 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	);
 
 	// ── Detach ────────────────────────────────────────────────────────────────
-	server.tool(
+	server.registerTool(
 		"tenki_detach_volume",
-		"Unmount a volume from a sandbox session.",
 		{
-			session_id: sessionIdSchema.describe("The sandbox session to detach the volume from."),
-			volume_id: z.string().describe("The volume id to detach."),
+			description: "Unmount a volume from a sandbox session.",
+			inputSchema: z.object({
+				session_id: sessionIdSchema.describe(
+					"The sandbox session to detach the volume from.",
+				),
+				volume_id: z.string().describe("The volume id to detach."),
+			}),
 		},
 		async ({ session_id, volume_id }) =>
-			ok(await client.control("DetachVolume", { sessionId: session_id, volumeId: volume_id })),
+			ok(
+				await client.control("DetachVolume", {
+					sessionId: session_id,
+					volumeId: volume_id,
+				}),
+			),
 	);
-
 }

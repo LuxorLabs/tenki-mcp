@@ -12,8 +12,7 @@
  *   3. optionally audit-logs each call name to stderr: TENKI_MCP_AUDIT=1
  *      (tool name + argument KEYS only — never values, content, or the token).
  */
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-
+import { McpServer } from "@modelcontextprotocol/server";
 import type { TenkiClient } from "./client.js";
 import { registerIdentity } from "./tools/identity.js";
 import { registerRun } from "./tools/run.js";
@@ -56,7 +55,8 @@ const modules = [
 
 type Cls = "read" | "write" | "destructive";
 // Destroys/removes/revokes a resource → destructiveHint.
-const DESTRUCTIVE = /^tenki_(terminate|delete|remove|unshare|revoke|detach|unexpose|unbind)/;
+const DESTRUCTIVE =
+	/^tenki_(terminate|delete|remove|unshare|revoke|detach|unexpose|unbind)/;
 // Named exceptions that match the READ prefix below but actually grant a
 // write/spend capability, so they must never be treated as read-only.
 // tenki_get_upload_url returns a signed URL for an arbitrary PUT into the sandbox.
@@ -85,14 +85,19 @@ interface GuardOpts {
 }
 
 function readGuardOpts(): GuardOpts {
-	const truthy = (v?: string) => v === "1" || (v ?? "").toLowerCase() === "true";
+	const truthy = (v?: string) =>
+		v === "1" || (v ?? "").toLowerCase() === "true";
 	const disabled = new Set(
 		(process.env.TENKI_MCP_DISABLED_TOOLS || "")
 			.split(",")
 			.map((s) => s.trim())
 			.filter(Boolean),
 	);
-	return { readonly: truthy(process.env.TENKI_MCP_READONLY), disabled, audit: truthy(process.env.TENKI_MCP_AUDIT) };
+	return {
+		readonly: truthy(process.env.TENKI_MCP_READONLY),
+		disabled,
+		audit: truthy(process.env.TENKI_MCP_AUDIT),
+	};
 }
 
 /** Log a tool call's name + argument KEYS (never values/content/token) to stderr. */
@@ -113,14 +118,20 @@ function annotationsFor(cls: Cls) {
 }
 
 /** Wrap a handler so TENKI_MCP_AUDIT=1 logs the call name + argument keys. */
-function withAudit(name: string, handler: (...a: unknown[]) => unknown, audit: boolean) {
+function withAudit(
+	name: string,
+	handler: (...a: unknown[]) => unknown,
+	audit: boolean,
+) {
 	if (!audit) return handler;
 	return async (args: unknown, extra: unknown) => {
 		try {
 			// A tool registered WITHOUT an input schema is invoked as (extra) —
 			// one argument — so the first param would be the request context, not
 			// tool args. Log arg keys only for the two-argument (args, extra) shape.
-			console.error(`[tenki-mcp audit] ${name}${extra === undefined ? "" : auditKeys(args)}`);
+			console.error(
+				`[tenki-mcp audit] ${name}${extra === undefined ? "" : auditKeys(args)}`,
+			);
 		} catch {
 			/* never let logging break a call */
 		}
@@ -145,33 +156,18 @@ function noopToolHandle() {
 }
 
 /**
- * Wrap a server so every tool registration from a module is annotated + subject
- * to the least-privilege env controls above. Both registration APIs are guarded:
- * the legacy `.tool(name, description, schema, handler)` form and the modern
- * `.registerTool(name, config, handler)` form (the only one that accepts an
- * outputSchema) — so neither path can bypass annotations, read-only mode, or
- * the denylist. Other access passes through to the real server unchanged.
+ * Wrap a server so every tool registration is annotated and subject to the
+ * least-privilege env controls above.
  */
 function guard(server: McpServer, opts: GuardOpts): McpServer {
 	return new Proxy(server, {
 		get(target, prop, receiver) {
-			if (prop === "tool") {
-				return (name: string, description: string, schema: unknown, handler: (...a: unknown[]) => unknown) => {
-					const cls = classifyTool(name);
-					if (opts.disabled.has(name)) return noopToolHandle(); // explicit denylist
-					if (opts.readonly && cls !== "read") return noopToolHandle(); // read-only posture: skip anything that mutates/spends
-					if (opts.registered) opts.registered.count++;
-					return (target.tool as (...a: unknown[]) => unknown)(
-						name,
-						description,
-						schema,
-						annotationsFor(cls),
-						withAudit(name, handler, opts.audit),
-					);
-				};
-			}
 			if (prop === "registerTool") {
-				return (name: string, config: Record<string, unknown>, handler: (...a: unknown[]) => unknown) => {
+				return (
+					name: string,
+					config: Record<string, unknown>,
+					handler: (...a: unknown[]) => unknown,
+				) => {
 					const cls = classifyTool(name);
 					if (opts.disabled.has(name)) return noopToolHandle(); // explicit denylist
 					if (opts.readonly && cls !== "read") return noopToolHandle(); // read-only posture: skip anything that mutates/spends
@@ -213,8 +209,17 @@ export function createServer(client: TenkiClient | null): McpServer {
 	// READ_OVERRIDE keeps it available under TENKI_MCP_READONLY;
 	// TENKI_MCP_DISABLED_TOOLS can still drop it.
 	registerAuthStatus(guarded, client, opts.registered.count + 1);
-	if (!client) console.error("tenki-mcp: no credential — only tenki_auth_status registered. Set TENKI_API_KEY or TENKI_AUTH_TOKEN and restart.");
-	if (opts.readonly) console.error("tenki-mcp: TENKI_MCP_READONLY — only read-only tools registered.");
-	else if (opts.disabled.size) console.error(`tenki-mcp: disabled tools — ${[...opts.disabled].join(", ")}`);
+	if (!client)
+		console.error(
+			"tenki-mcp: no credential — only tenki_auth_status registered. Set TENKI_API_KEY or TENKI_AUTH_TOKEN and restart.",
+		);
+	if (opts.readonly)
+		console.error(
+			"tenki-mcp: TENKI_MCP_READONLY — only read-only tools registered.",
+		);
+	else if (opts.disabled.size)
+		console.error(
+			`tenki-mcp: disabled tools — ${[...opts.disabled].join(", ")}`,
+		);
 	return server;
 }

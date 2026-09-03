@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { TenkiClient, ExecResult } from "../client.js";
@@ -9,43 +9,79 @@ import { envSchema, sessionIdSchema } from "./common.js";
  * the SDK validates every successful result against this, so the two must stay
  * in lockstep field-for-field.
  */
-const execOutputSchema = {
+const execOutputSchema = z.object({
 	command: z.string().describe("The executable that was run."),
-	args: z.array(z.string()).describe("Arguments the executable was invoked with."),
-	stdout: z.string().describe("Captured standard output (empty when capture failed — see captureError)."),
-	stderr: z.string().describe("Captured standard error (empty when capture failed — see captureError)."),
-	exitCode: z.number().int().describe("Process exit code; 0 means success. (The API omits zero values; the server normalizes an absent code to 0.)"),
-	ok: z.boolean().describe("True only when exitCode is 0 AND stdout/stderr capture succeeded."),
+	args: z
+		.array(z.string())
+		.describe("Arguments the executable was invoked with."),
+	stdout: z
+		.string()
+		.describe(
+			"Captured standard output (empty when capture failed — see captureError).",
+		),
+	stderr: z
+		.string()
+		.describe(
+			"Captured standard error (empty when capture failed — see captureError).",
+		),
+	exitCode: z
+		.number()
+		.int()
+		.describe(
+			"Process exit code; 0 means success. (The API omits zero values; the server normalizes an absent code to 0.)",
+		),
+	ok: z
+		.boolean()
+		.describe(
+			"True only when exitCode is 0 AND stdout/stderr capture succeeded.",
+		),
 	captureError: z
 		.string()
 		.optional()
-		.describe("Present when the command ran but its output could not be read back; stdout/stderr are unknown, not empty."),
+		.describe(
+			"Present when the command ran but its output could not be read back; stdout/stderr are unknown, not empty.",
+		),
 	stdoutTruncated: z
 		.boolean()
 		.optional()
-		.describe("Present (true) when stdout exceeded the output cap and carries only a head+tail preview."),
+		.describe(
+			"Present (true) when stdout exceeded the output cap and carries only a head+tail preview.",
+		),
 	stderrTruncated: z
 		.boolean()
 		.optional()
-		.describe("Present (true) when stderr exceeded the output cap and carries only a head+tail preview."),
+		.describe(
+			"Present (true) when stderr exceeded the output cap and carries only a head+tail preview.",
+		),
 	stdoutPath: z
 		.string()
 		.optional()
-		.describe("Sandbox path holding the FULL stdout, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c)."),
+		.describe(
+			"Sandbox path holding the FULL stdout, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c).",
+		),
 	stderrPath: z
 		.string()
 		.optional()
-		.describe("Sandbox path holding the FULL stderr, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c)."),
-};
+		.describe(
+			"Sandbox path holding the FULL stderr, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c).",
+		),
+});
 
 /**
  * Field drift between execOutputSchema and ExecResult must fail the build, not
  * the tool call — at runtime the SDK rejects a mismatched result outright and
  * the command's output is lost.
  */
-const execOutput = z.object(execOutputSchema);
-type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
-const _execSchemaLockstep: MutuallyAssignable<z.infer<typeof execOutput>, ExecResult> = true;
+const execOutput = execOutputSchema;
+type MutuallyAssignable<A, B> = [A] extends [B]
+	? [B] extends [A]
+		? true
+		: never
+	: never;
+const _execSchemaLockstep: MutuallyAssignable<
+	z.infer<typeof execOutput>,
+	ExecResult
+> = true;
 void _execSchemaLockstep;
 
 /**
@@ -62,10 +98,15 @@ void _execSchemaLockstep;
  */
 function sanitizeForTerminal(s: string): string {
 	// eslint-disable-next-line no-control-regex
-	return s.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, (c) => {
-		const code = c.charCodeAt(0);
-		return code <= 0xff ? `\\x${code.toString(16).padStart(2, "0")}` : `\\u${code.toString(16).padStart(4, "0")}`;
-	});
+	return s.replace(
+		/[\x00-\x08\x0b-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g,
+		(c) => {
+			const code = c.charCodeAt(0);
+			return code <= 0xff
+				? `\\x${code.toString(16).padStart(2, "0")}`
+				: `\\u${code.toString(16).padStart(4, "0")}`;
+		},
+	);
 }
 
 /**
@@ -81,8 +122,12 @@ function execText(r: ExecResult): string {
 		: "";
 	const stdout = sanitizeForTerminal(r.stdout);
 	const stderr = sanitizeForTerminal(r.stderr);
-	const outTag = r.stdoutTruncated ? ", TRUNCATED — full output at " + r.stdoutPath : "";
-	const errTag = r.stderrTruncated ? ", TRUNCATED — full output at " + r.stderrPath : "";
+	const outTag = r.stdoutTruncated
+		? ", TRUNCATED — full output at " + r.stdoutPath
+		: "";
+	const errTag = r.stderrTruncated
+		? ", TRUNCATED — full output at " + r.stderrPath
+		: "";
 	return `${head}${capture}\n--- stdout (${r.stdout.length} chars, control chars escaped${outTag}) ---\n${stdout}\n--- stderr (${r.stderr.length} chars, control chars escaped${errTag}) ---\n${stderr}`;
 }
 
@@ -93,11 +138,14 @@ export function registerExec(server: McpServer, client: TenkiClient): void {
 		{
 			description:
 				"Run a command in an existing sandbox and return stdout, stderr, and exit code inline. Streams over max_output_bytes (default 64KB) come back as a head+tail preview with the full output retained at stdoutPath/stderrPath in the sandbox.",
-			inputSchema: {
+			inputSchema: z.object({
 				session_id: sessionIdSchema,
 				command: z.string().describe("Executable, e.g. 'npm' or 'python3'."),
 				args: z.array(z.string()).optional().describe("Arguments."),
-				cwd: z.string().optional().describe("Working directory (honored in-script)."),
+				cwd: z
+					.string()
+					.optional()
+					.describe("Working directory (honored in-script)."),
 				env: envSchema,
 				timeout_seconds: z.number().int().positive().optional(),
 				max_output_bytes: z
@@ -106,11 +154,21 @@ export function registerExec(server: McpServer, client: TenkiClient): void {
 					.min(1024)
 					.max(10_000_000)
 					.optional()
-					.describe("Per-stream inline output cap in bytes (default 65536). Larger output is truncated head+tail and kept in the sandbox at stdoutPath/stderrPath."),
-			},
+					.describe(
+						"Per-stream inline output cap in bytes (default 65536). Larger output is truncated head+tail and kept in the sandbox at stdoutPath/stderrPath.",
+					),
+			}),
 			outputSchema: execOutputSchema,
 		},
-		async ({ session_id, command, args, cwd, env, timeout_seconds, max_output_bytes }) => {
+		async ({
+			session_id,
+			command,
+			args,
+			cwd,
+			env,
+			timeout_seconds,
+			max_output_bytes,
+		}) => {
 			const result = await client.execCaptured(session_id, command, {
 				args,
 				cwd,
