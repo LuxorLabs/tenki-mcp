@@ -16,8 +16,8 @@ import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
 
-/** How a credential was supplied, derived from the token's prefix. */
-export type CredentialKind = "none" | "api_key" | "oauth_session_token" | "session_cookie";
+/** How the server authenticates API calls. */
+export type CredentialKind = "none" | "api_key" | "oauth_session_token" | "session_cookie" | "hosted_oauth";
 
 export interface CredentialInfo {
 	kind: CredentialKind;
@@ -35,6 +35,7 @@ export function describeCredential(env: NodeJS.ProcessEnv = process.env): Creden
 	const fromToken = env.TENKI_AUTH_TOKEN?.trim();
 	const fromKey = env.TENKI_API_KEY?.trim();
 	const raw = fromToken || fromKey;
+	if (!raw && env.TENKI_MCP_OAUTH_ISSUER?.trim()) return { kind: "hosted_oauth" };
 	if (!raw) return { kind: "none" };
 	const source = fromToken ? "TENKI_AUTH_TOKEN" : "TENKI_API_KEY";
 	if (raw.startsWith("tk_")) return { kind: "api_key", source };
@@ -47,13 +48,14 @@ const CREDENTIAL_HELP: Record<CredentialKind, string> = {
 	api_key: "Authenticated with a tk_… API key (Authorization: Bearer).",
 	oauth_session_token: "Authenticated with an ory_st_… session token (X-Session-Token). Session tokens expire; an API key is the stabler choice for a long-running server.",
 	session_cookie: "Authenticated with a session cookie (the token matched neither the tk_ nor ory_st_ prefix, so it is sent as a tenki_session cookie). If that is not what you intended, check the value.",
+	hosted_oauth: "Authenticated through the hosted OAuth session for this MCP connection.",
 };
 
 const authOutputSchema = {
 	authenticated: z.boolean().describe("True only when a credential is present AND a live identity probe succeeded."),
 	credential: z
-		.enum(["none", "api_key", "oauth_session_token", "session_cookie"])
-		.describe("Kind of credential the server is running with, derived from its prefix. Never includes the token itself."),
+		.enum(["none", "api_key", "oauth_session_token", "session_cookie", "hosted_oauth"])
+		.describe("Kind of credential the server is running with. Never includes the token itself."),
 	source: z
 		.string()
 		.optional()
@@ -127,7 +129,10 @@ export function registerAuthStatus(server: McpServer, client: TenkiClient | null
 					...base,
 					authenticated: false,
 					error: (e as Error).message,
-					detail: `A ${cred.kind === "api_key" ? "tk_… API key" : "credential"} is set (from ${cred.source}) but the identity probe failed — it may be expired, revoked, or the endpoint may be wrong. ${CREDENTIAL_HELP.none}`,
+					detail:
+						cred.kind === "hosted_oauth"
+							? "The hosted OAuth session is present, but the identity probe failed. Run MCP login again."
+							: `A ${cred.kind === "api_key" ? "tk_… API key" : "credential"} is set (from ${cred.source}) but the identity probe failed — it may be expired, revoked, or the endpoint may be wrong. ${CREDENTIAL_HELP.none}`,
 				};
 				return { structuredContent: result, content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
 			}

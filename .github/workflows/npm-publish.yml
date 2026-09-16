@@ -51,6 +51,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # npm provenance + trusted publishing, and mcp-publisher OIDC
+      packages: write # publish the hosted-server image to GHCR
     env:
       # Mapped here because the `secrets` context is not available in step-level
       # `if:` conditions, while `env` is. Empty when the secret is absent, which is
@@ -195,6 +196,29 @@ jobs:
           set -euo pipefail
           name=$(node -p 'require("./server.json").name')
           curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=${name}" | tee /dev/stderr | grep -q "$name"
+
+      - name: Set up Docker Buildx
+        if: github.event_name == 'push' || !inputs.dry_run
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' || !inputs.dry_run
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish hosted-server image
+        if: github.event_name == 'push' || !inputs.dry_run
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/luxorlabs/tenki-mcp:${{ steps.ver.outputs.version }}
+            ghcr.io/luxorlabs/tenki-mcp:latest
 
       - name: Publish summary
         if: always()

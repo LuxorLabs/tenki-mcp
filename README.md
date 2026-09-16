@@ -22,6 +22,17 @@ Nothing to clone or build. The package installs one command, `tenki-mcp`.
 
 ### Use it in Claude Code
 
+Connect to Tenki's hosted MCP service and sign in with your Tenki account:
+
+```bash
+claude mcp add --transport http tenki https://mcp.tenki.cloud/mcp
+claude mcp login tenki
+```
+
+Claude Code's `mcp add` command stores the server configuration; `mcp login` performs the one-time browser authorization and workspace selection.
+
+Alternatively, run the MCP server locally with an API key:
+
 ```bash
 claude mcp add tenki --env TENKI_API_KEY=tk_your_key_here -- npx -y @tenkicloud/mcp
 ```
@@ -115,6 +126,12 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | `PORT` | `3000` | HTTP transport port. |
 | `TENKI_MCP_HTTP_HOST` | `127.0.0.1` | HTTP bind host; non-loopback requires `TENKI_MCP_HTTP_TOKEN`. |
 | `TENKI_MCP_HTTP_TOKEN` | — | Bearer token for the HTTP endpoint; optional on loopback, required on a non-loopback host. |
+| `TENKI_MCP_PUBLIC_URL` | — | Public base URL for an OAuth-protected hosted server. |
+| `TENKI_MCP_OAUTH_ISSUER` | — | OAuth authorization-server issuer. Enables delegated OAuth HTTP mode. |
+| `TENKI_MCP_OAUTH_RESOURCE` | `<public URL>/mcp` | RFC 8707 resource identifier accepted in access-token audiences. |
+| `TENKI_MCP_OAUTH_SCOPE` | `mcp` | Required delegated scope. |
+| `TENKI_MCP_IDENTITY_URL` | — | Internal Tenki Identity service endpoint used to exchange OAuth access tokens. |
+| `TENKI_MCP_IDENTITY_SERVICE_TOKEN` | — | Service credential for the private Identity token-exchange RPC. |
 
 ## Tools
 
@@ -155,7 +172,7 @@ TENKI_MCP_TRANSPORT=http PORT=3000 TENKI_API_KEY=… npx -y @tenkicloud/mcp
 # → tenki-mcp running on http://127.0.0.1:3000/mcp (Streamable HTTP) [loopback only, no auth]
 ```
 
-**Security — this endpoint is a capability.** In HTTP mode the process holds one shared `TENKI_API_KEY` and exposes every tool, including arbitrary code execution and credit spend. So by default it:
+For a single-user deployment, HTTP mode can hold one shared `TENKI_API_KEY` and therefore exposes a powerful capability. By default it:
 
 - **binds to loopback (`127.0.0.1`) only** — set `TENKI_MCP_HTTP_HOST=0.0.0.0` to expose it, but then
 - it **requires a bearer token**: set `TENKI_MCP_HTTP_TOKEN` and send `Authorization: Bearer <token>`. It **refuses to start** on a non-loopback host without one.
@@ -167,7 +184,9 @@ TENKI_MCP_TRANSPORT=http TENKI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
   TENKI_MCP_HTTP_TOKEN=$(openssl rand -hex 32) TENKI_API_KEY=… npx -y @tenkicloud/mcp
 ```
 
-Point an HTTP-capable MCP client at `/mcp`. v2.0-beta uses one shared `TENKI_API_KEY` for all sessions; per-request auth (multi-tenant hosting) is not yet implemented. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
+Point an HTTP-capable MCP client at `/mcp`. Static-key mode uses one shared `TENKI_API_KEY` for all sessions. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
+
+Hosted multi-tenant deployments instead use Tenki Identity's OAuth facade. The MCP server publishes RFC 9728 protected-resource metadata and exchanges each caller's access token through the private Identity service. Identity owns Hydra, validates the requested audience and scope, and issues a short-lived API delegation bound to the user, client, and workspace selected on the Tenki consent page. `tenki-mcp` has no Hydra Admin access and does not hold the delegation-signing secret.
 
 ## How it works
 
