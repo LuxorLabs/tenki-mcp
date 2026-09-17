@@ -84,7 +84,15 @@ export function createDefaultAgent(): BuiltInAgent {
 	agent.use(
 		new ContinueAfterAppsMiddleware(3),
 		new MCPAppsMiddleware({
-			mcpServers: [{ type: "http", url: MCP_URL, serverId: "tenki" }],
+			mcpServers: [
+				{
+					type: "http",
+					url: MCP_URL,
+					serverId: "tenki",
+					// Set when the MCP server is hosted (see scripts/deploy-sandbox.mts); empty for localhost.
+					...(process.env.MCP_TOKEN ? { headers: { Authorization: `Bearer ${process.env.MCP_TOKEN}` } } : {}),
+				},
+			],
 		}),
 	);
 	return agent;

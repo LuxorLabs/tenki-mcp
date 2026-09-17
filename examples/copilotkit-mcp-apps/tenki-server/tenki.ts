@@ -13,8 +13,14 @@ import { TenkiClient } from "../../../src/client.ts";
 
 /** Every sandbox this demo creates carries this tag; mutations are refused on anything without it. */
 export const DEMO_TAG = process.env.TENKI_DEMO_TAG || "copilotkit-mcp-apps";
-/** Pre-booted, long-lived demo VMs (`npm run warm`) also carry this tag. */
+/** Pre-booted, long-lived demo sandboxes (`npm run warm`) also carry this tag. */
 export const WARM_TAG = "warm";
+/**
+ * The sandbox that HOSTS this MCP server when it is deployed (scripts/deploy-sandbox.mts).
+ * It deliberately does NOT carry DEMO_TAG: "destroy all demo sandboxes" would
+ * otherwise terminate the server serving that very request (it did, once).
+ */
+export const HOST_TAG = "mcp-host";
 export const SANDBOX_HOME = "/home/tenki";
 /** Where run_code_in_sandbox writes its program. */
 export const APP_DIR = `${SANDBOX_HOME}/app`;

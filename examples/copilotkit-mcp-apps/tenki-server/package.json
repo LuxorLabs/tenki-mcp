@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "warm": "tsx scripts/warm.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "capacity": "tsx scripts/capacity-watch.mts 15 30"
+    "capacity": "tsx scripts/capacity-watch.mts 15 30",
+    "deploy": "tsx scripts/deploy-sandbox.mts"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",

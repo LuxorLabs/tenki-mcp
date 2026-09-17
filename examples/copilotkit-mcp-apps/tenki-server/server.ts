@@ -12,6 +12,7 @@
  * Streamable HTTP, stateless: a fresh McpServer per request, which is what
  * CopilotKit's MCP Apps middleware expects (it opens a connection per call).
  */
+import { timingSafeEqual } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -25,7 +26,6 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import {
-	APP_DIR,
 	DEMO_TAG,
 	FILE_FOR,
 	SimulatedBackend,
@@ -477,9 +477,30 @@ function createServer(): McpServer {
 
 // No CORS: only the Copilot Runtime (server-side) talks to this endpoint. Allowing browser
 // origins would let any page the presenter opens drive their Tenki account through localhost.
-const app = createMcpExpressApp({ host: process.env.MCP_HOST || "127.0.0.1" });
+// MCP_HOST=0.0.0.0 (a hosted deployment) turns off the SDK's localhost DNS-rebinding guard,
+// so MCP_TOKEN is what stands between the public internet and this Tenki account.
+const HOST = process.env.MCP_HOST || "127.0.0.1";
+const TOKEN = process.env.MCP_TOKEN || "";
+if (HOST !== "127.0.0.1" && HOST !== "localhost" && !TOKEN) {
+	console.error("[tenki-mcp-app] refusing to bind a non-loopback host without MCP_TOKEN — anyone could then run code in this Tenki workspace.");
+	process.exit(1);
+}
+const app = createMcpExpressApp({ host: HOST, ...(process.env.MCP_ALLOWED_HOSTS ? { allowedHosts: process.env.MCP_ALLOWED_HOSTS.split(",").map((h) => h.trim()) } : {}) });
+
+/** Constant-time bearer check on /mcp when MCP_TOKEN is set. */
+function authorized(req: Request): boolean {
+	if (!TOKEN) return true;
+	const given = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+	const a = Buffer.from(given);
+	const b = Buffer.from(TOKEN);
+	return a.length === b.length && timingSafeEqual(a, b);
+}
 
 app.all("/mcp", async (req: Request, res: Response) => {
+	if (!authorized(req)) {
+		res.status(401).json({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null });
+		return;
+	}
 	const server = createServer();
 	const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
 	res.on("close", () => {
@@ -498,7 +519,7 @@ app.all("/mcp", async (req: Request, res: Response) => {
 });
 
 app.get("/healthz", (_req, res) => {
-	res.json({ ok: true, mode: backend.mode, tag: DEMO_TAG, appDir: APP_DIR });
+	res.json({ ok: true, mode: backend.mode, tag: DEMO_TAG });
 });
 
 // Simulated mode only: serve the static files the agent "deployed" so the preview still renders.

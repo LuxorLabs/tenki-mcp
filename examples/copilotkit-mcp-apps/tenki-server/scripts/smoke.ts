@@ -18,7 +18,10 @@ async function withClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
 		{ name: "smoke", version: "0.0.0" },
 		{ capabilities: { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } } } as never },
 	);
-	await client.connect(new StreamableHTTPClientTransport(new URL(URL_)));
+	const token = process.env.MCP_TOKEN;
+	await client.connect(
+		new StreamableHTTPClientTransport(new URL(URL_), token ? { requestInit: { headers: { Authorization: `Bearer ${token}` } } } : undefined),
+	);
 	try {
 		return await fn(client);
 	} finally {
