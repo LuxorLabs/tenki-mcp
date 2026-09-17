@@ -180,7 +180,7 @@ function createServer(backend: Backend): McpServer {
 		{
 			title: "Run code in a Tenki Sandbox",
 			description:
-				"Run a Python, JavaScript (Node) or shell program in an isolated Tenki Sandbox (boots in ~2s) and open the interactive Sandbox Console: " +
+				"Run a Python, JavaScript (Node) or shell program in an isolated Tenki Sandbox (boots in about half a second) and open the interactive Sandbox Console: " +
 				"the user sees the code, its output, timings, and gets a live shell into the same sandbox. " +
 				"Pass sandbox_id from an earlier result to iterate in the same sandbox (files persist, no boot). " +
 				"Standard libraries only unless allow_internet is true (then pip/npm installs work). Keep programs self-contained and print results to stdout.",

@@ -121,7 +121,7 @@ export default function Page() {
 					rendered as <em>MCP Apps</em>.
 				</h1>
 				<p className="lede">
-					Ask for anything that needs a computer. The agent boots a Tenki Sandbox in about two seconds, and the answer comes back as an app you can use,
+					Ask for anything that needs a computer. The agent boots a Tenki Sandbox instantly, and the answer comes back as an app you can use,
 					not a wall of text.
 				</p>
 
