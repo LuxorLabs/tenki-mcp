@@ -16,7 +16,15 @@ const body = {
 const t0 = Date.now();
 const res = await fetch(`${base}/api/copilotkit/agent/default/run`, {
 	method: "POST",
-	headers: { "content-type": "application/json", accept: "text/event-stream" },
+	headers: {
+		"content-type": "application/json",
+		accept: "text/event-stream",
+		// Same headers the browser sends when a visitor brings their own keys.
+		...(process.env.X_TENKI_KEY ? { "x-tenki-key": process.env.X_TENKI_KEY } : {}),
+		...(process.env.X_LLM_KEY ? { "x-llm-key": process.env.X_LLM_KEY } : {}),
+		...(process.env.X_LLM_BASE_URL ? { "x-llm-base-url": process.env.X_LLM_BASE_URL } : {}),
+		...(process.env.X_LLM_MODEL ? { "x-llm-model": process.env.X_LLM_MODEL } : {}),
+	},
 	body: JSON.stringify(body),
 });
 console.log("HTTP", res.status, res.headers.get("content-type"));

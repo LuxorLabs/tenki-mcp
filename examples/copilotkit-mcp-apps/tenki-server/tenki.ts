@@ -399,9 +399,14 @@ class SimulatedBackend implements Backend {
 	}
 }
 
-export function createBackend(publicBase: string): Backend {
-	const token = process.env.TENKI_AUTH_TOKEN || process.env.TENKI_API_KEY;
-	if (!token || process.env.TENKI_SIMULATE === "1") return new SimulatedBackend(publicBase);
+/**
+ * Backend for a request. `overrideToken` is a visitor's own Tenki key (sent as
+ * x-tenki-key), so their sandboxes are created in their workspace on their bill;
+ * without one this falls back to the server's key, or to simulated mode.
+ */
+export function createBackend(publicBase: string, overrideToken?: string): Backend {
+	const token = overrideToken || process.env.TENKI_AUTH_TOKEN || process.env.TENKI_API_KEY;
+	if (!token || (process.env.TENKI_SIMULATE === "1" && !overrideToken)) return new SimulatedBackend(publicBase);
 	return new LiveBackend(new TenkiClient(token, process.env.TENKI_API_ENDPOINT || undefined));
 }
 

@@ -12,7 +12,7 @@
  * Streamable HTTP, stateless: a fresh McpServer per request, which is what
  * CopilotKit's MCP Apps middleware expects (it opens a connection per call).
  */
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -27,6 +27,7 @@ import { z } from "zod";
 
 import {
 	DEMO_TAG,
+	type Backend,
 	FILE_FOR,
 	SimulatedBackend,
 	appPath,
@@ -43,7 +44,7 @@ loadEnv({ path: [path.join(import.meta.dirname, ".env"), path.join(import.meta.d
 const PORT = Number(process.env.MCP_PORT || 3108);
 const PUBLIC_BASE = process.env.MCP_PUBLIC_URL || `http://localhost:${PORT}`;
 const DIST = path.join(import.meta.dirname, "dist", "index.html");
-const backend = createBackend(PUBLIC_BASE);
+const defaultBackend = createBackend(PUBLIC_BASE);
 /** Warm pool use: "fallback" (default) when Tenki can't place a new VM, "prefer" to skip booting, "off". */
 const POOL = (process.env.TENKI_POOL || "fallback").toLowerCase();
 /** Listing sandboxes this demo didn't create is off by default: a shared workspace can hold other projects' VMs, and the fleet may be on a projector. */
@@ -67,7 +68,7 @@ const vmName = (title: string) => `ck-${slug(title)}-${Math.random().toString(36
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n… [${s.length - n} more chars shown in the UI]` : s);
 
 /** Refuse to touch a sandbox this demo did not create — the workspace may hold other people's VMs. */
-async function demoVm(id: string): Promise<VmInfo> {
+async function demoVm(backend: Backend, id: string): Promise<VmInfo> {
 	const vm = await backend.get(id);
 	if (!vm.demo) {
 		throw new Error(`Sandbox ${id} was not created by this demo (no "${DEMO_TAG}" tag); refusing to run code in or destroy it.`);
@@ -76,12 +77,17 @@ async function demoVm(id: string): Promise<VmInfo> {
 }
 
 /** A tool result carrying both the widget's data and a compact text rendering for the model. */
-function result(structured: Record<string, unknown>, text: string): CallToolResult {
+function result(backend: Backend, structured: Record<string, unknown>, text: string): CallToolResult {
 	return { structuredContent: { mode: backend.mode, ...structured }, content: [{ type: "text", text }] };
 }
 
-function failure(kind: string, err: unknown, extra: Record<string, unknown> = {}): CallToolResult {
-	const message = err instanceof Error ? err.message : String(err);
+function failure(backend: Backend, kind: string, err: unknown, extra: Record<string, unknown> = {}): CallToolResult {
+	let message = err instanceof Error ? err.message : String(err);
+	// A rejected key reads like a mysterious platform error otherwise, and the
+	// model tends to guess "simulated" — say which key failed and where to fix it.
+	if (/401|unauthenticated|unauthorized/i.test(message)) {
+		message += "\n\nThe Tenki API key was rejected. If you entered your own key under “Use your own keys”, check it there; otherwise this server's key is invalid or expired. Nothing ran.";
+	}
 	console.error(`[tenki-mcp-app] ${kind} failed:`, message);
 	return {
 		isError: true,
@@ -99,7 +105,7 @@ type Acquired = { vm: VmInfo; bootMs: number | null; reused: boolean; pooled: bo
 const poolLastUsed = new Map<string, number>();
 
 /** The least recently used running warm VM, if any. */
-async function takeWarmVm(): Promise<VmInfo | undefined> {
+async function takeWarmVm(backend: Backend): Promise<VmInfo | undefined> {
 	const warm = (await backend.list(false)).filter((v) => v.warm && v.state.includes("RUNNING"));
 	warm.sort((a, b) => (poolLastUsed.get(a.id) ?? 0) - (poolLastUsed.get(b.id) ?? 0));
 	const vm = warm[0];
@@ -112,16 +118,19 @@ async function takeWarmVm(): Promise<VmInfo | undefined> {
  * one. If Tenki can't place a new VM (capacity), fall back to the warm pool
  * that `npm run warm` pre-booted, so a capacity blip doesn't sink a live demo.
  */
-async function acquire(opts: {
+async function acquire(
+	backend: Backend,
+	opts: {
 	title: string;
 	sandboxId?: string;
-	allowInbound: boolean;
-	allowOutbound: boolean;
-}): Promise<Acquired> {
+		allowInbound: boolean;
+		allowOutbound: boolean;
+	},
+): Promise<Acquired> {
 	let replaced: string | undefined;
 	if (opts.sandboxId) {
 		try {
-			const vm = await demoVm(opts.sandboxId);
+			const vm = await demoVm(backend, opts.sandboxId);
 			if (vm.state.includes("RUNNING")) return { vm, bootMs: null, reused: true, pooled: false };
 			replaced = opts.sandboxId;
 		} catch (err) {
@@ -130,7 +139,7 @@ async function acquire(opts: {
 		}
 	}
 	if (POOL === "prefer") {
-		const vm = await takeWarmVm();
+		const vm = await takeWarmVm(backend);
 		if (vm) return { vm, bootMs: null, reused: true, pooled: true, replaced };
 	}
 	try {
@@ -144,7 +153,7 @@ async function acquire(opts: {
 		return { vm, bootMs, reused: false, pooled: false, replaced };
 	} catch (err) {
 		if (POOL === "off" || !isCapacityError(err)) throw err;
-		const vm = await takeWarmVm();
+		const vm = await takeWarmVm(backend);
 		if (!vm) {
 			throw new Error(
 				`Tenki has no capacity to place a new sandbox right now, and there is no warm pool to fall back to (run \`npm run warm\` while capacity is available). Details: ${err instanceof Error ? err.message : String(err)}`,
@@ -161,7 +170,7 @@ const poolNote = (a: Acquired) => (a.pooled ? " (from the pre-booted warm pool)"
 
 const sandboxIdSchema = z.string().min(1).describe("Sandbox id returned by an earlier call.");
 
-function createServer(): McpServer {
+function createServer(backend: Backend): McpServer {
 	const server = new McpServer({ name: "tenki-sandboxes", version: "0.1.0" });
 
 	// Model-facing app: run code in a sandbox → Sandbox Console.
@@ -188,7 +197,7 @@ function createServer(): McpServer {
 		async ({ title, language, code, sandbox_id, allow_internet, timeout_seconds }) => {
 			const started = Date.now();
 			try {
-				const acquired = await acquire({
+				const acquired = await acquire(backend, {
 					title,
 					sandboxId: sandbox_id,
 					allowInbound: false,
@@ -199,7 +208,7 @@ function createServer(): McpServer {
 				const uploadMs = await backend.writeFiles(vm.id, [{ path: appPath(file), content: code }]);
 				const run = await backend.exec(vm.id, command, timeout_seconds ?? 60);
 				const timings = { bootMs, uploadMs, runMs: run.runMs, totalMs: Date.now() - started };
-				return result(
+				return result(backend, 
 					{ kind: "run", title, language, file, code, sandbox: vm, reused, pooled, replaced, timings, run: { ...run, command } },
 					`${reused ? "Reused" : "Booted"} Tenki Sandbox ${vm.name}${poolNote(acquired)} (sandbox_id: ${vm.id})${replaced ? ` — the previous sandbox ${replaced} was gone, so a fresh one was booted` : ""}` +
 						`${bootMs !== null ? `, boot ${(bootMs / 1000).toFixed(2)}s` : ""}. Ran \`${command}\`: ${runText(run)}\n` +
@@ -207,7 +216,7 @@ function createServer(): McpServer {
 						"The user is looking at an interactive console for this sandbox with the code and full output; don't repeat the output verbatim.",
 				);
 			} catch (err) {
-				return failure("run", err, { title, language, code });
+				return failure(backend, "run", err, { title, language, code });
 			}
 		},
 	);
@@ -252,7 +261,7 @@ function createServer(): McpServer {
 			let p = port ?? 8080;
 			try {
 				if (files.length === 0) throw new Error("Nothing to deploy: pass `html` (index.html contents) or `files`.");
-				const acquired = await acquire({
+				const acquired = await acquire(backend, {
 					title,
 					sandboxId: sandbox_id,
 					allowInbound: true,
@@ -270,7 +279,7 @@ function createServer(): McpServer {
 				const startMs = Date.now() - t0;
 				if (!listening) {
 					const log = await backend.readLog(vm.id, p).catch(() => "");
-					return failure("preview", new Error(`The server did not start listening on port ${p} within 15s.\n--- server log ---\n${clip(log, 2500)}`), {
+					return failure(backend, "preview", new Error(`The server did not start listening on port ${p} within 15s.\n--- server log ---\n${clip(log, 2500)}`), {
 						title,
 						sandbox: vm,
 						port: p,
@@ -284,7 +293,7 @@ function createServer(): McpServer {
 				const exposeMs = Date.now() - t1;
 				const log = await backend.readLog(vm.id, p).catch(() => "");
 				const timings = { bootMs, uploadMs, startMs, exposeMs, totalMs: Date.now() - started };
-				return result(
+				return result(backend, 
 					{ kind: "preview", title, sandbox: vm, reused, pooled, replaced, port: p, previewUrl, startCommand, files: files.map((f) => f.path), log, timings },
 					`${title} is live at ${previewUrl} — served from Tenki Sandbox ${vm.name}${poolNote(acquired)} (sandbox_id: ${vm.id}), port ${p}, command \`${startCommand}\`, ` +
 						`${bootMs !== null ? `boot ${(bootMs / 1000).toFixed(2)}s, ` : ""}total ${((Date.now() - started) / 1000).toFixed(1)}s.\n` +
@@ -292,7 +301,7 @@ function createServer(): McpServer {
 						"The user sees the running app embedded in the chat.",
 				);
 			} catch (err) {
-				return failure("preview", err, { title, port: p, files: files.map((f) => f.path) });
+				return failure(backend, "preview", err, { title, port: p, files: files.map((f) => f.path) });
 			}
 		},
 	);
@@ -314,12 +323,12 @@ function createServer(): McpServer {
 			try {
 				const vms = await backend.list(ALLOW_ALL && Boolean(include_all));
 				const lines = vms.map((v) => `- ${v.name || v.id} (${v.id}) ${v.state}, ${v.cpuCores} vCPU / ${v.memoryMb} MB${v.demo ? "" : " [not a demo VM]"}`);
-				return result(
+				return result(backend, 
 					{ kind: "fleet", includeAll: ALLOW_ALL && Boolean(include_all), allowAll: ALLOW_ALL, vms, tag: DEMO_TAG },
 					`${vms.length} sandbox(es):\n${lines.join("\n") || "(none running)"}\nThe user sees a live fleet dashboard.`,
 				);
 			} catch (err) {
-				return failure("fleet", err);
+				return failure(backend, "fleet", err);
 			}
 		},
 	);
@@ -337,11 +346,11 @@ function createServer(): McpServer {
 		},
 		async ({ sandbox_id, command, timeout_seconds }) => {
 			try {
-				await demoVm(sandbox_id);
+				await demoVm(backend, sandbox_id);
 				const run = await backend.exec(sandbox_id, command, timeout_seconds ?? 60);
-				return result({ kind: "exec", run }, runText(run));
+				return result(backend, { kind: "exec", run }, runText(run));
 			} catch (err) {
-				return failure("exec", err);
+				return failure(backend, "exec", err);
 			}
 		},
 	);
@@ -356,13 +365,13 @@ function createServer(): McpServer {
 		},
 		async ({ sandbox_id, language, code }) => {
 			try {
-				await demoVm(sandbox_id);
+				await demoVm(backend, sandbox_id);
 				const { file, command } = FILE_FOR[language as Language];
 				const uploadMs = await backend.writeFiles(sandbox_id, [{ path: appPath(file), content: code }]);
 				const run = await backend.exec(sandbox_id, command, 60);
-				return result({ kind: "exec", uploadMs, run: { ...run, command } }, runText(run));
+				return result(backend, { kind: "exec", uploadMs, run: { ...run, command } }, runText(run));
 			} catch (err) {
-				return failure("exec", err);
+				return failure(backend, "exec", err);
 			}
 		},
 	);
@@ -374,9 +383,9 @@ function createServer(): McpServer {
 		async ({ sandbox_id }) => {
 			try {
 				const vm = await backend.get(sandbox_id);
-				return result({ kind: "status", sandbox: vm }, `${vm.id} ${vm.state}`);
+				return result(backend, { kind: "status", sandbox: vm }, `${vm.id} ${vm.state}`);
 			} catch (err) {
-				return failure("status", err, { sandboxId: sandbox_id });
+				return failure(backend, "status", err, { sandboxId: sandbox_id });
 			}
 		},
 	);
@@ -387,11 +396,11 @@ function createServer(): McpServer {
 		{ description: "Tail a demo web app's server log.", inputSchema: { sandbox_id: sandboxIdSchema, port: z.number().int() }, _meta: appOnly },
 		async ({ sandbox_id, port }) => {
 			try {
-				await demoVm(sandbox_id);
+				await demoVm(backend, sandbox_id);
 				const log = await backend.readLog(sandbox_id, port);
-				return result({ kind: "logs", log }, log);
+				return result(backend, { kind: "logs", log }, log);
 			} catch (err) {
-				return failure("logs", err);
+				return failure(backend, "logs", err);
 			}
 		},
 	);
@@ -402,11 +411,11 @@ function createServer(): McpServer {
 		{ description: "Terminate a demo sandbox.", inputSchema: { sandbox_id: sandboxIdSchema }, _meta: appOnly },
 		async ({ sandbox_id }) => {
 			try {
-				await demoVm(sandbox_id);
+				await demoVm(backend, sandbox_id);
 				await backend.destroy(sandbox_id);
-				return result({ kind: "destroyed", sandboxId: sandbox_id }, `Terminated ${sandbox_id}.`);
+				return result(backend, { kind: "destroyed", sandboxId: sandbox_id }, `Terminated ${sandbox_id}.`);
 			} catch (err) {
-				return failure("destroy", err);
+				return failure(backend, "destroy", err);
 			}
 		},
 	);
@@ -418,9 +427,9 @@ function createServer(): McpServer {
 		async ({ include_all }) => {
 			try {
 				const vms = await backend.list(ALLOW_ALL && Boolean(include_all));
-				return result({ kind: "fleet", includeAll: ALLOW_ALL && Boolean(include_all), allowAll: ALLOW_ALL, vms, tag: DEMO_TAG }, `${vms.length} sandbox(es)`);
+				return result(backend, { kind: "fleet", includeAll: ALLOW_ALL && Boolean(include_all), allowAll: ALLOW_ALL, vms, tag: DEMO_TAG }, `${vms.length} sandbox(es)`);
 			} catch (err) {
-				return failure("fleet", err);
+				return failure(backend, "fleet", err);
 			}
 		},
 	);
@@ -435,9 +444,9 @@ function createServer(): McpServer {
 				const vms = (await backend.list(false)).filter((v) => v.demo && !v.warm);
 				const settled = await Promise.allSettled(vms.map((v) => backend.destroy(v.id)));
 				const destroyed = settled.filter((s) => s.status === "fulfilled").length;
-				return result({ kind: "destroyed-all", destroyed, attempted: vms.length }, `Terminated ${destroyed}/${vms.length} demo sandboxes.`);
+				return result(backend, { kind: "destroyed-all", destroyed, attempted: vms.length }, `Terminated ${destroyed}/${vms.length} demo sandboxes.`);
 			} catch (err) {
-				return failure("destroy-all", err);
+				return failure(backend, "destroy-all", err);
 			}
 		},
 	);
@@ -496,12 +505,33 @@ function authorized(req: Request): boolean {
 	return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * One backend per Tenki key. A visitor who brings their own key (x-tenki-key)
+ * gets sandboxes in their own workspace; everyone else shares the server's.
+ * Cached so each request doesn't pay a fresh WhoAmI, and bounded so a stream of
+ * distinct keys can't grow this map forever. Keys are never logged.
+ */
+const backends = new Map<string, Backend>();
+function backendFor(rawKey: string | undefined): Backend {
+	const key = rawKey?.trim();
+	if (!key) return defaultBackend;
+	const id = createHash("sha256").update(key).digest("hex").slice(0, 16);
+	let backend = backends.get(id);
+	if (!backend) {
+		backend = createBackend(PUBLIC_BASE, key);
+		if (backends.size >= 64) backends.delete(backends.keys().next().value as string);
+		backends.set(id, backend);
+	}
+	return backend;
+}
+
 app.all("/mcp", async (req: Request, res: Response) => {
 	if (!authorized(req)) {
 		res.status(401).json({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null });
 		return;
 	}
-	const server = createServer();
+	const header = req.headers["x-tenki-key"];
+	const server = createServer(backendFor(Array.isArray(header) ? header[0] : header));
 	const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
 	res.on("close", () => {
 		transport.close().catch(() => {});
@@ -519,18 +549,18 @@ app.all("/mcp", async (req: Request, res: Response) => {
 });
 
 app.get("/healthz", (_req, res) => {
-	res.json({ ok: true, mode: backend.mode, tag: DEMO_TAG });
+	res.json({ ok: true, mode: defaultBackend.mode, tag: DEMO_TAG });
 });
 
 // Simulated mode only: serve the static files the agent "deployed" so the preview still renders.
 app.get("/simulated-preview/:id/:port/{*rest}", (req, res) => {
-	if (!(backend instanceof SimulatedBackend)) {
+	if (!(defaultBackend instanceof SimulatedBackend)) {
 		res.status(404).end();
 		return;
 	}
 	const rest = (req.params as { rest?: string[] }).rest;
 	const rel = rest?.join("/") ?? "";
-	const body = backend.file(String(req.params.id), Number(req.params.port), rel);
+	const body = defaultBackend.file(String(req.params.id), Number(req.params.port), rel);
 	if (body === undefined) {
 		res.status(404).type("text/plain").send("Not found (simulated preview)");
 		return;
@@ -542,9 +572,9 @@ app.get("/simulated-preview/:id/:port/{*rest}", (req, res) => {
 
 // Simulated rehearsal of a stage outage: TENKI_SIMULATE_WARM=2 pre-boots a simulated warm pool
 // (pair with TENKI_SIMULATE_NO_CAPACITY=1 to watch the fallback kick in).
-if (backend instanceof SimulatedBackend && Number(process.env.TENKI_SIMULATE_WARM) > 0) {
+if (defaultBackend instanceof SimulatedBackend && Number(process.env.TENKI_SIMULATE_WARM) > 0) {
 	for (let i = 0; i < Number(process.env.TENKI_SIMULATE_WARM); i++) {
-		void backend.create({ name: `ck-warm-sim-${i + 1}`, cpuCores: 2, memoryMb: 4096, allowInbound: true, allowOutbound: true, warm: true });
+		void defaultBackend.create({ name: `ck-warm-sim-${i + 1}`, cpuCores: 2, memoryMb: 4096, allowInbound: true, allowOutbound: true, warm: true });
 	}
 }
 
@@ -553,8 +583,8 @@ app.listen(PORT, (err?: Error) => {
 		console.error("[tenki-mcp-app] failed to start:", err);
 		process.exit(1);
 	}
-	console.log(`[tenki-mcp-app] listening on http://localhost:${PORT}/mcp — mode: ${backend.mode.toUpperCase()}`);
-	if (backend.mode === "simulated") {
+	console.log(`[tenki-mcp-app] listening on http://localhost:${PORT}/mcp — mode: ${defaultBackend.mode.toUpperCase()}`);
+	if (defaultBackend.mode === "simulated") {
 		console.log("[tenki-mcp-app] no TENKI_API_KEY: SIMULATED mode, nothing will execute. Put the key in examples/copilotkit-mcp-apps/.env.");
 	}
 });

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { CopilotKit } from "@copilotkit/react-core";
+import { Providers } from "./providers";
 import "@copilotkit/react-ui/v2/styles.css";
 import "./globals.css";
 
@@ -17,9 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 	return (
 		<html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
 			<body className="antialiased">
-				<CopilotKit runtimeUrl="/api/copilotkit" showDevConsole={false} enableInspector={false} useSingleEndpoint={false}>
-					{children}
-				</CopilotKit>
+				<Providers>{children}</Providers>
 			</body>
 		</html>
 	);

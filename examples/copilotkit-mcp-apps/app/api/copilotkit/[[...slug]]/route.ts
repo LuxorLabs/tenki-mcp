@@ -1,10 +1,12 @@
 import { CopilotRuntime, InMemoryAgentRunner, createCopilotEndpoint } from "@copilotkit/runtime/v2";
 import { handle } from "hono/vercel";
 
-import { createDefaultAgent } from "../../../agent";
+import { createDefaultAgent, keysFromRequest } from "../../../agent";
 
 const runtime = new CopilotRuntime({
-	agents: { default: createDefaultAgent() },
+	// Built per request: a visitor can bring their own Tenki and model keys, which
+	// arrive as headers and decide both the model and what the MCP server runs on.
+	agents: ({ request }) => ({ default: createDefaultAgent(keysFromRequest(request)) }),
 	runner: new InMemoryAgentRunner(),
 });
 

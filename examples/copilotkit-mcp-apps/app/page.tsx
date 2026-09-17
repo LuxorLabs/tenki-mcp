@@ -3,6 +3,7 @@
 import { CopilotChat, useAgent, useConfigureSuggestions, useCopilotKit, useRenderTool } from "@copilotkit/react-core/v2";
 import { useEffect, useState } from "react";
 
+import { useSettings } from "./settings";
 import { ToolCallCard } from "./tool-call-card";
 
 const AGENT_ID = "default";
@@ -64,8 +65,15 @@ function useStatus() {
 	return status;
 }
 
+const LINKS = [
+	{ label: "GitHub", href: "https://github.com/LuxorLabs/tenki-mcp", title: "The MCP server and this demo" },
+	{ label: "Tenki docs", href: "https://docs.tenki.cloud", title: "Tenki Sandboxes" },
+	{ label: "MCP Apps docs", href: "https://mcpui.dev/guide/introduction", title: "The MCP Apps extension" },
+];
+
 export default function Page() {
 	const status = useStatus();
+	const { setOpen, usingOwnTenki, usingOwnModel } = useSettings();
 	const { agent } = useAgent({ agentId: AGENT_ID });
 	const { copilotkit } = useCopilotKit();
 	const [sending, setSending] = useState(false);
@@ -96,11 +104,8 @@ export default function Page() {
 		<div className="shell">
 			<aside className="side">
 				<div className="brandrow">
-					<svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
-						<rect x="1" y="1" width="22" height="22" rx="6" fill="#0b1b2d" stroke="#1d3450" />
-						<path d="M12 5.2 17.8 8.5v6.9L12 18.8 6.2 15.4V8.5z" fill="none" stroke="#047BFF" strokeWidth="1.6" strokeLinejoin="round" />
-						<path d="M6.4 8.6 12 11.9l5.6-3.3M12 11.9v6.7" fill="none" stroke="#7CC0FF" strokeWidth="1.3" strokeLinejoin="round" />
-					</svg>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src="/tenki-glyph.svg" width={26} height={26} alt="" />
 					<span className="wm">tenki</span>
 					<span className="x">×</span>
 					<span className="ck">CopilotKit</span>
@@ -146,12 +151,31 @@ export default function Page() {
 					</li>
 				</ol>
 
-				<div className="status">
-					<span className={`pill ${tenki}`}>
-						<i /> Tenki {tenki === "live" ? "live" : tenki === "simulated" ? "simulated (no key)" : tenki === "offline" ? "MCP server offline" : "…"}
+				<button className="byo" onClick={() => setOpen(true)}>
+					<span className="byo-icon">⚙</span>
+					<span className="ptext">
+						<span className="ptitle">{usingOwnTenki || usingOwnModel ? "Your keys are in use" : "Use your own keys"}</span>
+						<span className="pblurb">Your Tenki account and model provider</span>
 					</span>
-					<span className={`pill ${status?.model ? "live" : status ? "offline" : "checking"}`}>
-						<i /> {status?.model ?? (status ? "no model key" : "…")}
+				</button>
+
+				<div className="links">
+					{LINKS.map((l) => (
+						<a key={l.href} href={l.href} title={l.title} target="_blank" rel="noreferrer noopener">
+							{l.label} <span className="ext">↗</span>
+						</a>
+					))}
+				</div>
+
+				<div className="status">
+					<span className={`pill ${usingOwnTenki ? "live" : tenki}`}>
+						<i />{" "}
+						{usingOwnTenki
+							? "Tenki · your key"
+							: `Tenki ${tenki === "live" ? "live" : tenki === "simulated" ? "simulated (no key)" : tenki === "offline" ? "MCP server offline" : "…"}`}
+					</span>
+					<span className={`pill ${usingOwnModel || status?.model ? "live" : status ? "offline" : "checking"}`}>
+						<i /> {usingOwnModel ? "model · your key" : (status?.model ?? (status ? "no model key" : "…"))}
 					</span>
 				</div>
 			</aside>

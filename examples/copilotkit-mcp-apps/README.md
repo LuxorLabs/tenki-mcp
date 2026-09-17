@@ -75,6 +75,10 @@ To rehearse that failure without a real outage:
 TENKI_SIMULATE=1 TENKI_SIMULATE_NO_CAPACITY=1 TENKI_SIMULATE_WARM=2 npm run dev
 ```
 
+## Bring your own keys
+
+"Use your own keys" in the side panel takes a Tenki API key and any OpenAI-compatible model provider (Aisa, OpenAI, OpenRouter, or a custom base URL). They are kept in the visitor's browser and sent as headers (`x-tenki-key`, `x-llm-*`) with each request; the runtime builds that turn's agent from them, and the MCP server keeps one backend per key, so a visitor's sandboxes are created in **their** workspace on their bill. Nothing is stored server-side — a hosted runtime is still a server the keys pass through, which is what the dialog says. Any field left empty falls back to the deployment's own key.
+
 ## Hosting it
 
 The demo runs hosted as two pieces: the chat on Vercel, the MCP server in a **sticky Tenki Sandbox** (it holds the Tenki key, boots the demo's sandboxes, and needs a stable public URL).

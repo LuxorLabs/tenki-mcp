@@ -22,7 +22,7 @@ How to behave:
 - To change, fix or extend something, pass the sandbox_id from the earlier result so the work stays in the same VM.
 - Programs are self-contained and print their results. Use only the standard library unless asked. If packages are needed, set allow_internet: true and use a shell program, e.g. "pip install -q rich && python3 - <<'PY' ... PY".
 - For a backend (an API, websockets, anything dynamic), put the server in \`files\`, use python http.server or node http, listen on 0.0.0.0 and the port you pass, and set start_command.
-- If a result says SIMULATED, tell the user no Tenki key is configured, so nothing actually ran.
+- Only call something SIMULATED when the result literally says SIMULATED. A rejected key (401/unauthenticated) is an auth problem: say the key was rejected and point at “Use your own keys”, and never claim the run was simulated.
 - Keep a demo pace: small, striking examples over long ones.`;
 
 /**
@@ -37,8 +37,37 @@ const streamingHeaders = (model: string): Record<string, string> =>
 		? { "anthropic-beta": "fine-grained-tool-streaming-2025-05-14" }
 		: {};
 
-/** The model, from whichever key is configured. Also reported (without secrets) by /api/status. */
-export function resolveModel() {
+/**
+ * Keys a visitor brought themselves, carried per request as headers from the
+ * browser. They are used for that request and never stored server-side.
+ */
+export interface UserKeys {
+	tenkiKey?: string;
+	llmKey?: string;
+	llmBaseUrl?: string;
+	llmModel?: string;
+}
+
+const header = (request: Request, name: string) => request.headers.get(name)?.trim() || undefined;
+
+/** Read a visitor's keys off the request the browser just made. */
+export function keysFromRequest(request: Request): UserKeys {
+	return {
+		tenkiKey: header(request, "x-tenki-key"),
+		llmKey: header(request, "x-llm-key"),
+		llmBaseUrl: header(request, "x-llm-base-url"),
+		llmModel: header(request, "x-llm-model"),
+	};
+}
+
+/** The model for this request: the visitor's own if they brought one, else the server's. */
+export function resolveModel(keys: UserKeys = {}) {
+	if (keys.llmKey) {
+		const baseURL = keys.llmBaseUrl || "https://api.openai.com/v1";
+		const id = keys.llmModel || (baseURL.includes("aisa") ? "claude-sonnet-5" : "gpt-4.1");
+		const provider = createOpenAI({ baseURL, apiKey: keys.llmKey, headers: streamingHeaders(id), fetch: repairingFetch });
+		return { model: provider.chat(id), label: `${id} · ${new URL(baseURL).host} (your key)`, byo: true };
+	}
 	const model = process.env.LLM_MODEL;
 	if (process.env.LLM_BASE_URL && process.env.LLM_API_KEY) {
 		const provider = createOpenAI({
@@ -70,8 +99,8 @@ export function resolveModel() {
 	return null;
 }
 
-export function createDefaultAgent(): BuiltInAgent {
-	const resolved = resolveModel();
+export function createDefaultAgent(keys: UserKeys = {}): BuiltInAgent {
+	const resolved = resolveModel(keys);
 	const agent = new BuiltInAgent({
 		// With no key the agent still constructs, so the page renders and the
 		// status pill can say what's missing; the first message fails with a clear error.
@@ -89,8 +118,12 @@ export function createDefaultAgent(): BuiltInAgent {
 					type: "http",
 					url: MCP_URL,
 					serverId: "tenki",
-					// Set when the MCP server is hosted (see scripts/deploy-sandbox.mts); empty for localhost.
-					...(process.env.MCP_TOKEN ? { headers: { Authorization: `Bearer ${process.env.MCP_TOKEN}` } } : {}),
+					headers: {
+						// Set when the MCP server is hosted (see scripts/deploy-sandbox.mts); empty for localhost.
+						...(process.env.MCP_TOKEN ? { Authorization: `Bearer ${process.env.MCP_TOKEN}` } : {}),
+						// A visitor's own Tenki key: their sandboxes, their workspace, their bill.
+						...(keys.tenkiKey ? { "x-tenki-key": keys.tenkiKey } : {}),
+					},
 				},
 			],
 		}),
