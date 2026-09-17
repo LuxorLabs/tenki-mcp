@@ -496,13 +496,26 @@ if (HOST !== "127.0.0.1" && HOST !== "localhost" && !TOKEN) {
 }
 const app = createMcpExpressApp({ host: HOST, ...(process.env.MCP_ALLOWED_HOSTS ? { allowedHosts: process.env.MCP_ALLOWED_HOSTS.split(",").map((h) => h.trim()) } : {}) });
 
-/** Constant-time bearer check on /mcp when MCP_TOKEN is set. */
-function authorized(req: Request): boolean {
-	if (!TOKEN) return true;
-	const given = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-	const a = Buffer.from(given);
+/**
+ * The bearer carries the server token and, optionally, the visitor's own Tenki
+ * key after a "~": `Bearer <mcpToken>~<tenkiKey>`.
+ *
+ * Custom headers do not survive every hop — Tenki's preview edge forwards
+ * Authorization but drops `x-tenki-key` — and a key must never travel in a URL,
+ * where it would land in access logs. So the key rides in the header that is
+ * already secret. `x-tenki-key` still works for hops that keep it (localhost).
+ */
+function credentials(req: Request): { ok: boolean; tenkiKey?: string } {
+	const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+	const sep = bearer.indexOf("~");
+	const presented = sep === -1 ? bearer : bearer.slice(0, sep);
+	const inlineKey = sep === -1 ? undefined : bearer.slice(sep + 1) || undefined;
+	const headerKey = Array.isArray(req.headers["x-tenki-key"]) ? req.headers["x-tenki-key"][0] : req.headers["x-tenki-key"];
+	const tenkiKey = inlineKey ?? headerKey;
+	if (!TOKEN) return { ok: true, tenkiKey };
+	const a = Buffer.from(presented);
 	const b = Buffer.from(TOKEN);
-	return a.length === b.length && timingSafeEqual(a, b);
+	return { ok: a.length === b.length && timingSafeEqual(a, b), tenkiKey };
 }
 
 /**
@@ -526,12 +539,12 @@ function backendFor(rawKey: string | undefined): Backend {
 }
 
 app.all("/mcp", async (req: Request, res: Response) => {
-	if (!authorized(req)) {
+	const { ok, tenkiKey } = credentials(req);
+	if (!ok) {
 		res.status(401).json({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null });
 		return;
 	}
-	const header = req.headers["x-tenki-key"];
-	const server = createServer(backendFor(Array.isArray(header) ? header[0] : header));
+	const server = createServer(backendFor(tenkiKey));
 	const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
 	res.on("close", () => {
 		transport.close().catch(() => {});

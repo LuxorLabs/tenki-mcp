@@ -120,8 +120,12 @@ export function createDefaultAgent(keys: UserKeys = {}): BuiltInAgent {
 					serverId: "tenki",
 					headers: {
 						// Set when the MCP server is hosted (see scripts/deploy-sandbox.mts); empty for localhost.
-						...(process.env.MCP_TOKEN ? { Authorization: `Bearer ${process.env.MCP_TOKEN}` } : {}),
-						// A visitor's own Tenki key: their sandboxes, their workspace, their bill.
+						// A visitor's own Tenki key rides in the same header after a "~": Tenki's
+						// preview edge forwards Authorization but drops custom headers, and a key
+						// must not travel in a URL. x-tenki-key covers hops that keep it (localhost).
+						...(process.env.MCP_TOKEN
+							? { Authorization: `Bearer ${process.env.MCP_TOKEN}${keys.tenkiKey ? `~${keys.tenkiKey}` : ""}` }
+							: {}),
 						...(keys.tenkiKey ? { "x-tenki-key": keys.tenkiKey } : {}),
 					},
 				},
