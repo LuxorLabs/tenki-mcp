@@ -10,7 +10,7 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono"
 
 export const metadata: Metadata = {
 	title: "Tenki × CopilotKit — MCP Apps",
-	description: "Real Tenki Sandboxes, rendered as interactive MCP Apps inside a CopilotKit agent chat.",
+	description: "Real Linux VMs, rendered as interactive MCP Apps inside a CopilotKit agent chat.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

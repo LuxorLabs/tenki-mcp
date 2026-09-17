@@ -1,6 +1,6 @@
 # Tenki × CopilotKit — MCP Apps
 
-Real Tenki Sandboxes, rendered as interactive **MCP Apps** inside a CopilotKit agent chat.
+Real Linux VMs, rendered as interactive **MCP Apps** inside a CopilotKit agent chat.
 
 Ask the agent for anything that needs a computer. It boots a Tenki Sandbox (about half a second), and the answer comes back as an app you can use: a console with a live shell into the sandbox, a web app served from the sandbox and framed in the chat, or a fleet dashboard with teardown.
 

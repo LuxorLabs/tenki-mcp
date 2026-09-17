@@ -65,6 +65,9 @@ function useStatus() {
 	return status;
 }
 
+const HOW_PROMPT =
+	"How does this demo actually work? Walk me through the path from my message to the app I'm looking at: CopilotKit and AG-UI, the MCP Apps middleware, the Tenki MCP server and its apps, and the sandboxes underneath. Add a little detail on what makes an MCP App different from a plain tool call.";
+
 const LINKS = [
 	{ label: "GitHub", href: "https://github.com/LuxorLabs/tenki-mcp", title: "The MCP server and this demo" },
 	{ label: "Tenki docs", href: "https://docs.tenki.cloud", title: "Tenki Sandboxes" },
@@ -112,7 +115,7 @@ export default function Page() {
 				</div>
 
 				<h1>
-					Real Tenki Sandboxes,
+					Real Linux VMs,
 					<br />
 					rendered as <em>MCP Apps</em>.
 				</h1>
@@ -135,21 +138,14 @@ export default function Page() {
 					))}
 				</div>
 
-				<div className="section-label">How it works</div>
-				<ol className="stack">
-					<li>
-						<b>CopilotKit</b> chat renders the app
-					</li>
-					<li>
-						<b>AG-UI</b> + MCP Apps middleware
-					</li>
-					<li>
-						<b>Tenki MCP server</b>: 3 apps, 7 app-only tools
-					</li>
-					<li>
-						<b>Tenki Sandboxes</b>: boot, run, serve
-					</li>
-				</ol>
+				<button className="prompt how" disabled={sending} onClick={() => send(HOW_PROMPT)}>
+					<span className="picon">?</span>
+					<span className="ptext">
+						<span className="ptitle">How does this work?</span>
+						<span className="pblurb">Ask the agent to explain the stack</span>
+					</span>
+					<span className="pgo">→</span>
+				</button>
 
 				<button className="byo" onClick={() => setOpen(true)}>
 					<span className="byo-icon">⚙</span>

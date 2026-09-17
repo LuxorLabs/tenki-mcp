@@ -693,3 +693,12 @@ body {
 		gap: 0;
 	}
 }
+
+.prompt.how {
+	border-style: dashed;
+}
+
+.prompt.how .picon {
+	color: #9db4cc;
+	font-weight: 600;
+}
