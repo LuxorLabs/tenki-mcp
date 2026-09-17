@@ -79,8 +79,9 @@ body {
 }
 
 .brandrow .ck {
-	color: #b9c7d8;
-	font-weight: 500;
+	height: 18px;
+	width: auto;
+	display: block;
 }
 
 .side h1 {

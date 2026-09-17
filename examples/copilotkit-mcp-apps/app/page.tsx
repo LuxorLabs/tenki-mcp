@@ -111,7 +111,8 @@ export default function Page() {
 					<img src="/tenki-glyph.svg" width={26} height={26} alt="" />
 					<span className="wm">tenki</span>
 					<span className="x">×</span>
-					<span className="ck">CopilotKit</span>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img className="ck" src="/copilot-kit-logo-white.svg" alt="CopilotKit" height={18} />
 				</div>
 
 				<h1>
