@@ -91,8 +91,9 @@ node scripts/deploy-vercel.mjs   # chat app → Vercel (uses the CLI token alrea
 
 `npm run deploy` writes `MCP_URL` and a generated `MCP_TOKEN` to the gitignored `.env.deploy`; set both (plus your model key) as environment variables on the chat app. The MCP endpoint refuses any call without that bearer token, and the deploy aborts if an unauthenticated probe is not refused — the endpoint can create sandboxes on your Tenki account, so it is never left open.
 
-Two things that bite:
+Three things that bite:
 
+- **Tenki caps a sandbox's lifetime and PAUSES it at the cap** — 2h in this workspace, whatever `maxDuration` asks for. A paused host is frozen and its preview route disappears, so the hosted chat quietly loses its tools; the agent then says the sandbox tools "aren't available". Resuming a paused host has hung in RESUMING for minutes, so `npm run deploy` replaces it instead. Run `npm run keepalive` during a demo: it watches `/healthz` and redeploys when the host goes down (about a minute). The warm pool pauses the same way — re-run `npm run warm`.
 - The host sandbox carries **only** `mcp-host`, never the demo tag. Tagged as a demo sandbox, "destroy all demo sandboxes" terminates the server serving that request (it did, once).
 - Anyone who opens the deployed chat can spend your model credits and boot sandboxes in that workspace. Take the deployment down, or put Vercel protection on it, once the talk is over.
 

@@ -13,7 +13,8 @@
     "warm": "tsx scripts/warm.ts",
     "smoke": "tsx scripts/smoke.ts",
     "capacity": "tsx scripts/capacity-watch.mts 15 30",
-    "deploy": "tsx scripts/deploy-sandbox.mts"
+    "deploy": "tsx scripts/deploy-sandbox.mts",
+    "keepalive": "tsx scripts/keepalive.mts"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",

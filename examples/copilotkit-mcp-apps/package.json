@@ -14,7 +14,8 @@
     "warm": "npm --prefix tenki-server run warm --",
     "smoke": "npm --prefix tenki-server run smoke --",
     "capacity": "npm --prefix tenki-server run capacity",
-    "deploy": "npm --prefix tenki-server run deploy --"
+    "deploy": "npm --prefix tenki-server run deploy --",
+    "keepalive": "npm --prefix tenki-server run keepalive --"
   },
   "dependencies": {
     "@ag-ui/client": "0.0.59",

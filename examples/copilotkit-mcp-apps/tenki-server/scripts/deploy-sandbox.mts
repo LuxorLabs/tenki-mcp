@@ -78,6 +78,14 @@ if (existing && String(existing.state).includes("RUNNING")) {
 	sessionId = existing.id;
 	console.log(`Reusing host sandbox ${existing.name} (${sessionId})`);
 } else {
+	// A host that is PAUSED (Tenki caps a sandbox's lifetime — 2h in this
+	// workspace — and pauses it at the cap) still holds the preview slug, and
+	// resuming a paused 4 GB VM has hung for minutes. Replacing it is faster and
+	// predictable, so retire it before booting the new one.
+	if (existing) {
+		console.log(`Replacing ${String(existing.state).replace("SESSION_STATE_", "")} host sandbox ${existing.name}`);
+		await client.control("TerminateSession", { sessionId: existing.id }).catch(() => {});
+	}
 	const created = await client.control("CreateSession", {
 		...(owner.ownerType ? { ownerType: owner.ownerType } : {}),
 		...(owner.ownerId ? { ownerId: owner.ownerId } : {}),
