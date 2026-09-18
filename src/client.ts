@@ -46,6 +46,7 @@ const RETRY_AFTER_CAP_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_EXEC_TIMEOUT_MS = 630_000; // runCode's 600s hard cap + margin
 const EXEC_TIMEOUT_MARGIN_MS = 30_000; // headroom over a command's own timeout
+const CREATE_WAIT_READY_TIMEOUT_MS = 90_000; // server holds wait_ready up to 60s + margin
 
 /**
  * Methods whose RPC does not return until a long storage/VM operation finishes,
@@ -200,7 +201,12 @@ export class TenkiClient {
 	 * the command's own timeout (plus margin) instead of the unary default.
 	 */
 	private timeoutFor(method: string, body: Record<string, unknown>): number {
-		if (SLOW_METHOD.test(method)) return this.slowTimeoutMs;
+		// With `async: true` these RPCs return once the work is accepted, so the
+		// long storage budget would only delay a genuinely hung call.
+		if (SLOW_METHOD.test(method)) return body.async === true ? this.timeoutMs : this.slowTimeoutMs;
+		// CreateSession{waitReady} is held server-side for up to 60s (createWaitReadyMaxWait);
+		// a 30s client budget would abort a slow boot and orphan the (billing) sandbox.
+		if (method === "CreateSession" && body.waitReady === true) return Math.max(this.timeoutMs, CREATE_WAIT_READY_TIMEOUT_MS);
 		if (method !== "ExecuteCommand") return this.timeoutMs;
 		const t = typeof body.timeout === "string" ? Number.parseInt(body.timeout, 10) : Number.NaN; // "30s"
 		return Number.isFinite(t) && t > 0 ? t * 1000 + EXEC_TIMEOUT_MARGIN_MS : this.execTimeoutMs;

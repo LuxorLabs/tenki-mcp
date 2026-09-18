@@ -2,6 +2,19 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
+## [Unreleased]
+
+- Remove `tenki_get_workspace_settings`, `tenki_update_workspace_settings`, `tenki_get_snapshot_retention_settings` and `tenki_update_snapshot_retention_settings`: their API methods were removed upstream and every call returned 404. Plan limits are visible through `tenki_get_workspace_usage`.
+- Add `tenki_get_sandbox_metrics` (CPU/memory averages over a window) and `tenki_get_workspace_preview_domains` / `tenki_update_workspace_preview_domains` (wildcard preview domains).
+- Fix `tenki_attach_volume` `read_only`, which the API silently ignored (wrong wire field name); the mount was always read-write.
+- Fix `tenki_update_sandbox`: `max_duration_seconds` always failed (the API requires an explicit sticky value — sticky=false is now sent for you); `tags: []` now clears tags; new `sticky` and `clear_tags` arguments; `idle_timeout_minutes` removed because the API cannot change it after creation.
+- Fix `tenki_list_ssh_gateways`: `workspace_id` did nothing; the tool now takes `region` and/or `session_id`.
+- `tenki_get_download_url` no longer requires `session_id` (the API ignores it).
+- `tenki_list_preview_urls` filters by `session_id` on the server instead of on the fetched page.
+- `tenki_create_sandbox`: explicit `allow_inbound: false` / `allow_outbound: false` are sent; new `sticky`, `volumes`, `ssh_authorized_keys`, `metadata`, `egress_allow_domains` / `egress_allow_cidrs`, `template_spec_id`, `setup_env`, `setup_secrets`, `secret_overrides`; the server-side ready wait is used; API `warnings` are returned; `memory_mb` must be even and `disk_size_gb` 5-100.
+- New optional arguments: `async` on `tenki_pause_sandbox` and `tenki_create_snapshot`; `tags` / `clear_tags` on `tenki_update_snapshot` and `tenki_update_volume`, plus `clear_expires_at` on snapshots; `force` on `tenki_detach_volume`; `mode` on `tenki_make_dir`; `expires_at` on `tenki_expose_port` and `tenki_bind_preview_url`; `slug` lookup on `tenki_get_preview_url`; `requested_ttl_seconds` / `source_addresses` on `tenki_issue_ssh_cert`; `tags` / `sticky` filters on the sandbox lists.
+- Tool descriptions now flag the API-deprecated methods behind `tenki_expose_port`, `tenki_unexpose_port`, `tenki_list_exposed_ports`, `tenki_list_workspace_sandboxes` and `tenki_list_workspace_snapshots`, and point to the replacements.
+
 ## [0.2.0] — 2026-08-21
 
 - Remove standalone image management tools. Template images remain available through template builds and sandbox creation.

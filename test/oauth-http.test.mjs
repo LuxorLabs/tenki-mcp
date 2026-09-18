@@ -159,7 +159,7 @@ try {
 	const client = new Client({ name: "oauth-http-test", version: "1.0.0" });
 	await client.connect(transport);
 	const { tools } = await client.listTools();
-	if (tools.length !== 71) throw new Error(`OAuth MCP advertised ${tools.length} tools; expected 71`);
+	if (tools.length !== 70) throw new Error(`OAuth MCP advertised ${tools.length} tools; expected 70`);
 	requestHeaders.set("Authorization", `Bearer ${refreshedSourceToken}`);
 	await client.callTool({ name: "tenki_get_workspace_usage", arguments: {} });
 	if (delegatedRequests < 2) throw new Error("tool call did not reach the backend with delegated authentication");

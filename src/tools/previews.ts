@@ -23,7 +23,7 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Unexpose a port (tear down its exposure + preview) ────────────────────────
 	server.tool(
 		"tenki_unexpose_port",
-		"Remove an inbound port exposure from a sandbox, taking its public URL/preview offline. Use this to un-publish a port previously exposed with tenki_expose_port.",
+		"Remove an inbound port exposure from a sandbox, unbinding EVERY preview URL on that port and taking them offline. DEPRECATED upstream (UnexposePort): to take one specific preview URL offline use tenki_unbind_preview_url or tenki_delete_preview_url with its id.",
 		{
 			session_id: sessionIdSchema.describe("The sandbox session whose port to unexpose."),
 			port: portSchema.describe("The TCP port inside the sandbox to unexpose (1-65535)."),
@@ -80,32 +80,26 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── List the preview URLs bound to a sandbox / project ────────────────────────
 	server.tool(
 		"tenki_list_preview_urls",
-		"List the workspace's preview URLs, newest page first. Pass session_id to keep only the ones bound to that sandbox (filtered here, not server-side — so it applies to the page you fetched; raise page_size or follow next_page_token to widen it). Results are paginated: a nextPageToken in the response means more pages exist.",
+		"List the workspace's preview URLs, newest page first. Pass session_id to list only the ones bound to that sandbox (server-side filter). Results are paginated: a nextPageToken in the response means more pages exist.",
 		{
-			session_id: sessionIdSchema
-				.optional()
-				.describe("Keep only preview URLs bound to this sandbox. Applied client-side to the fetched page."),
+			session_id: sessionIdSchema.optional().describe("Only preview URLs bound to this sandbox."),
 			workspace_id: z.string().optional().describe("Workspace to list (defaults to the key's first workspace)."),
 			page_size: z.number().int().min(1).max(100).optional().describe("Rows per page (server default 20, max 100)."),
 			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
 		async ({ session_id, workspace_id, page_size, page_token }) => {
-			// The RPC has no sessionId field (ListPreviewUrlsRequest: workspace_id,
-			// page_size, page_token), so a sessionId sent
-			// on the wire is silently discarded and every session's rows come back.
-			// Filter here instead of advertising a filter that does nothing.
+			// ListPreviewUrlsRequest.session_id (field 5) filters server-side.
 			const workspaceId = workspace_id ?? (await client.resolveOwner()).workspaceId;
 			const resp = await client.control("ListPreviewUrls", {
 				...(workspaceId ? { workspaceId } : {}),
+				...(session_id ? { sessionId: session_id } : {}),
 				...(page_size !== undefined ? { pageSize: page_size } : {}),
 				...(page_token ? { pageToken: page_token } : {}),
 			});
-			const rows: any[] = Array.isArray(resp.previewUrls) ? resp.previewUrls : [];
-			const filtered = session_id ? rows.filter((r) => r?.sessionId === session_id) : rows;
+			// proto3 omits an empty repeated field; normalize so an empty page is an array.
 			return ok({
-				previewUrls: filtered,
+				previewUrls: Array.isArray(resp.previewUrls) ? resp.previewUrls : [],
 				...(resp.nextPageToken ? { nextPageToken: resp.nextPageToken } : {}),
-				...(session_id ? { filteredClientSide: true, fetchedOnThisPage: rows.length } : {}),
 			});
 		},
 	);
@@ -113,9 +107,17 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Get / delete a specific preview URL ───────────────────────────────────────
 	server.tool(
 		"tenki_get_preview_url",
-		"Fetch a specific preview URL's details by id.",
-		{ preview_url_id: z.string().describe("The preview URL id.") },
-		async ({ preview_url_id }) => ok(await client.control("GetPreviewUrl", { previewUrlId: preview_url_id })),
+		"Fetch a specific preview URL's details by id OR by slug (pass exactly one).",
+		{
+			preview_url_id: z.string().optional().describe("The preview URL id."),
+			slug: slugSchema.optional().describe("The preview URL's slug (alternative to preview_url_id)."),
+		},
+		async ({ preview_url_id, slug }) => {
+			if ((preview_url_id === undefined) === (slug === undefined)) {
+				throw new Error("tenki_get_preview_url: pass exactly one of preview_url_id or slug.");
+			}
+			return ok(await client.control("GetPreviewUrl", preview_url_id ? { previewUrlId: preview_url_id } : { slug }));
+		},
 	);
 
 	server.tool(
@@ -138,14 +140,25 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// Advanced routing primitives (shapes SDK-name-verified; not exercised end-to-end here).
 	server.tool(
 		"tenki_bind_preview_url",
-		"Bind a named preview URL to a sandbox session and port (advanced routing).",
+		"Bind a named preview URL to a sandbox session and port (advanced routing). A URL whose expiry has lapsed can only be re-bound with a new expires_at.",
 		{
 			preview_url_id: z.string().describe("The preview URL id to bind."),
 			session_id: sessionIdSchema,
 			port: portSchema.describe("The port to route the preview URL to."),
+			expires_at: z
+				.string()
+				.optional()
+				.describe("Optional RFC-3339 timestamp replacing the URL's expiry deadline (required when re-binding a lapsed URL)."),
 		},
-		async ({ preview_url_id, session_id, port }) =>
-			ok(await client.control("BindPreviewUrl", { previewUrlId: preview_url_id, sessionId: session_id, port })),
+		async ({ preview_url_id, session_id, port, expires_at }) =>
+			ok(
+				await client.control("BindPreviewUrl", {
+					previewUrlId: preview_url_id,
+					sessionId: session_id,
+					port,
+					...(expires_at !== undefined ? { expiresAt: expires_at } : {}),
+				}),
+			),
 	);
 
 	server.tool(
