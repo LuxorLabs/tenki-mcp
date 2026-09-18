@@ -135,14 +135,14 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 
 ## Tools
 
-**71 tools** — all 68 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs)), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
+**70 tools** — all 67 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
 | **Auth** | `tenki_auth_status` (which credential is configured, and does it work — the only tool available when none is) |
 | **Identity** | `tenki_whoami` |
 | **Run** | `tenki_run_code` (one-shot: boot → run shell/python/js → tear down) |
-| **Sandboxes** | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox` |
+| **Sandboxes** | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_get_sandbox_metrics` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox` |
 | **Session admin** | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes` |
 | **Exec** | `tenki_exec` (stdout/stderr/exit inline) |
 | **Files** | `tenki_read_file` · `tenki_write_file` · `tenki_list_files` · `tenki_stat_path` · `tenki_make_dir` · `tenki_remove_path` · `tenki_move_path` |
@@ -153,9 +153,11 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | **Snapshots** | create · get · list · list-session · list-workspace · list-dangling · update · delete · get-download-url |
 | **Volumes** | create · get · list · update · delete · resize · attach · detach |
 | **Templates** | create · get · list · update · delete · build · cancel-build · get-build · list-active-builds |
-| **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_settings` · `tenki_update_workspace_settings` · `tenki_get_snapshot_retention_settings` · `tenki_update_snapshot_retention_settings` |
+| **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_preview_domains` · `tenki_update_workspace_preview_domains` |
 
 Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
+
+**Deprecated upstream, still served:** `tenki_expose_port` / `tenki_unexpose_port` / `tenki_list_exposed_ports` (the API prefers the preview-URL tools), `tenki_list_workspace_sandboxes` / `tenki_list_workspace_snapshots` (prefer the credential-scoped lists), and the `ExecuteCommand` RPC behind `tenki_exec` / `tenki_run_code` / `tenki_move_path` (successor is the data-plane `Run` stream, which needs an HTTP/2 transport this server does not have yet). The parity audit prints these on every run.
 
 ## Auth
 

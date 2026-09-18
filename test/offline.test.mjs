@@ -98,7 +98,7 @@ try {
 	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
-	check("advertises 71 tools (70 + tenki_auth_status)", tools.length === 71, `${tools.length}`);
+	check("advertises 70 tools (69 + tenki_auth_status)", tools.length === 70, `${tools.length}`);
 	const names = tools.map((t) => t.name);
 	check("standalone registry terminology is absent", !/registry/i.test(JSON.stringify(tools)));
 	check("no duplicate tool names", new Set(names).size === names.length);
@@ -169,6 +169,31 @@ try {
 			"empty path rejected pre-network (tenki_read_file)",
 			await rejectsPreNetwork("tenki_read_file", { session_id: "s", path: "  " }, /must not be empty or whitespace-only/i),
 		);
+		check(
+			"odd memory_mb rejected pre-network (API requires 2 MiB alignment)",
+			await rejectsPreNetwork("tenki_create_sandbox", { memory_mb: 1025 }, /2 MiB/i),
+		);
+		check(
+			"bulk terminate over 100 ids rejected pre-network (API max_items 100)",
+			await rejectsPreNetwork("tenki_terminate_sandboxes", { session_ids: Array.from({ length: 101 }, (_, i) => `s${i}`) }, /100/),
+		);
+		check(
+			"get_preview_url with neither id nor slug rejected before any call",
+			await rejectsPreNetwork("tenki_get_preview_url", {}, /exactly one of preview_url_id or slug/i),
+		);
+	}
+
+	// 3c) request-shape contract: tool schemas only advertise fields the API has.
+	{
+		const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+		const props = (n) => Object.keys(byName[n]?.inputSchema?.properties ?? {});
+		check("removed workspace-settings tools are gone", !["tenki_get_workspace_settings", "tenki_update_workspace_settings", "tenki_get_snapshot_retention_settings", "tenki_update_snapshot_retention_settings"].some((n) => byName[n]));
+		check("update_sandbox no longer advertises idle_timeout_minutes (UpdateSession has no such field)", !props("tenki_update_sandbox").includes("idle_timeout_minutes"));
+		check("update_sandbox advertises sticky + clear_tags", props("tenki_update_sandbox").includes("sticky") && props("tenki_update_sandbox").includes("clear_tags"));
+		check("list_ssh_gateways takes region/session_id, not workspace_id", props("tenki_list_ssh_gateways").includes("region") && !props("tenki_list_ssh_gateways").includes("workspace_id"));
+		check("get_download_url no longer REQUIRES session_id", !(byName["tenki_get_download_url"]?.inputSchema?.required ?? []).includes("session_id"));
+		check("get_sandbox_metrics is registered as a read tool", byName["tenki_get_sandbox_metrics"]?.annotations?.readOnlyHint === true);
+		check("create_sandbox advertises egress + volumes + sticky", ["egress_allow_domains", "volumes", "sticky"].every((k) => props("tenki_create_sandbox").includes(k)));
 	}
 
 	// 4) unknown tool → clean error (thrown JSON-RPC error OR isError result), not a crash
