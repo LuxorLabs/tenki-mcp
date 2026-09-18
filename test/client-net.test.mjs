@@ -363,6 +363,10 @@ const stop = (srv) => { srv.closeAllConnections?.(); srv.close(); };
 		check(`timeoutFor: ${m} → slow budget (600s), not 30s`, c.timeoutFor(m, {}) === 600_000, `${c.timeoutFor(m, {})}`);
 	}
 	check("timeoutFor: GetSnapshot (a read) stays on the unary default", c.timeoutFor("GetSnapshot", {}) === 30_000);
+	check("timeoutFor: CreateSession{waitReady} → 90s (server holds up to 60s)", c.timeoutFor("CreateSession", { waitReady: true }) === 90_000, `${c.timeoutFor("CreateSession", { waitReady: true })}`);
+	check("timeoutFor: CreateSession without waitReady stays on the unary default", c.timeoutFor("CreateSession", {}) === 30_000);
+	check("timeoutFor: PauseSession{async} drops to the unary default", c.timeoutFor("PauseSession", { async: true }) === 30_000);
+	check("timeoutFor: CreateSnapshot{async} drops to the unary default", c.timeoutFor("CreateSnapshot", { async: true }) === 30_000);
 	// Async methods return a handle in <1s; a long budget would only delay a hung call.
 	for (const m of ["BuildTemplate", "PublishRegistryImage", "ResumeSession", "ResizeVolume"]) {
 		check(`timeoutFor: ${m} (async/fast) stays on the unary default`, c.timeoutFor(m, {}) === 30_000, `${c.timeoutFor(m, {})}`);

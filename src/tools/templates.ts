@@ -30,7 +30,7 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 		"tenki_create_template",
 		"Create a custom-image template (a reusable sandbox-image spec: base image + setup script + default resources). Build it into a bootable image later with tenki_build_template. NOTE: only a TYPED template (created with builder_spec, no legacy fields) can build a named, publishable image (image_name) that tenki_create_sandbox boots via its `image` arg.",
 		{
-			name: z.string().describe("Human-readable template name."),
+			name: z.string().min(1).max(64).describe("Human-readable template name (1-64 chars)."),
 			base_image_id: z.string().optional().describe("Base image ID to build on top of."),
 			setup_script: z.string().optional().describe("Shell script run at build time to provision the image. Required for a from-scratch template (the API rejects a create without it unless you derive from a parent template/image)."),
 			start_cmd: z.string().optional().describe("Command run when a sandbox boots from this template."),
@@ -163,8 +163,9 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			template_id: z.string().describe("The template ID to build."),
 			image_name: z
 				.string()
+				.regex(/^[a-z][a-z0-9-]{0,63}$/, "lowercase letters, digits and hyphens; must start with a letter; max 64 chars")
 				.optional()
-				.describe("Name for the resulting image. Requires a TYPED template (created with builder_spec) — the API rejects it for legacy setup-script templates."),
+				.describe("Name for the resulting image (^[a-z][a-z0-9-]{0,63}$). Requires a TYPED template (created with builder_spec) — the API rejects it for legacy setup-script templates."),
 			publish_raw_image: z.boolean().optional().describe("Publish the raw rootfs image alongside the build snapshot."),
 			build_secrets: z.record(z.string(), z.string()).optional().describe("Build-time secrets as a key→value object (not persisted into the image)."),
 			build_env: z.record(z.string(), z.string()).optional().describe("Per-build environment overrides frozen into this build only."),

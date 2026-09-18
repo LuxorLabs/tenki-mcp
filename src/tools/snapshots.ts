@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, sessionIdSchema } from "./common.js";
+import { ok, sessionIdSchema, tagsPatch, tagsSchema } from "./common.js";
 
 /**
  * Snapshots — capture a sandbox's disk + memory as a reusable image.
@@ -27,14 +27,19 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 				.boolean()
 				.optional()
 				.describe("Also store the raw disk image alongside the snapshot (needed to download it later)."),
+			async: z
+				.boolean()
+				.optional()
+				.describe("Return as soon as the snapshot row exists and poll tenki_get_snapshot for READY, instead of blocking until the capture finishes (default false)."),
 		},
-		async ({ session_id, name, expires_at, store_raw_image }) =>
+		async ({ session_id, name, expires_at, store_raw_image, async: isAsync }) =>
 			ok(
 				await client.control("CreateSnapshot", {
 					sessionId: session_id,
 					...(name ? { name } : {}),
 					...(expires_at ? { expiresAt: expires_at } : {}),
 					...(store_raw_image !== undefined ? { storeRawImage: store_raw_image } : {}),
+					...(isAsync ? { async: true } : {}),
 				}),
 			),
 	);
@@ -98,23 +103,33 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_update_snapshot",
-		"Update a snapshot's mutable metadata (name and/or expiry).",
+		"Update a snapshot's mutable metadata: name, expiry (set or clear), and tags.",
 		{
 			snapshot_id: z.string(),
-			name: z.string().optional().describe("New human-readable name."),
+			name: z.string().max(64).optional().describe("New human-readable name (max 64 chars)."),
 			expires_at: z
 				.string()
 				.optional()
 				.describe("New RFC-3339 / ISO-8601 auto-delete timestamp."),
+			clear_expires_at: z.boolean().optional().describe("Remove the expiry so the snapshot is kept indefinitely."),
+			tags: tagsSchema.describe("Replacement tag list. Pass [] (or clear_tags) to remove all tags."),
+			clear_tags: z.boolean().optional().describe("Remove all tags from the snapshot."),
 		},
-		async ({ snapshot_id, name, expires_at }) =>
-			ok(
+		async ({ snapshot_id, name, expires_at, clear_expires_at, tags, clear_tags }) => {
+			const tagPatch = tagsPatch(tags, clear_tags);
+			if (name === undefined && expires_at === undefined && !clear_expires_at && !Object.keys(tagPatch).length) {
+				throw new Error("tenki_update_snapshot: pass at least one field to change — nothing was sent.");
+			}
+			return ok(
 				await client.control("UpdateSnapshot", {
 					snapshotId: snapshot_id,
 					...(name !== undefined ? { name } : {}),
 					...(expires_at !== undefined ? { expiresAt: expires_at } : {}),
+					...(clear_expires_at ? { clearExpiresAt: true } : {}),
+					...tagPatch,
 				}),
-			),
+			);
+		},
 	);
 
 	server.tool(
@@ -133,7 +148,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_list_workspace_snapshots",
-		"List all snapshots in a workspace (defaults to the key's first workspace). Supports pagination.",
+		"List all snapshots in a workspace (defaults to the key's first workspace). Supports pagination. NOTE: the underlying RPC (ListWorkspaceSnapshots) is deprecated upstream in favour of the credential-scoped tenki_list_snapshots; prefer that unless you need an explicit workspace_id.",
 		{
 			workspace_id: z.string().optional().describe("Workspace to list (defaults to the key's first workspace)."),
 			page_size: z.number().int().positive().optional(),

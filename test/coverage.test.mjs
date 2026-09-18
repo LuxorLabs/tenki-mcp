@@ -41,6 +41,8 @@ try {
 	await h.check("sessions-admin: extend → update → report → list workspace", async () => {
 		await h.call("tenki_extend_sandbox", { session_id: mainSid, additional_duration_seconds: 60 });
 		await h.call("tenki_update_sandbox", { session_id: mainSid, name: "cov-main-2" });
+		await h.call("tenki_update_sandbox", { session_id: mainSid, max_duration_seconds: 900 }); // implies sticky=false
+		await h.call("tenki_get_sandbox_metrics", { session_id: mainSid });
 		await h.call("tenki_report_sandbox_activity", { session_id: mainSid });
 		await h.call("tenki_list_workspace_sandboxes", { page_size: 5 });
 	});
@@ -136,10 +138,9 @@ try {
 	});
 
 	// ── workspace ────────────────────────────────────────────────────────────────
-	await h.check("workspace: usage → settings → retention", async () => {
+	await h.check("workspace: usage → preview domains", async () => {
 		await h.call("tenki_get_workspace_usage", {});
-		await h.call("tenki_get_workspace_settings", {});
-		await h.call("tenki_get_snapshot_retention_settings", {});
+		await h.call("tenki_get_workspace_preview_domains", {});
 	});
 
 	// ── ssh (read; gateway service path) ─────────────────────────────────────────────
