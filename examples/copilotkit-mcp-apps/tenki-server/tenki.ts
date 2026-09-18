@@ -60,7 +60,17 @@ export interface CreateOptions {
 	allowOutbound: boolean;
 	/** A long-lived pool VM rather than a per-request one. */
 	warm?: boolean;
+	/**
+	 * How long to wait for RUNNING before giving up. A demo run passes a short
+	 * budget: the MCP client abandons a tool call at 60s, so waiting two minutes
+	 * for a slow placement only guarantees the call dies with a timeout instead
+	 * of falling back to the warm pool.
+	 */
+	readyTimeoutMs?: number;
 }
+
+/** Tenki accepted the sandbox but has not placed it in time — treat it like no capacity. */
+export const SLOW_PLACEMENT = "Tenki is placing sandboxes slowly";
 
 export interface Backend {
 	mode: Mode;
@@ -107,7 +117,8 @@ export const webPath = (port: number, rel: string) => `${webDir(port)}/${safeRel
 
 /** Tenki could not place a VM right now (capacity), as opposed to a bad request. */
 export function isCapacityError(err: unknown): boolean {
-	return /resource_exhausted|capacity unavailable|placement constraints/i.test(err instanceof Error ? err.message : String(err));
+	const message = err instanceof Error ? err.message : String(err);
+	return /resource_exhausted|capacity unavailable|placement constraints/i.test(message) || message.includes(SLOW_PLACEMENT);
 }
 
 // ─── Live: real Tenki Sandboxes ──────────────────────────────────────────────
@@ -158,8 +169,15 @@ class LiveBackend implements Backend {
 		const id = String(session.id ?? resp.sessionId ?? "");
 		if (!id) throw new Error("CreateSession returned no session id.");
 		this.mine.add(id);
-		const running = await this.client.waitForState(id, "RUNNING", { intervalMs: 200, timeoutMs: 120_000 });
-		return { vm: this.toVm({ ...session, ...running, id }), bootMs: Date.now() - started };
+		try {
+			const running = await this.client.waitForState(id, "RUNNING", { intervalMs: 200, timeoutMs: opts.readyTimeoutMs ?? 120_000 });
+			return { vm: this.toVm({ ...session, ...running, id }), bootMs: Date.now() - started };
+		} catch (err) {
+			// Don't leave the half-placed sandbox billing once we stop waiting for it.
+			void this.client.control("TerminateSession", { sessionId: id }).catch(() => {});
+			this.mine.delete(id);
+			throw new Error(`${SLOW_PLACEMENT}: ${err instanceof Error ? err.message : String(err)}`);
+		}
 	}
 
 	async get(id: string) {

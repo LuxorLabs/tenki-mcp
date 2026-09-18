@@ -103,7 +103,9 @@ if (existing && String(existing.state).includes("RUNNING")) {
 	});
 	const session = created.session ?? created;
 	sessionId = session.id;
-	await client.waitForState(sessionId, "RUNNING", { intervalMs: 250 });
+	// Placement has taken minutes when Tenki is busy; failing fast here just means
+	// the keepalive tries again from scratch, which is slower still.
+	await client.waitForState(sessionId, "RUNNING", { intervalMs: 250, timeoutMs: 420_000 });
 	console.log(`Created host sandbox ${HOST_NAME} (${sessionId})`);
 }
 

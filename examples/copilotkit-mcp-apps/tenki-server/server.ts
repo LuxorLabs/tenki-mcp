@@ -149,6 +149,9 @@ async function acquire(
 			memoryMb: 4096,
 			allowInbound: opts.allowInbound,
 			allowOutbound: opts.allowOutbound,
+			// Boots measure 0.3–0.5s; 20s means Tenki is struggling, and the MCP
+			// client gives up on the whole call at 60s.
+			readyTimeoutMs: 20_000,
 		});
 		return { vm, bootMs, reused: false, pooled: false, replaced };
 	} catch (err) {
