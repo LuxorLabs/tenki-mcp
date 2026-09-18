@@ -128,8 +128,8 @@ export default function Page() {
 					rendered as <em>MCP Apps</em>.
 				</h1>
 				<p className="lede">
-					Ask for anything that needs a computer. The agent boots a Tenki Sandbox instantly, and the answer comes back as an app you can use,
-					not a wall of text.
+					Ask for anything that needs a computer. The agent boots a Tenki Sandbox instantly and answers with an app you can use, not a wall
+					of text.
 				</p>
 
 				<div className="section-label">Try it</div>
