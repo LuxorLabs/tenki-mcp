@@ -1,0 +1,9 @@
+node_modules
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.env*
+!.env.example
+
+# deploy credentials written by npm run deploy
+.env.deploy

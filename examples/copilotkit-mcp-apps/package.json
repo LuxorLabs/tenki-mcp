@@ -1,0 +1,48 @@
+{
+  "name": "tenki-copilotkit-mcp-apps",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tenki microVM sandboxes as MCP Apps inside a CopilotKit chat.",
+  "scripts": {
+    "dev": "concurrently --kill-others --names ui,mcp --prefix-colors blue,green \"npm run dev:ui\" \"npm run dev:mcp\"",
+    "dev:ui": "next dev --turbopack -p 3000",
+    "dev:mcp": "npm --prefix tenki-server run dev",
+    "build": "npm --prefix tenki-server run build && next build",
+    "start": "concurrently --kill-others --names ui,mcp --prefix-colors blue,green \"next start -p 3000\" \"npm --prefix tenki-server run serve\"",
+    "typecheck": "tsc --noEmit && npm --prefix tenki-server run typecheck",
+    "postinstall": "npm --prefix tenki-server install",
+    "warm": "npm --prefix tenki-server run warm --",
+    "smoke": "npm --prefix tenki-server run smoke --",
+    "capacity": "npm --prefix tenki-server run capacity",
+    "deploy": "npm --prefix tenki-server run deploy --",
+    "keepalive": "npm --prefix tenki-server run keepalive --"
+  },
+  "dependencies": {
+    "@ag-ui/client": "0.0.59",
+    "@ag-ui/mcp-apps-middleware": "^0.1.1",
+    "@ai-sdk/openai": "^3.0.112",
+    "@copilotkit/react-core": "1.72.0",
+    "@copilotkit/react-ui": "1.72.0",
+    "@copilotkit/runtime": "1.72.0",
+    "hono": "^4.12.10",
+    "next": "16.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "rxjs": "7.8.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^9.1.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "overrides": {
+    "@ag-ui/client": "0.0.59",
+    "@ag-ui/core": "0.0.59",
+    "@ag-ui/encoder": "0.0.59",
+    "@ag-ui/proto": "0.0.59"
+  }
+}
