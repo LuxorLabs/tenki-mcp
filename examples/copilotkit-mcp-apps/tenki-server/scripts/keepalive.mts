@@ -37,10 +37,27 @@ const healthy = async () => {
 	}
 };
 
-console.log(`[keepalive] watching ${health} every ${every / 1000}s`);
+const WARM_EVERY_MS = 10 * 60_000;
+let warmedAt = 0;
+
+/** Keep the pool stocked: the reaper clears warm sandboxes once Tenki pauses them. */
+function topUpWarmPool() {
+	if (Date.now() - warmedAt < WARM_EVERY_MS) return;
+	warmedAt = Date.now();
+	try {
+		const out = execFileSync("npx", ["tsx", path.join(import.meta.dirname, "warm.ts"), "2"], { cwd: ROOT, encoding: "utf8" });
+		const booted = out.split("\n").filter((l) => l.startsWith("✓")).length;
+		if (booted) console.log(`${stamp()} warm pool topped up (+${booted})`);
+	} catch (err) {
+		console.error(`${stamp()} warm top-up failed:`, err instanceof Error ? err.message.slice(0, 120) : String(err));
+	}
+}
+
+console.log(`[keepalive] watching ${health} every ${every / 1000}s, warm pool every ${WARM_EVERY_MS / 60_000} min`);
 for (;;) {
 	if (await healthy()) {
 		console.log(`${stamp()} ok`);
+		topUpWarmPool();
 	} else {
 		// One retry: a redeploy is disruptive, and a single blip is usually the edge.
 		await new Promise((r) => setTimeout(r, 3000));
