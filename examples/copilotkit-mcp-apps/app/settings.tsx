@@ -22,52 +22,10 @@ const EMPTY: Keys = { tenkiKey: "", llmKey: "", llmBaseUrl: "", llmModel: "" };
 /** Free credits for the event — the whole reason a visitor opens this dialog. */
 export const TENKI_CREDITS_URL = "https://tenki.cloud/events/mcp-apps-night";
 export const AISA_SIGNUP_URL = "https://aisa.one";
-/**
- * One code per visitor, drawn at random and then kept: re-rendering or reopening
- * the dialog must not hand the same person a second code. Codes are finite, so
- * with more visitors than codes some will collide — first to redeem wins.
- */
-export const AISA_PROMOS = [
-	"PROMO-F2B159FD3B5C69DA",
-	"PROMO-531FB3650DAC5BDC",
-	"PROMO-406F5985D2105EAE",
-	"PROMO-7F8BA6F3DD6508CC",
-	"PROMO-362C006429FF20A2",
-	"PROMO-62BF68FC3453ECFC",
-	"PROMO-EE678AF201F132F0",
-	"PROMO-F77F81D275DCFC55",
-	"PROMO-B3853CC09A8D1367",
-	"PROMO-E8621E8E4E66B9A6",
-];
+/** One shared code for the event. */
+export const AISA_PROMO = "MCPAPPS50";
+
 const STORAGE = "tenki-copilotkit-keys";
-const PROMO_STORAGE = "tenki-copilotkit-promo";
-
-/** The visitor's code: the one they were already given, or a fresh draw. */
-function usePromoCode() {
-	const [promo, setPromo] = useState<string | null>(null);
-	// Drawn after mount, never during render: the server has no idea which code
-	// this visitor holds, and drawing during render would trip hydration.
-	useEffect(() => {
-		try {
-			const kept = localStorage.getItem(PROMO_STORAGE);
-			if (kept && AISA_PROMOS.includes(kept)) {
-				setPromo(kept);
-				return;
-			}
-		} catch {
-			/* private mode — draw one for this session instead */
-		}
-		const drawn = AISA_PROMOS[Math.floor(Math.random() * AISA_PROMOS.length)];
-		setPromo(drawn);
-		try {
-			localStorage.setItem(PROMO_STORAGE, drawn);
-		} catch {
-			/* not persisting is fine; the code stays put for this page load */
-		}
-	}, []);
-	return promo;
-}
-
 export const PROVIDERS = [
 	{ id: "aisa", label: "Aisa", baseUrl: "https://api.aisa.one/v1", model: "claude-sonnet-5" },
 	{ id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1" },
@@ -152,7 +110,6 @@ export function SettingsDialog() {
 	const [draft, setDraft] = useState<Keys>(keys);
 	const [provider, setProvider] = useState<string>("aisa");
 	const [copied, setCopied] = useState(false);
-	const promo = usePromoCode();
 
 	useEffect(() => {
 		if (!open) return;
@@ -210,14 +167,12 @@ export function SettingsDialog() {
 							Sign up, then apply this promo code for $50 of inference — Claude, GPT and others through one OpenAI-compatible endpoint.
 						</p>
 						<div className="promo">
-							<code>{promo ?? "PROMO-…"}</code>
+							<code>{AISA_PROMO}</code>
 							<button
 								className="copy"
-								disabled={!promo}
 								onClick={async () => {
-									if (!promo) return;
 									try {
-										await navigator.clipboard.writeText(promo);
+										await navigator.clipboard.writeText(AISA_PROMO);
 										setCopied(true);
 										setTimeout(() => setCopied(false), 1500);
 									} catch {
