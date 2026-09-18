@@ -78,6 +78,27 @@ body {
 	color: #4f6580;
 }
 
+.brandrow {
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.brandrow .aisa {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.brandrow .aisa .ai {
+	height: 17px;
+	width: auto;
+}
+
+.brandrow .aisa .aw {
+	height: 11px;
+	width: auto;
+}
+
 .brandrow .ck {
 	height: 18px;
 	width: auto;
@@ -702,4 +723,122 @@ body {
 .prompt.how .picon {
 	color: #9db4cc;
 	font-weight: 600;
+}
+
+/* ── free-credit offers in the dialog ─────────────────────────────────── */
+
+.offers {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px;
+	margin-bottom: 18px;
+}
+
+.offer {
+	border: 1px solid #dbe6f5;
+	background: linear-gradient(180deg, #f8fbff, #fff);
+	border-radius: 12px;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.offer-top {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.offer-top b {
+	font-size: 14px;
+}
+
+.offer-mark {
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 6px;
+	background: #0b1220;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.offer-tag {
+	margin-left: auto;
+	font-size: 10.5px;
+	font-weight: 600;
+	color: #0153f4;
+	background: #e8f2ff;
+	border-radius: 999px;
+	padding: 2px 8px;
+	white-space: nowrap;
+}
+
+.offer p {
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--muted-foreground);
+	flex: 1;
+}
+
+.offer-cta {
+	display: inline-block;
+	text-align: center;
+	text-decoration: none;
+	font-size: 13px;
+	font-weight: 600;
+	padding: 8px 10px;
+	border-radius: 9px;
+	background: var(--ring);
+	color: #fff;
+}
+
+.offer-cta:hover {
+	background: #0153f4;
+}
+
+.promo {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px dashed #b9d4f7;
+	border-radius: 9px;
+	padding: 5px 6px 5px 10px;
+	background: #fff;
+}
+
+.promo code {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-code);
+	font-size: 11.5px;
+	letter-spacing: -0.01em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.copy {
+	border: 1px solid var(--input);
+	background: #fff;
+	border-radius: 7px;
+	padding: 4px 9px;
+	font-size: 11.5px;
+	font-weight: 600;
+	cursor: pointer;
+	flex: none;
+}
+
+.copy:hover {
+	border-color: var(--ring);
+	color: var(--accent-foreground);
+}
+
+@media (max-width: 520px) {
+	.offers {
+		grid-template-columns: 1fr;
+	}
 }

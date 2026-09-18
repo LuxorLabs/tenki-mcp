@@ -18,7 +18,55 @@ export interface Keys {
 }
 
 const EMPTY: Keys = { tenkiKey: "", llmKey: "", llmBaseUrl: "", llmModel: "" };
+
+/** Free credits for the event — the whole reason a visitor opens this dialog. */
+export const TENKI_CREDITS_URL = "https://tenki.cloud/events/mcp-apps-night";
+export const AISA_SIGNUP_URL = "https://aisa.one";
+/**
+ * One code per visitor, drawn at random and then kept: re-rendering or reopening
+ * the dialog must not hand the same person a second code. Codes are finite, so
+ * with more visitors than codes some will collide — first to redeem wins.
+ */
+export const AISA_PROMOS = [
+	"PROMO-F2B159FD3B5C69DA",
+	"PROMO-531FB3650DAC5BDC",
+	"PROMO-406F5985D2105EAE",
+	"PROMO-7F8BA6F3DD6508CC",
+	"PROMO-362C006429FF20A2",
+	"PROMO-62BF68FC3453ECFC",
+	"PROMO-EE678AF201F132F0",
+	"PROMO-F77F81D275DCFC55",
+	"PROMO-B3853CC09A8D1367",
+	"PROMO-E8621E8E4E66B9A6",
+];
 const STORAGE = "tenki-copilotkit-keys";
+const PROMO_STORAGE = "tenki-copilotkit-promo";
+
+/** The visitor's code: the one they were already given, or a fresh draw. */
+function usePromoCode() {
+	const [promo, setPromo] = useState<string | null>(null);
+	// Drawn after mount, never during render: the server has no idea which code
+	// this visitor holds, and drawing during render would trip hydration.
+	useEffect(() => {
+		try {
+			const kept = localStorage.getItem(PROMO_STORAGE);
+			if (kept && AISA_PROMOS.includes(kept)) {
+				setPromo(kept);
+				return;
+			}
+		} catch {
+			/* private mode — draw one for this session instead */
+		}
+		const drawn = AISA_PROMOS[Math.floor(Math.random() * AISA_PROMOS.length)];
+		setPromo(drawn);
+		try {
+			localStorage.setItem(PROMO_STORAGE, drawn);
+		} catch {
+			/* not persisting is fine; the code stays put for this page load */
+		}
+	}, []);
+	return promo;
+}
 
 export const PROVIDERS = [
 	{ id: "aisa", label: "Aisa", baseUrl: "https://api.aisa.one/v1", model: "claude-sonnet-5" },
@@ -103,6 +151,8 @@ export function SettingsDialog() {
 	const { keys, save, clear, open, setOpen, usingOwnTenki, usingOwnModel } = useSettings();
 	const [draft, setDraft] = useState<Keys>(keys);
 	const [provider, setProvider] = useState<string>("aisa");
+	const [copied, setCopied] = useState(false);
+	const promo = usePromoCode();
 
 	useEffect(() => {
 		if (!open) return;
@@ -123,18 +173,66 @@ export function SettingsDialog() {
 
 	return (
 		<div className="modal-backdrop" onClick={() => setOpen(false)}>
-			<div className="modal" role="dialog" aria-modal="true" aria-label="Use your own keys" onClick={(e) => e.stopPropagation()}>
+			<div className="modal" role="dialog" aria-modal="true" aria-label="Get free API credits" onClick={(e) => e.stopPropagation()}>
 				<div className="modal-head">
-					<h2>Use your own keys</h2>
+					<h2>Get FREE API Credits!</h2>
 					<button className="modal-x" onClick={() => setOpen(false)} aria-label="Close">
 						×
 					</button>
 				</div>
 
 				<p className="modal-lede">
-					Run the demo on your own Tenki account and model provider. Keys are kept in this browser and sent with each request to this app, which
+					Grab free credits, then run this demo on your own accounts. Keys are kept in this browser and sent with each request to this app, which
 					passes the Tenki key to the MCP server for that call. They are never stored on the server. Leave a field empty to use the demo&rsquo;s own key.
 				</p>
+
+				<div className="offers">
+					<div className="offer">
+						<div className="offer-top">
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img src="/tenki-glyph.svg" width={20} height={20} alt="" />
+							<b>Tenki</b>
+							<span className="offer-tag">free sandbox credits</span>
+						</div>
+						<p>Claim credits for MCP Apps Night and create an API key — it starts with tk_.</p>
+						<a className="offer-cta" href={TENKI_CREDITS_URL} target="_blank" rel="noreferrer noopener">
+							Claim Tenki credits ↗
+						</a>
+					</div>
+
+					<div className="offer">
+						<div className="offer-top">
+							<span className="offer-mark">A</span>
+							<b>Aisa</b>
+							<span className="offer-tag">$50 in model credits</span>
+						</div>
+						<p>
+							Sign up, then apply this promo code for $50 of inference — Claude, GPT and others through one OpenAI-compatible endpoint.
+						</p>
+						<div className="promo">
+							<code>{promo ?? "PROMO-…"}</code>
+							<button
+								className="copy"
+								disabled={!promo}
+								onClick={async () => {
+									if (!promo) return;
+									try {
+										await navigator.clipboard.writeText(promo);
+										setCopied(true);
+										setTimeout(() => setCopied(false), 1500);
+									} catch {
+										/* clipboard blocked — the code is on screen to type */
+									}
+								}}
+							>
+								{copied ? "Copied" : "Copy"}
+							</button>
+						</div>
+						<a className="offer-cta" href={AISA_SIGNUP_URL} target="_blank" rel="noreferrer noopener">
+							Sign up at aisa.one ↗
+						</a>
+					</div>
+				</div>
 
 				<label className="field">
 					<span>

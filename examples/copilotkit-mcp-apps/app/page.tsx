@@ -113,6 +113,13 @@ export default function Page() {
 					<span className="x">×</span>
 					{/* eslint-disable-next-line @next/next/no-img-element */}
 					<img className="ck" src="/copilot-kit-logo-white.svg" alt="CopilotKit" height={18} />
+					<span className="x">×</span>
+					<span className="aisa">
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img className="ai" src="/aisa-icon.svg" alt="" height={17} />
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img className="aw" src="/aisa-wordmark-white.svg" alt="Aisa" height={11} />
+					</span>
 				</div>
 
 				<h1>
@@ -149,10 +156,10 @@ export default function Page() {
 				</button>
 
 				<button className="byo" onClick={() => setOpen(true)}>
-					<span className="byo-icon">⚙</span>
+					<span className="byo-icon">✦</span>
 					<span className="ptext">
-						<span className="ptitle">{usingOwnTenki || usingOwnModel ? "Your keys are in use" : "Use your own keys"}</span>
-						<span className="pblurb">Your Tenki account and model provider</span>
+						<span className="ptitle">{usingOwnTenki || usingOwnModel ? "Your keys are in use" : "Get FREE API Credits!"}</span>
+						<span className="pblurb">{usingOwnTenki || usingOwnModel ? "Running on your own accounts" : "Tenki credits + $50 on Aisa"}</span>
 					</span>
 				</button>
 
