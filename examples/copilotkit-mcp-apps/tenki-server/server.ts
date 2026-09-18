@@ -594,6 +594,50 @@ if (defaultBackend instanceof SimulatedBackend && Number(process.env.TENKI_SIMUL
 	}
 }
 
+/**
+ * Reaper: demo sandboxes are throwaway, but Tenki PAUSES a sandbox at its
+ * lifetime cap instead of terminating it, so they pile up frozen (18 of them
+ * after one event). This sweeps them: anything demo-tagged older than
+ * TENKI_REAP_MINUTES, and anything already paused, is terminated.
+ *
+ * It only ever touches sandboxes carrying this demo's tag, created with the
+ * server's OWN key — never the host (tagged mcp-host), never another project's
+ * (the workspace is shared), and never a visitor's: someone running on their own
+ * Tenki key pays for their own sandboxes and decides when they go.
+ * Warm sandboxes are spared while they are still running; once paused they are
+ * dead weight and `npm run warm` makes new ones.
+ */
+const REAP_MINUTES = Number(process.env.TENKI_REAP_MINUTES ?? 60);
+const REAP_EVERY_MS = Math.max(30, Number(process.env.TENKI_REAP_INTERVAL_SECONDS ?? 300)) * 1000;
+
+async function reap(): Promise<void> {
+	try {
+		const vms = await defaultBackend.list(false);
+		const now = Date.now();
+		for (const vm of vms) {
+			if (!vm.demo || vm.byo) continue;
+			const frozen = vm.state.includes("PAUS");
+			const ageMs = vm.createdAt ? now - Date.parse(vm.createdAt) : 0;
+			const stale = Number.isFinite(ageMs) && ageMs > REAP_MINUTES * 60_000;
+			if (vm.warm && !frozen) continue;
+			if (!frozen && !stale) continue;
+			try {
+				await defaultBackend.destroy(vm.id);
+				console.log(`[tenki-mcp-app] reaped ${vm.name} (${frozen ? "paused" : `${Math.round(ageMs / 60_000)} min old`})`);
+			} catch (err) {
+				console.error(`[tenki-mcp-app] could not reap ${vm.name}:`, err instanceof Error ? err.message : String(err));
+			}
+		}
+	} catch (err) {
+		console.error("[tenki-mcp-app] reaper sweep failed:", err instanceof Error ? err.message : String(err));
+	}
+}
+
+if (REAP_MINUTES > 0 && defaultBackend.mode === "live") {
+	void reap();
+	setInterval(() => void reap(), REAP_EVERY_MS).unref();
+}
+
 app.listen(PORT, (err?: Error) => {
 	if (err) {
 		console.error("[tenki-mcp-app] failed to start:", err);

@@ -110,6 +110,7 @@ All in `.env` (read by both processes). See [.env.example](.env.example).
 | `TENKI_POOL` | `fallback` (default), `prefer` (use warm sandboxes first, no boot), or `off`. |
 | `TENKI_DEMO_TAG` | Tag on every sandbox the demo creates (default `copilotkit-mcp-apps`). |
 | `TENKI_FLEET_ALLOW_ALL` | `1` lets the fleet list sandboxes this demo didn't create (read-only). Off by default: a shared workspace may hold other projects' sandboxes, and the fleet may be on a projector. |
+| `TENKI_REAP_MINUTES` | Terminate demo sandboxes older than this, and any that Tenki has paused (default 60; 0 disables). Never touches the host or another project's sandboxes. |
 | `MCP_PORT` | MCP server port (default 3108). |
 | `MCP_HOST` + `MCP_TOKEN` | Hosted mode: bind beyond loopback, and the bearer token every `/mcp` call must carry. The server refuses to start on a non-loopback host without a token. |
 

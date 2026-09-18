@@ -15,6 +15,7 @@ export interface VmInfo {
 	tags: string[];
 	demo: boolean;
 	warm?: boolean;
+	byo?: boolean;
 }
 
 export interface RunOutput {

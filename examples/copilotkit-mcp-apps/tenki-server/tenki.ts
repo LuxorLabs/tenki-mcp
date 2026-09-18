@@ -21,6 +21,13 @@ export const WARM_TAG = "warm";
  * otherwise terminate the server serving that very request (it did, once).
  */
 export const HOST_TAG = "mcp-host";
+/**
+ * A sandbox created with a VISITOR's own Tenki key. Their account, their bill,
+ * so the demo's reaper leaves it alone — it only sweeps what the server's own
+ * key created. (A visitor's key usually points at their own workspace, where
+ * the reaper cannot see it at all; this covers a key in the same workspace.)
+ */
+export const BYO_TAG = "byo";
 export const SANDBOX_HOME = "/home/tenki";
 /** Where run_code_in_sandbox writes its program. */
 export const APP_DIR = `${SANDBOX_HOME}/app`;
@@ -40,6 +47,8 @@ export interface VmInfo {
 	tags: string[];
 	demo: boolean;
 	warm: boolean;
+	/** Created with a visitor's own key — never reaped by this demo. */
+	byo: boolean;
 }
 
 export interface RunOutput {
@@ -129,7 +138,11 @@ class LiveBackend implements Backend {
 	/** Sessions this process created — authoritative even if the API omits tags. */
 	private readonly mine = new Set<string>();
 
-	constructor(private readonly client: TenkiClient) {}
+	constructor(
+		private readonly client: TenkiClient,
+		/** True when this backend runs on a visitor's key rather than the server's. */
+		private readonly byo = false,
+	) {}
 
 	private toVm(s: Record<string, any>): VmInfo {
 		const tags: string[] = Array.isArray(s.tags) ? s.tags : [];
@@ -144,6 +157,7 @@ class LiveBackend implements Backend {
 			tags,
 			demo: tags.includes(DEMO_TAG) || this.mine.has(id),
 			warm: tags.includes(WARM_TAG),
+			byo: tags.includes(BYO_TAG),
 		};
 	}
 
@@ -161,7 +175,7 @@ class LiveBackend implements Backend {
 			// A demo sandbox can never outlive the demo by much; pool VMs cover a whole session.
 			maxDuration: opts.warm ? "21600s" : "3600s",
 			idleTimeoutMinutes: opts.warm ? 240 : 15,
-			tags: opts.warm ? [DEMO_TAG, WARM_TAG] : [DEMO_TAG],
+			tags: [DEMO_TAG, ...(opts.warm ? [WARM_TAG] : []), ...(this.byo ? [BYO_TAG] : [])],
 			...(opts.allowInbound ? { allowInbound: true } : {}),
 			...(opts.allowOutbound ? { allowOutbound: true } : {}),
 		});
@@ -344,6 +358,7 @@ class SimulatedBackend implements Backend {
 			tags: opts.warm ? [DEMO_TAG, WARM_TAG] : [DEMO_TAG],
 			demo: true,
 			warm: Boolean(opts.warm),
+			byo: false,
 		};
 		this.vms.set(vm.id, { vm, files: new Map(), servers: new Map() });
 		return { vm, bootMs };
@@ -425,7 +440,7 @@ class SimulatedBackend implements Backend {
 export function createBackend(publicBase: string, overrideToken?: string): Backend {
 	const token = overrideToken || process.env.TENKI_AUTH_TOKEN || process.env.TENKI_API_KEY;
 	if (!token || (process.env.TENKI_SIMULATE === "1" && !overrideToken)) return new SimulatedBackend(publicBase);
-	return new LiveBackend(new TenkiClient(token, process.env.TENKI_API_ENDPOINT || undefined));
+	return new LiveBackend(new TenkiClient(token, process.env.TENKI_API_ENDPOINT || undefined), Boolean(overrideToken));
 }
 
 export { SimulatedBackend };

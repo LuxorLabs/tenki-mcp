@@ -124,6 +124,7 @@ function Fleet({ app, data }: { app: App; data: Structured }) {
 								<div className="vmtitle">
 									{v.name || "(unnamed)"}
 									{v.warm && <span className="tag warm">warm pool</span>}
+									{v.byo && <span className="tag warm">your key</span>}
 									{!v.demo && <span className="tag">not this demo</span>}
 								</div>
 								<div className="vmsub">
