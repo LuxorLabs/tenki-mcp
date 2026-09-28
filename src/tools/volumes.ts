@@ -15,7 +15,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, pathSchema, sessionIdSchema, tagsPatch, tagsSchema } from "./common.js";
+import { listQuery, ok, pathSchema, protoEnum, searchSchema, sessionIdSchema, tagsPatch, tagsSchema } from "./common.js";
 
 /** Volume size bounds the control plane accepts: 1 MiB … 100 GiB, in bytes. */
 const MIN_VOLUME_BYTES = 1_048_576; // 1 MiB
@@ -62,18 +62,26 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── List ──────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_list_volumes",
-		"List persistent volumes in a workspace (defaults to the key's first workspace). Supports pagination.",
+		"List persistent volumes in a workspace (defaults to the key's first workspace) with server-side search, state filter, sorting and optional state-count facets. Supports pagination.",
 		{
 			workspace_id: z.string().optional().describe("Workspace to list volumes from (defaults to the key's first workspace)."),
-			page_size: z.number().int().positive().optional().describe("Max volumes to return per page."),
+			search: searchSchema.describe("Free-text search over volume name/id (max 256 chars)."),
+			states: z.array(z.enum(["AVAILABLE", "IN_USE", "DELETING", "DELETED"])).max(16).optional().describe("Only volumes in any of these states."),
+			sort_by: z.enum(["NAME", "STATE", "SIZE_BYTES", "CREATED_AT"]).optional().describe("Column to sort by."),
+			sort_desc: z.boolean().optional().describe("Sort descending (default ascending)."),
+			include_facets: z.boolean().optional().describe("Also return per-state counts for the same filter scope."),
+			page_size: z.number().int().min(1).max(100).optional().describe("Max volumes to return per page (max 100)."),
 			page_token: z.string().optional().describe("Page token from a previous response's nextPageToken."),
 		},
-		async ({ workspace_id, page_size, page_token }) => {
+		async ({ workspace_id, search, states, sort_by, sort_desc, include_facets, page_size, page_token }) => {
 			const owner = await client.resolveOwner();
 			const workspaceId = workspace_id ?? owner.workspaceId;
 			return ok(
 				await client.control("ListVolumes", {
 					...(workspaceId ? { workspaceId } : {}),
+					...(states && states.length ? { states: states.map((s) => protoEnum("VOLUME_STATE", s)) } : {}),
+					...(sort_by ? { sortBy: protoEnum("VOLUME_SORT_FIELD", sort_by) } : {}),
+					...listQuery(search, include_facets, sort_desc),
 					...(page_size ? { pageSize: page_size } : {}),
 					...(page_token ? { pageToken: page_token } : {}),
 				}),

@@ -91,3 +91,16 @@ export function tagsPatch(tags?: string[], clearTags?: boolean): { tags?: string
 	if (clearTags || (tags !== undefined && tags.length === 0)) return { clearTags: true };
 	return tags && tags.length ? { tags } : {};
 }
+
+/** Free-text search across a list (server-side; API max 256 chars). */
+export const searchSchema = z.string().max(256).optional();
+
+/** Prefix a bare enum name the way protobuf JSON expects it (e.g. RUNNING → SESSION_STATE_RUNNING). */
+export const protoEnum = (prefix: string, value: string): string => `${prefix}_${value}`;
+
+/** Common server-side list options shared by the sandbox, volume, template and preview-URL lists. */
+export const listQuery = (search?: string, includeFacets?: boolean, sortDesc?: boolean): Record<string, unknown> => ({
+	...(search && search.trim() ? { search: search.trim() } : {}),
+	...(includeFacets ? { includeFacets: true } : {}),
+	...(sortDesc ? { sortDesc: true } : {}),
+});

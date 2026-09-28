@@ -4,6 +4,27 @@ import { z } from "zod";
 import type { TenkiClient } from "../client.js";
 import { ok, envSchema, pathSchema, sessionIdSchema, tagsSchema } from "./common.js";
 
+/** Secret request bindings: inject a workspace secret into outbound HTTPS requests that match origin/method/path. */
+const secretRequestSchema = z.object({
+	name: z.string().min(1).describe("Binding name (unique within the sandbox)."),
+	secret_name: z.string().min(1).describe("Workspace secret to inject."),
+	origin: z.string().min(1).describe("Request origin to match, e.g. https://api.github.com."),
+	methods: z.array(z.string()).optional().describe("HTTP methods to match (omit for all)."),
+	path_prefix: z.string().optional().describe("Only requests whose path starts with this prefix."),
+	header: z.string().optional().describe("Inject as this request header."),
+	query_parameter: z.string().optional().describe("Inject as this query parameter."),
+	json_pointer: z.string().optional().describe("Inject into this JSON body field (RFC 6901 pointer, e.g. /credentials/token)."),
+});
+
+/** Secret files: materialize a workspace secret (or inline text) as a file in the guest at runtime. */
+const secretFileSchema = z
+	.object({
+		path: pathSchema.describe("Absolute guest path to write, e.g. /home/tenki/.npmrc."),
+		secret_name: z.string().min(1).optional().describe("Workspace secret whose value becomes the file content."),
+		content: z.string().optional().describe("Inline (unresolved) text to write instead of a secret."),
+	})
+	.refine((f) => (f.secret_name !== undefined) !== (f.content !== undefined), "pass exactly one of secret_name or content");
+
 /** Non-secret/secret request-scoped env maps share the API's key/value bounds. */
 const MAX_ENV_PAIRS = 64;
 const boundedEnvSchema = z
@@ -21,15 +42,15 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 			inputSchema: z
 				.object({
 					name: z.string().max(64).optional().describe("Human-readable name."),
-					cpu_cores: z.number().int().min(1).max(16).optional().describe("vCPUs (default 2)."),
+					cpu_cores: z.number().int().min(1).max(128).optional().describe("vCPUs (default 2; API ceiling 128, your workspace plan may cap lower)."),
 					memory_mb: z
 						.number()
 						.int()
 						.min(128)
-						.max(65536)
+						.max(524288)
 						.refine((n) => n % 2 === 0, "memory_mb must be aligned to 2 MiB (even)")
 						.optional()
-						.describe("Memory in MB (default 4096; must be even)."),
+						.describe("Memory in MB (default 4096; must be even; API ceiling 524288, your workspace plan may cap lower)."),
 					disk_size_gb: z.number().int().min(5).max(100).optional().describe("Disk in GB (default 5; 5-100)."),
 					max_duration_seconds: z.number().int().positive().optional().describe("Hard lifetime cap in seconds."),
 					idle_timeout_minutes: z
@@ -73,6 +94,16 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.refine((o) => Object.keys(o).length <= MAX_ENV_PAIRS, `at most ${MAX_ENV_PAIRS} pairs`)
 						.optional()
 						.describe("Map of a declared runtime secret name to the workspace secret to use instead (≤64 pairs)."),
+					secret_files: z
+						.array(secretFileSchema)
+						.max(32)
+						.optional()
+						.describe("Files to write into the guest at boot from workspace secrets or inline text (≤32)."),
+					secret_requests: z
+						.array(secretRequestSchema)
+						.max(64)
+						.optional()
+						.describe("Workspace secrets injected into matching outbound HTTPS requests as a header, query parameter or JSON field, so the secret value never enters the sandbox (≤64)."),
 					volumes: z
 						.array(
 							z.object({
@@ -102,13 +133,13 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 			const owner = await client.resolveOwner();
 			const workspaceId = a.workspace_id ?? owner.workspaceId;
 			const wait = a.wait_ready !== false;
-			const egress =
-				(a.egress_allow_domains && a.egress_allow_domains.length) || (a.egress_allow_cidrs && a.egress_allow_cidrs.length)
-					? {
-							...(a.egress_allow_domains && a.egress_allow_domains.length ? { allowDomains: a.egress_allow_domains } : {}),
-							...(a.egress_allow_cidrs && a.egress_allow_cidrs.length ? { allowCidrs: a.egress_allow_cidrs } : {}),
-						}
-					: undefined;
+			const domains = a.egress_allow_domains?.length ? a.egress_allow_domains : undefined;
+			const cidrs = a.egress_allow_cidrs?.length ? a.egress_allow_cidrs : undefined;
+			const egress = domains || cidrs ? { ...(domains ? { allowDomains: domains } : {}), ...(cidrs ? { allowCidrs: cidrs } : {}) } : undefined;
+			// The API ignores the allowlist entirely unless outbound is on; refuse rather than boot a sandbox with no network.
+			if (egress && a.allow_outbound !== true) {
+				throw new Error("tenki_create_sandbox: egress_allow_domains/egress_allow_cidrs need allow_outbound: true — with outbound off (the default) the allowlist is ignored and the sandbox has no network at all.");
+			}
 			// allow_inbound / allow_outbound are `optional bool` with presence semantics on
 			// the wire, so an explicit false is sent, not dropped (sticky is a plain bool;
 			// sending false there is harmless).
@@ -134,6 +165,28 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 				...(a.setup_env && Object.keys(a.setup_env).length ? { setupEnv: a.setup_env } : {}),
 				...(a.setup_secrets && Object.keys(a.setup_secrets).length ? { setupSecrets: a.setup_secrets } : {}),
 				...(a.secret_overrides && Object.keys(a.secret_overrides).length ? { secretOverrides: a.secret_overrides } : {}),
+				...(a.secret_files && a.secret_files.length
+					? {
+							secretFiles: a.secret_files.map((f) => ({
+								path: f.path,
+								...(f.secret_name !== undefined ? { raw: { name: f.secret_name } } : { content: f.content }),
+							})),
+						}
+					: {}),
+				...(a.secret_requests && a.secret_requests.length
+					? {
+							secretRequests: a.secret_requests.map((r) => ({
+								name: r.name,
+								secretName: r.secret_name,
+								origin: r.origin,
+								...(r.methods && r.methods.length ? { methods: r.methods } : {}),
+								...(r.path_prefix ? { pathPrefix: r.path_prefix } : {}),
+								...(r.header ? { header: r.header } : {}),
+								...(r.query_parameter ? { queryParameter: r.query_parameter } : {}),
+								...(r.json_pointer ? { jsonPointer: r.json_pointer } : {}),
+							})),
+						}
+					: {}),
 				...(a.volumes && a.volumes.length
 					? {
 							volumes: a.volumes.map((v) => ({
