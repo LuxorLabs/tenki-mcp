@@ -116,6 +116,9 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 			clear_tags: z.boolean().optional().describe("Remove all tags from the snapshot."),
 		},
 		async ({ snapshot_id, name, expires_at, clear_expires_at, tags, clear_tags }) => {
+			if (expires_at !== undefined && clear_expires_at) {
+				throw new Error("tenki_update_snapshot: pass either expires_at or clear_expires_at, not both — clear would win and the new expiry would be silently dropped.");
+			}
 			const tagPatch = tagsPatch(tags, clear_tags);
 			if (name === undefined && expires_at === undefined && !clear_expires_at && !Object.keys(tagPatch).length) {
 				throw new Error("tenki_update_snapshot: pass at least one field to change — nothing was sent.");

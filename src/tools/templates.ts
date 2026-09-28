@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, envSchema } from "./common.js";
+import { envSchema, listQuery, ok, protoEnum, searchSchema, tagsPatch, tagsSchema } from "./common.js";
 
 /**
  * Template tools — custom-image templates and their builds.
@@ -34,11 +34,11 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			base_image_id: z.string().optional().describe("Base image ID to build on top of."),
 			setup_script: z.string().optional().describe("Shell script run at build time to provision the image. Required for a from-scratch template (the API rejects a create without it unless you derive from a parent template/image)."),
 			start_cmd: z.string().optional().describe("Command run when a sandbox boots from this template."),
-			cpu_cores: z.number().int().min(1).max(16).optional().describe("Default vCPUs for sandboxes from this template (1-16)."),
-			memory_mb: z.number().int().min(512).max(65536).optional().describe("Default memory in MB (512-65536)."),
+			cpu_cores: z.number().int().min(1).max(128).optional().describe("Default vCPUs for sandboxes from this template (1-128; workspace plan may cap lower)."),
+			memory_mb: z.number().int().min(512).max(524288).refine((n) => n % 2 === 0, "memory_mb must be even").optional().describe("Default memory in MB (512-524288, even)."),
 			disk_size_gb: z.number().int().min(5).max(100).optional().describe("Default disk in GB (5-100)."),
 			env_vars: envSchema,
-			tags: z.array(z.string()).optional().describe("Tags for later filtering."),
+			tags: tagsSchema.describe("Tags for later filtering (≤20, each ≤32 chars of a-z 0-9 _ : . -)."),
 			parent_template_id: z.string().optional().describe("Derive this template from an existing template."),
 			parent_image: z.string().optional().describe("Derive this template from an existing built image reference."),
 			builder_spec: z
@@ -81,20 +81,32 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 	// ── List ────────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_list_templates",
-		"List templates for the workspace, optionally filtered by tags.",
+		"List templates for the workspace with server-side search, build-state filter, tag filter, sorting and optional state-count facets.",
 		{
 			tags: z.array(z.string()).optional().describe("Only return templates that carry all of these tags."),
+			search: searchSchema.describe("Free-text search over template name/id (max 256 chars)."),
+			states: z
+				.array(z.enum(["READY", "BUILDING", "PENDING", "FAILED", "UNBUILT"]))
+				.max(16)
+				.optional()
+				.describe("Only templates whose latest build is in any of these states (UNBUILT = never built)."),
+			sort_by: z.enum(["NAME", "CREATED_AT", "UPDATED_AT"]).optional().describe("Column to sort by."),
+			sort_desc: z.boolean().optional().describe("Sort descending (default ascending)."),
+			include_facets: z.boolean().optional().describe("Also return per-state counts for the same filter scope."),
 			workspace_id: z.string().optional().describe("Workspace to list from (defaults to the key's first workspace)."),
-			page_size: z.number().int().positive().optional(),
+			page_size: z.number().int().min(1).max(100).optional(),
 			page_token: z.string().optional(),
 		},
-		async ({ tags, workspace_id, page_size, page_token }) => {
+		async ({ tags, search, states, sort_by, sort_desc, include_facets, workspace_id, page_size, page_token }) => {
 			const owner = await client.resolveOwner();
 			const workspaceId = workspace_id ?? owner.workspaceId;
 			return ok(
 				await client.control("ListTemplates", {
 					...(workspaceId ? { workspaceId } : {}),
 					...(tags && tags.length ? { tags } : {}),
+					...(states && states.length ? { states: states.map((s) => protoEnum("TEMPLATE_LIST_STATE", s)) } : {}),
+					...(sort_by ? { sortBy: protoEnum("TEMPLATE_SORT_FIELD", sort_by) } : {}),
+					...listQuery(search, include_facets, sort_desc),
 					...(page_size ? { pageSize: page_size } : {}),
 					...(page_token ? { pageToken: page_token } : {}),
 				}),
@@ -112,11 +124,11 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			base_image_id: z.string().optional().describe("New base image ID."),
 			setup_script: z.string().optional().describe("New build-time provisioning script."),
 			start_cmd: z.string().optional().describe("New boot command."),
-			cpu_cores: z.number().int().min(1).max(16).optional().describe("New default vCPUs (1-16)."),
-			memory_mb: z.number().int().min(512).max(65536).optional().describe("New default memory in MB (512-65536)."),
+			cpu_cores: z.number().int().min(1).max(128).optional().describe("New default vCPUs (1-128)."),
+			memory_mb: z.number().int().min(512).max(524288).refine((n) => n % 2 === 0, "memory_mb must be even").optional().describe("New default memory in MB (512-524288, even)."),
 			disk_size_gb: z.number().int().min(5).max(100).optional().describe("New default disk in GB (5-100)."),
 			env_vars: envSchema,
-			tags: z.array(z.string()).optional().describe("Replacement set of tags."),
+			tags: tagsSchema.describe("Replacement tag list. Pass [] (or clear_tags) to remove all tags."),
 			clear_tags: z.boolean().optional().describe("Remove all tags from the template."),
 			builder_spec: z.record(z.string(), z.unknown()).optional().describe("Advanced structured build spec (TemplateBuildSpec); passed through as-is."),
 		},
@@ -130,10 +142,12 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 				...(a.start_cmd !== undefined ? { startCmd: a.start_cmd } : {}),
 				...(a.env_vars && Object.keys(a.env_vars).length ? { envVars: a.env_vars } : {}),
 				...(Object.keys(resources).length ? { resources } : {}),
-				...(a.tags && a.tags.length ? { tags: a.tags } : {}),
-				...(a.clear_tags ? { clearTags: true } : {}),
+				...tagsPatch(a.tags, a.clear_tags),
 				...(a.builder_spec ? { builderSpec: a.builder_spec } : {}),
 			};
+			if (Object.keys(body).length === 1) {
+				throw new Error("tenki_update_template: pass at least one field to change — nothing was sent.");
+			}
 			return ok(await client.control("UpdateTemplate", body));
 		},
 	);

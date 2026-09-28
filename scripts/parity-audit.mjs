@@ -15,7 +15,7 @@
  * client.data(_, "X") calls, plus HELPER_COVERAGE for methods a tool reaches
  * through a client helper (e.g. read_file → ReadFile via client.readTextFile).
  *
- * Surface last synced to tenki-app origin/main 7685be8cba (2026-09-18). When the
+ * Surface last synced to tenki-app origin/main f88b3b1e5b (2026-09-28). When the
  * proto changes, update SURFACE / DEPRECATED here in the same PR.
  */
 import fs from "node:fs";

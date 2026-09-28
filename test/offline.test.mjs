@@ -194,6 +194,8 @@ try {
 		check("get_download_url no longer REQUIRES session_id", !(byName["tenki_get_download_url"]?.inputSchema?.required ?? []).includes("session_id"));
 		check("get_sandbox_metrics is registered as a read tool", byName["tenki_get_sandbox_metrics"]?.annotations?.readOnlyHint === true);
 		check("create_sandbox advertises egress + volumes + sticky", ["egress_allow_domains", "volumes", "sticky"].every((k) => props("tenki_create_sandbox").includes(k)));
+		check("create_sandbox advertises secret_files + secret_requests", ["secret_files", "secret_requests"].every((k) => props("tenki_create_sandbox").includes(k)));
+		check("list tools advertise search/states/sort_by/include_facets", ["tenki_list_workspace_sandboxes", "tenki_list_volumes", "tenki_list_templates", "tenki_list_preview_urls"].every((n) => ["search", "states", "sort_by", "include_facets"].every((k) => props(n).includes(k))));
 	}
 
 	// 4) unknown tool → clean error (thrown JSON-RPC error OR isError result), not a crash

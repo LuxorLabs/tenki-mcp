@@ -35,7 +35,7 @@ export function registerSsh(server: McpServer, client: TenkiClient): void {
 
 	server.tool(
 		"tenki_issue_ssh_cert",
-		"Issue a short-lived SSH certificate for a public key, authorizing SSH access to a sandbox via the SSH gateway. Returns the certificate, the CA public key for known_hosts pinning, expiry, and a renewal hint.",
+		"Issue a short-lived SSH certificate for a public key, authorizing SSH access to a sandbox via the SSH gateway. Returns the certificate, the CA public key (caPub) for known_hosts, expiry, a renewal hint, and pinHostKey — when true, verify the gateway host certificate against caPub (e.g. a `@cert-authority` known_hosts line) rather than trusting on first use.",
 		{
 			session_id: sessionIdSchema,
 			public_key: z

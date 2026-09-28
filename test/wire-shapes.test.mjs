@@ -38,6 +38,7 @@ const REPLIES = {
 	WhoAmI: { ownerType: "USER", ownerId: "u1", workspaces: [{ workspaceId: WS, name: "ws" }] },
 	CreateSession: { session: { id: SID, state: "SESSION_STATE_RUNNING" }, dataPlaneEndpoint: "http://127.0.0.1:1", warnings: [{ code: "SANDBOX_WARNING_CODE_MAX_DURATION_CAPPED", message: "capped" }] },
 	UpdateSession: { session: { id: SID }, warnings: [] },
+	GetSession: { session: { id: SID, state: "SESSION_STATE_RUNNING", sticky: false } },
 	ListActiveSSHGateways: { gateways: [] },
 	ListPreviewUrls: {},
 };
@@ -72,6 +73,11 @@ try {
 	await call("tenki_update_sandbox", { session_id: SID, max_duration_seconds: 900, tags: [] });
 	let b = last("UpdateSession");
 	check("update_sandbox: max_duration_seconds → maxDuration '900s' + sticky:false", b?.maxDuration === "900s" && b?.sticky === false, JSON.stringify(b));
+	check("update_sandbox: looked the sandbox up before defaulting sticky:false", (seen.get("GetSession") ?? []).length === 1);
+	REPLIES.GetSession = { session: { id: SID, state: "SESSION_STATE_RUNNING", sticky: true } };
+	const stickyRefused = await call("tenki_update_sandbox", { session_id: SID, max_duration_seconds: 900 });
+	check("update_sandbox: max_duration on a STICKY sandbox is refused without explicit sticky", stickyRefused.isError === true && /sticky/.test(text(stickyRefused)) && (seen.get("UpdateSession") ?? []).length === 1, text(stickyRefused).slice(0, 120));
+	REPLIES.GetSession = { session: { id: SID, state: "SESSION_STATE_RUNNING", sticky: false } };
 	check("update_sandbox: tags [] → clearTags:true and no empty tags array", b?.clearTags === true && !("tags" in (b ?? {})), JSON.stringify(b));
 	check("update_sandbox: never sends idleTimeoutMinutes", !("idleTimeoutMinutes" in (b ?? {})));
 	await call("tenki_update_sandbox", { session_id: SID, sticky: true, max_duration_seconds: 900 });
@@ -102,6 +108,7 @@ try {
 	const lp = await call("tenki_list_preview_urls", { session_id: SID, page_size: 5 });
 	b = last("ListPreviewUrls");
 	check("list_preview_urls: sessionId sent server-side", b?.sessionId === SID && b?.pageSize === 5, JSON.stringify(b));
+	check("list_preview_urls: no WhoAmI / workspaceId when session_id scopes the query", !("workspaceId" in (b ?? {})) && !seen.has("WhoAmI"));
 	check("list_preview_urls: empty page normalizes to previewUrls []", /"previewUrls":\s*\[\]/.test(text(lp)), text(lp));
 
 	// GetPreviewUrl: oneof id | slug
@@ -157,10 +164,55 @@ try {
 	check("create_sandbox: waitReady:true asks the server to hold until RUNNING", b?.waitReady === true);
 	check("create_sandbox: workspaceId resolved from WhoAmI", b?.workspaceId === WS);
 	check("create_sandbox: API warnings surfaced in the result", /MAX_DURATION_CAPPED/.test(text(cr)), text(cr).slice(0, 200));
-	check("create_sandbox: no GetSession poll when the server returned RUNNING", !seen.has("GetSession"));
+	check("create_sandbox: no GetSession poll when the server returned RUNNING", (seen.get("GetSession") ?? []).length === 2);
+
+	// Server-side list search / state filters / sort / facets (tenki-app #5747) use proto enum names
+	{
+		await call("tenki_list_workspace_sandboxes", { search: " web ", states: ["RUNNING", "PAUSED"], state: "RUNNING", order: "STATE_THEN_CREATED", sort_by: "CREATED_AT", sort_desc: true, include_facets: true, page_size: 10 });
+		const ls = last("ListWorkspaceSandboxes");
+		check("list_workspace_sandboxes: search trimmed, states/state/order/sortBy carry proto enum prefixes", ls?.search === "web" && ls?.states?.[1] === "SESSION_STATE_PAUSED" && ls?.state === "SESSION_STATE_RUNNING" && ls?.order === "SANDBOX_LIST_ORDER_STATE_THEN_CREATED" && ls?.sortBy === "SANDBOX_SORT_FIELD_CREATED_AT" && ls?.sortDesc === true && ls?.includeFacets === true, JSON.stringify(ls));
+		await call("tenki_list_volumes", { states: ["IN_USE"], sort_by: "SIZE_BYTES", search: "data" });
+		check("list_volumes: VOLUME_STATE_ / VOLUME_SORT_FIELD_ prefixes + search", last("ListVolumes")?.states?.[0] === "VOLUME_STATE_IN_USE" && last("ListVolumes")?.sortBy === "VOLUME_SORT_FIELD_SIZE_BYTES" && last("ListVolumes")?.search === "data", JSON.stringify(last("ListVolumes")));
+		await call("tenki_list_templates", { states: ["UNBUILT", "FAILED"], sort_by: "UPDATED_AT", sort_desc: true });
+		check("list_templates: TEMPLATE_LIST_STATE_ / TEMPLATE_SORT_FIELD_ prefixes", last("ListTemplates")?.states?.[0] === "TEMPLATE_LIST_STATE_UNBUILT" && last("ListTemplates")?.sortBy === "TEMPLATE_SORT_FIELD_UPDATED_AT" && last("ListTemplates")?.sortDesc === true, JSON.stringify(last("ListTemplates")));
+		await call("tenki_list_preview_urls", { states: ["ORPHANED"], sort_by: "SLUG", include_facets: true });
+		check("list_preview_urls: PREVIEW_URL_BINDING_STATE_ / PREVIEW_URL_SORT_FIELD_ prefixes", last("ListPreviewUrls")?.states?.[0] === "PREVIEW_URL_BINDING_STATE_ORPHANED" && last("ListPreviewUrls")?.sortBy === "PREVIEW_URL_SORT_FIELD_SLUG" && last("ListPreviewUrls")?.includeFacets === true, JSON.stringify(last("ListPreviewUrls")));
+		check("list tools omit search/sort/facet fields when not given", !("search" in (seen.get("ListPreviewUrls")?.[0] ?? {})) && !("sortBy" in (seen.get("ListPreviewUrls")?.[0] ?? {})));
+	}
+
+	// Workspace-secret injection on create (tenki-app #5707 / #5848 / #5849) + raised VM ceilings (#5832)
+	{
+		await call("tenki_create_sandbox", {
+			cpu_cores: 64,
+			memory_mb: 262144,
+			secret_files: [
+				{ path: "/home/tenki/.npmrc", secret_name: "npm-token" },
+				{ path: "/home/tenki/hello.txt", content: "hi" },
+			],
+			secret_requests: [{ name: "gh", secret_name: "github-pat", origin: "https://api.github.com", methods: ["GET"], path_prefix: "/repos", header: "Authorization" }],
+		});
+		const cs = last("CreateSession");
+		check("create_sandbox: 64 vCPU / 256 GiB accepted (API ceiling 128 / 512 GiB)", cs?.cpuCores === 64 && cs?.memoryMb === 262144, JSON.stringify({ c: cs?.cpuCores, m: cs?.memoryMb }));
+		check("create_sandbox: secret_files → secretFiles[{path, raw:{name}} | {path, content}]", cs?.secretFiles?.[0]?.raw?.name === "npm-token" && cs?.secretFiles?.[0]?.path === "/home/tenki/.npmrc" && cs?.secretFiles?.[1]?.content === "hi" && !("raw" in (cs?.secretFiles?.[1] ?? {})), JSON.stringify(cs?.secretFiles));
+		check("create_sandbox: secret_requests → secretRequests with lowerCamel field names", cs?.secretRequests?.[0]?.secretName === "github-pat" && cs?.secretRequests?.[0]?.pathPrefix === "/repos" && cs?.secretRequests?.[0]?.header === "Authorization" && cs?.secretRequests?.[0]?.methods?.[0] === "GET", JSON.stringify(cs?.secretRequests));
+		const bad = await call("tenki_create_sandbox", { secret_files: [{ path: "/x", secret_name: "a", content: "b" }] });
+		check("create_sandbox: a secret file with both secret_name and content is rejected pre-network", bad.isError === true && /exactly one of secret_name or content/.test(text(bad)));
+		const over = await call("tenki_create_sandbox", { cpu_cores: 129 });
+		check("create_sandbox: cpu_cores 129 rejected pre-network (ceiling 128)", over.isError === true && /128/.test(text(over)));
+	}
 
 	// Contradictory or empty updates are rejected before any call
 	{
+		const e1 = await call("tenki_update_snapshot", { snapshot_id: SNAP, expires_at: "2030-01-01T00:00:00Z", clear_expires_at: true });
+		check("update_snapshot: expires_at + clear_expires_at is rejected", e1.isError === true && /not both/.test(text(e1)));
+		const e2 = await call("tenki_create_sandbox", { egress_allow_domains: ["*.pypi.org"] });
+		check("create_sandbox: egress allowlist without allow_outbound is rejected pre-network", e2.isError === true && /allow_outbound: true/.test(text(e2)));
+		const e3 = await call("tenki_get_preview_url", { preview_url_id: "" });
+		check("get_preview_url: empty preview_url_id rejected pre-network", e3.isError === true && !/exactly one/.test(text(e3)) && (seen.get("GetPreviewUrl") ?? []).length === 2);
+		await call("tenki_update_template", { template_id: SNAP, tags: [] });
+		check("update_template: tags [] → clearTags:true", last("UpdateTemplate")?.clearTags === true && !("tags" in last("UpdateTemplate")));
+		const e4 = await call("tenki_update_template", { template_id: SNAP });
+		check("update_template: no fields → rejected", e4.isError === true && /at least one field/.test(text(e4)));
 		const before = (seen.get("UpdateSession") ?? []).length;
 		const r1 = await call("tenki_update_sandbox", { session_id: SID, tags: ["a"], clear_tags: true });
 		check("update_sandbox: tags + clear_tags is rejected (clear would silently win)", r1.isError === true && /not both/.test(text(r1)) && (seen.get("UpdateSession") ?? []).length === before, text(r1).slice(0, 120));
