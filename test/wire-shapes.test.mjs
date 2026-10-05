@@ -189,12 +189,24 @@ try {
 				{ path: "/home/tenki/.npmrc", secret_name: "npm-token" },
 				{ path: "/home/tenki/hello.txt", content: "hi" },
 			],
-			secret_requests: [{ name: "gh", secret_name: "github-pat", origin: "https://api.github.com", methods: ["GET"], path_prefix: "/repos", header: "Authorization" }],
+			secret_policies: ["github-readonly", "npm-publish"],
+			tailnet: { auth_key: "tskey-auth-k1-SECRET", hostname: "build-box", tags: ["tag:ci"], ephemeral: true, expose_ports: [8080], exit_node: "exit-1", exit_policy: "EXIT_NODE_MANAGED" },
 		});
 		const cs = last("CreateSession");
 		check("create_sandbox: 64 vCPU / 256 GiB accepted (API ceiling 128 / 512 GiB)", cs?.cpuCores === 64 && cs?.memoryMb === 262144, JSON.stringify({ c: cs?.cpuCores, m: cs?.memoryMb }));
 		check("create_sandbox: secret_files → secretFiles[{path, raw:{name}} | {path, content}]", cs?.secretFiles?.[0]?.raw?.name === "npm-token" && cs?.secretFiles?.[0]?.path === "/home/tenki/.npmrc" && cs?.secretFiles?.[1]?.content === "hi" && !("raw" in (cs?.secretFiles?.[1] ?? {})), JSON.stringify(cs?.secretFiles));
-		check("create_sandbox: secret_requests → secretRequests with lowerCamel field names", cs?.secretRequests?.[0]?.secretName === "github-pat" && cs?.secretRequests?.[0]?.pathPrefix === "/repos" && cs?.secretRequests?.[0]?.header === "Authorization" && cs?.secretRequests?.[0]?.methods?.[0] === "GET", JSON.stringify(cs?.secretRequests));
+		check("create_sandbox: secret_policies → secretPolicies (names only; SecretRequestBinding was removed upstream in #5913)", Array.isArray(cs?.secretPolicies) && cs.secretPolicies[1] === "npm-publish" && !("secretRequests" in (cs ?? {})), JSON.stringify(cs?.secretPolicies));
+		check("create_sandbox: tailnet → authKey, provider omitted when unset, exitNode + enum prefix", cs?.tailnet?.authKey === "tskey-auth-k1-SECRET" && !("provider" in (cs?.tailnet ?? {})) && cs?.tailnet?.hostname === "build-box" && cs?.tailnet?.tags?.[0] === "tag:ci" && cs?.tailnet?.ephemeral === true && cs?.tailnet?.exposePorts?.[0] === 8080 && cs?.tailnet?.exitNode === "exit-1" && cs?.tailnet?.exitPolicy === "TAILNET_EXIT_POLICY_EXIT_NODE_MANAGED" && !("wakeOnConnect" in (cs?.tailnet ?? {})) && !("ephemeralPausePolicy" in (cs?.tailnet ?? {})), JSON.stringify(cs?.tailnet));
+		const noExit = await call("tenki_create_sandbox", { tailnet: { auth_key: "tskey-x", exit_policy: "EXIT_NODE_MANAGED" } });
+		check("create_sandbox: EXIT_NODE_MANAGED without exit_node rejected pre-network", noExit.isError === true && /requires exit_node/.test(text(noExit)));
+		const dupTag = await call("tenki_create_sandbox", { tailnet: { auth_key: "tskey-x", tags: ["tag:ci", "tag:ci"] } });
+		check("create_sandbox: duplicate tailnet tags rejected pre-network", dupTag.isError === true && /unique/.test(text(dupTag)));
+		const httpUrl = await call("tenki_create_sandbox", { tailnet: { auth_key: "tskey-x", control_url: "http://headscale.local" } });
+		check("create_sandbox: non-https control_url rejected pre-network", httpUrl.isError === true && /https/.test(text(httpUrl)));
+		const badPolicy = await call("tenki_create_sandbox", { secret_policies: ["github readonly"] });
+		check("create_sandbox: secret policy name with a space rejected pre-network", badPolicy.isError === true && /policy names/.test(text(badPolicy)));
+		const badTag = await call("tenki_create_sandbox", { tailnet: { auth_key: "tskey-x", tags: ["ci"] } });
+		check("create_sandbox: tailnet tag without tag: prefix rejected pre-network", badTag.isError === true && /tag:name/.test(text(badTag)));
 		const bad = await call("tenki_create_sandbox", { secret_files: [{ path: "/x", secret_name: "a", content: "b" }] });
 		check("create_sandbox: a secret file with both secret_name and content is rejected pre-network", bad.isError === true && /exactly one of secret_name or content/.test(text(bad)));
 		const over = await call("tenki_create_sandbox", { cpu_cores: 129 });
