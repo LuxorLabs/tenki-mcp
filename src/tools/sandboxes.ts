@@ -2,19 +2,48 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, envSchema, pathSchema, sessionIdSchema, tagsSchema } from "./common.js";
+import { ok, envSchema, pathSchema, protoEnum, sessionIdSchema, tagsSchema } from "./common.js";
 
-/** Secret request bindings: inject a workspace secret into outbound HTTPS requests that match origin/method/path. */
-const secretRequestSchema = z.object({
-	name: z.string().min(1).describe("Binding name (unique within the sandbox)."),
-	secret_name: z.string().min(1).describe("Workspace secret to inject."),
-	origin: z.string().min(1).describe("Request origin to match, e.g. https://api.github.com."),
-	methods: z.array(z.string()).optional().describe("HTTP methods to match (omit for all)."),
-	path_prefix: z.string().optional().describe("Only requests whose path starts with this prefix."),
-	header: z.string().optional().describe("Inject as this request header."),
-	query_parameter: z.string().optional().describe("Inject as this query parameter."),
-	json_pointer: z.string().optional().describe("Inject into this JSON body field (RFC 6901 pointer, e.g. /credentials/token)."),
-});
+/** Tailnet attachment (tenki-app #5818): join the sandbox to a Tailscale tailnet with a direct auth key. */
+const unique = (xs: readonly unknown[]) => new Set(xs).size === xs.length;
+// wake_on_connect and ephemeral_pause_policy=RECREATE_ON_RESUME exist in the proto but the API
+// rejects them as Unimplemented ("requires milestone 2"), so they are not exposed yet.
+const tailnetSchema = z.object({
+	auth_key: z.string().min(1).max(4096).describe("Tailscale auth key (write-only; sent once to the API, never returned)."),
+	provider: z.enum(["tailscale"]).optional().describe("Tailnet provider (default tailscale)."),
+	hostname: z
+		.string()
+		.max(63)
+		.regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, "lowercase letters, digits and hyphens")
+		.optional()
+		.describe("Node hostname on the tailnet (default derived from the sandbox)."),
+	tags: z
+		.array(z.string().regex(/^tag:[a-z0-9-]+$/, "tags look like tag:name").max(128))
+		.max(16)
+		.refine(unique, "tags must be unique")
+		.optional()
+		.describe("ACL tags to advertise (tag:… form, ≤16, unique)."),
+	ephemeral: z.boolean().optional().describe("Register as an ephemeral node (removed from the tailnet when the sandbox ends)."),
+	control_url: z
+		.string()
+		.max(2048)
+		.regex(/^https:\/\/[^\s#@]+$/, "must be an https URL without userinfo or fragment")
+		.optional()
+		.describe("Alternative control server URL. Must be https and on the operator-approved control-URL list, otherwise the API returns permission_denied."),
+	exit_node: z.string().max(256).optional().describe("Exit node to route through."),
+	accept_routes: z.boolean().optional().describe("Accept subnet routes advertised on the tailnet."),
+	expose_ports: z
+		.array(z.number().int().min(1).max(65535))
+		.max(32)
+		.refine(unique, "ports must be unique")
+		.optional()
+		.describe("Sandbox ports reachable from the tailnet (≤32, unique)."),
+	wait_for_online: z.boolean().optional().describe("Hold sandbox creation until the node is online on the tailnet."),
+	exit_policy: z
+		.enum(["TENKI_ALLOWLIST", "EXIT_NODE_MANAGED"])
+		.optional()
+		.describe("Egress policy while attached: TENKI_ALLOWLIST keeps Tenki's egress rules; EXIT_NODE_MANAGED routes all egress through exit_node (requires exit_node and must be enabled for the workspace)."),
+}).refine((t) => t.exit_policy !== "EXIT_NODE_MANAGED" || !!t.exit_node, "exit_policy EXIT_NODE_MANAGED requires exit_node");
 
 /** Secret files: materialize a workspace secret (or inline text) as a file in the guest at runtime. */
 const secretFileSchema = z
@@ -99,11 +128,14 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.max(32)
 						.optional()
 						.describe("Files to write into the guest at boot from workspace secrets or inline text (≤32)."),
-					secret_requests: z
-						.array(secretRequestSchema)
+					secret_policies: z
+						.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/, "policy names: letters, digits, _ and -, max 128, no commas"))
 						.max(64)
 						.optional()
-						.describe("Workspace secrets injected into matching outbound HTTPS requests as a header, query parameter or JSON field, so the secret value never enters the sandbox (≤64)."),
+						.describe("Names of saved secret access policies to attach (≤64). A policy holds the request rules that inject a workspace secret into matching outbound HTTPS requests, so the value never enters the sandbox; policies are managed in the Tenki dashboard / workspace secrets API, not through this server."),
+					tailnet: tailnetSchema
+						.optional()
+						.describe("Join the sandbox to a Tailscale tailnet at boot (requires tailnet attachments to be enabled for the workspace; otherwise the API returns permission_denied). The session then carries a tailnetStatus (state, fqdn, ips)."),
 					volumes: z
 						.array(
 							z.object({
@@ -173,18 +205,22 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 							})),
 						}
 					: {}),
-				...(a.secret_requests && a.secret_requests.length
+				...(a.secret_policies && a.secret_policies.length ? { secretPolicies: a.secret_policies } : {}),
+				...(a.tailnet
 					? {
-							secretRequests: a.secret_requests.map((r) => ({
-								name: r.name,
-								secretName: r.secret_name,
-								origin: r.origin,
-								...(r.methods && r.methods.length ? { methods: r.methods } : {}),
-								...(r.path_prefix ? { pathPrefix: r.path_prefix } : {}),
-								...(r.header ? { header: r.header } : {}),
-								...(r.query_parameter ? { queryParameter: r.query_parameter } : {}),
-								...(r.json_pointer ? { jsonPointer: r.json_pointer } : {}),
-							})),
+							tailnet: {
+								authKey: a.tailnet.auth_key,
+								...(a.tailnet.provider ? { provider: a.tailnet.provider } : {}),
+								...(a.tailnet.hostname ? { hostname: a.tailnet.hostname } : {}),
+								...(a.tailnet.tags?.length ? { tags: a.tailnet.tags } : {}),
+								...(a.tailnet.ephemeral ? { ephemeral: true } : {}),
+								...(a.tailnet.control_url ? { controlUrl: a.tailnet.control_url } : {}),
+								...(a.tailnet.exit_node ? { exitNode: a.tailnet.exit_node } : {}),
+								...(a.tailnet.accept_routes ? { acceptRoutes: true } : {}),
+								...(a.tailnet.expose_ports?.length ? { exposePorts: a.tailnet.expose_ports } : {}),
+								...(a.tailnet.wait_for_online ? { waitForOnline: true } : {}),
+								...(a.tailnet.exit_policy ? { exitPolicy: protoEnum("TAILNET_EXIT_POLICY", a.tailnet.exit_policy) } : {}),
+							},
 						}
 					: {}),
 				...(a.volumes && a.volumes.length
