@@ -19,6 +19,7 @@ All notable changes to `@tenkicloud/mcp`. This project follows semantic versioni
 - `tenki_issue_ssh_cert` documents the new `pinHostKey` flag (verify the gateway host certificate against `caPub`).
 - Contradictory or empty updates are rejected before any call: `tags`+`clear_tags`, `expires_at`+`clear_expires_at`, an egress allowlist without `allow_outbound: true`, and update calls with nothing to change (sandbox, snapshot, volume, template).
 - Add `tenki_list_template_builds` (every build of a template with per-image storage and whether it can be deleted) and `tenki_delete_template_build` (free a build's image and any published image version carrying it; refused while the image is still referenced, e.g. published, in use by a non-terminated sandbox, building or tagged).
+- Update `@modelcontextprotocol/sdk` to 1.32.1 (fixes GHSA-6qxp-vccf-f47h: the OAuth client could send credentials to an authorization server chosen by the MCP server) and refresh transitive pins flagged by `npm audit`.
 
 ## [0.2.0] — 2026-08-21
 
