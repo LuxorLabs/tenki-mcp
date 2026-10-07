@@ -236,6 +236,12 @@ try {
 		check("get_sandbox_metrics: window under 60s rejected pre-network", r4.isError === true && /60/.test(text(r4)));
 	}
 
+	// Template build history / delete: templateId and buildId on the wire
+	await call("tenki_list_template_builds", { template_id: SNAP });
+	check("list_template_builds: sends templateId", last("ListTemplateBuilds")?.templateId === SNAP, JSON.stringify(last("ListTemplateBuilds")));
+	await call("tenki_delete_template_build", { build_id: VOL });
+	check("delete_template_build: sends buildId", last("DeleteTemplateBuild")?.buildId === VOL, JSON.stringify(last("DeleteTemplateBuild")));
+
 	// Removed workspace-settings RPCs are never called
 	check("no tool calls a removed workspace-settings RPC", ![...seen.keys()].some((m) => /WorkspaceSandboxSettings|SnapshotRetentionSettings/.test(m)));
 } catch (e) {

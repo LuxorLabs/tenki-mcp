@@ -98,7 +98,7 @@ try {
 	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
-	check("advertises 70 tools (69 + tenki_auth_status)", tools.length === 70, `${tools.length}`);
+	check("advertises 72 tools (71 + tenki_auth_status)", tools.length === 72, `${tools.length}`);
 	const names = tools.map((t) => t.name);
 	check("standalone registry terminology is absent", !/registry/i.test(JSON.stringify(tools)));
 	check("no duplicate tool names", new Set(names).size === names.length);
@@ -196,6 +196,7 @@ try {
 		check("create_sandbox advertises egress + volumes + sticky", ["egress_allow_domains", "volumes", "sticky"].every((k) => props("tenki_create_sandbox").includes(k)));
 		check("create_sandbox advertises secret_files + secret_policies + tailnet", ["secret_files", "secret_policies", "tailnet"].every((k) => props("tenki_create_sandbox").includes(k)));
 		check("list tools advertise search/states/sort_by/include_facets", ["tenki_list_workspace_sandboxes", "tenki_list_volumes", "tenki_list_templates", "tenki_list_preview_urls"].every((n) => ["search", "states", "sort_by", "include_facets"].every((k) => props(n).includes(k))));
+		check("template build history + delete tools advertised", props("tenki_list_template_builds").includes("template_id") && props("tenki_delete_template_build").includes("build_id"));
 	}
 
 	// 4) unknown tool → clean error (thrown JSON-RPC error OR isError result), not a crash

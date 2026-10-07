@@ -15,7 +15,7 @@
  * client.data(_, "X") calls, plus HELPER_COVERAGE for methods a tool reaches
  * through a client helper (e.g. read_file → ReadFile via client.readTextFile).
  *
- * Surface last synced to tenki-app origin/main c336b45176 (2026-10-03). When the
+ * Surface last synced to tenki-app origin/main c216496dc3 (2026-10-07). When the
  * proto changes, update SURFACE / DEPRECATED here in the same PR.
  */
 import fs from "node:fs";
@@ -48,7 +48,7 @@ const SURFACE = {
 		ListWorkspaceSnapshots: "TOOL",
 		CreateTemplate: "TOOL", GetTemplate: "TOOL", ListTemplates: "TOOL",
 		UpdateTemplate: "TOOL", DeleteTemplate: "TOOL", BuildTemplate: "TOOL", CancelTemplateBuild: "TOOL",
-		GetTemplateBuild: "TOOL", ListActiveTemplateBuilds: "TOOL",
+		GetTemplateBuild: "TOOL", ListActiveTemplateBuilds: "TOOL", ListTemplateBuilds: "TOOL", DeleteTemplateBuild: "TOOL",
 		PublishRegistryImage: "INTERNAL", GetRegistryImage: "INTERNAL", ListRegistryImages: "INTERNAL",
 		SetRegistryImageVisibility: "INTERNAL", DeleteRegistryImage: "INTERNAL", DeleteRegistryImageVersion: "INTERNAL",
 		ResolveRegistryRef: "INTERNAL", ShareImage: "INTERNAL", UnshareRegistryImage: "INTERNAL",

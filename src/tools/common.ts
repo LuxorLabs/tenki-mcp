@@ -9,6 +9,8 @@ const PUBLIC_KEYS: Record<string, string> = {
 	source_registry_workspace_id: "source_image_workspace_id",
 	sourceRegistryRef: "sourceImage",
 	source_registry_ref: "source_image",
+	registryImageName: "publishedImageName",
+	registry_image_name: "published_image_name",
 };
 
 /** Keep registry-backed implementation fields out of public MCP responses. */

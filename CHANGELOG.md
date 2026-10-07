@@ -18,6 +18,7 @@ All notable changes to `@tenkicloud/mcp`. This project follows semantic versioni
 - Server-side `search`, `states`, `sort_by` / `sort_desc` and `include_facets` on `tenki_list_workspace_sandboxes` (plus `order`), `tenki_list_volumes`, `tenki_list_templates` and `tenki_list_preview_urls`; preview-URL rows now include the bound sandbox's state and name.
 - `tenki_issue_ssh_cert` documents the new `pinHostKey` flag (verify the gateway host certificate against `caPub`).
 - Contradictory or empty updates are rejected before any call: `tags`+`clear_tags`, `expires_at`+`clear_expires_at`, an egress allowlist without `allow_outbound: true`, and update calls with nothing to change (sandbox, snapshot, volume, template).
+- Add `tenki_list_template_builds` (every build of a template with per-image storage and whether it can be deleted) and `tenki_delete_template_build` (free a build's image and any published image version carrying it; refused while the image is still referenced, e.g. published, in use by a non-terminated sandbox, building or tagged).
 
 ## [0.2.0] — 2026-08-21
 
