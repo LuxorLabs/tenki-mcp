@@ -98,7 +98,7 @@ try {
 	check("authorized client connects over Streamable HTTP", true);
 
 	const { tools } = await client.listTools();
-	check("tools/list over HTTP → 84 tools", tools.length >= 80, `${tools.length}`);
+	check("tools/list over HTTP → 72 tools", tools.length === 72, `${tools.length}`);
 
 	const res = await client.callTool({ name: "tenki_whoami", arguments: {} });
 	const j = JSON.parse(res.content?.find((c) => c.type === "text")?.text ?? "{}");

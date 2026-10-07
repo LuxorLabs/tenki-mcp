@@ -34,10 +34,10 @@ async function toolsWith(env) {
 try {
 	// 1) Default mode: annotations present + correct
 	const def = await toolsWith({});
-	check("default advertises 70 tools (69 + tenki_auth_status)", def.length === 70, `${def.length}`);
+	check("default advertises 72 tools (71 + tenki_auth_status)", def.length === 72, `${def.length}`);
 	const byName = Object.fromEntries(def.map((t) => [t.name, t]));
 	check("read tools carry readOnlyHint", byName["tenki_whoami"]?.annotations?.readOnlyHint === true && byName["tenki_get_sandbox"]?.annotations?.readOnlyHint === true);
-	check("destructive tools carry destructiveHint", byName["tenki_terminate_sandbox"]?.annotations?.destructiveHint === true && byName["tenki_delete_volume"]?.annotations?.destructiveHint === true);
+	check("destructive tools carry destructiveHint", byName["tenki_terminate_sandbox"]?.annotations?.destructiveHint === true && byName["tenki_delete_volume"]?.annotations?.destructiveHint === true && byName["tenki_delete_template_build"]?.annotations?.destructiveHint === true);
 	check("mutating (non-destructive) tools are NOT readOnly", byName["tenki_run_code"]?.annotations?.readOnlyHint !== true && byName["tenki_create_sandbox"]?.annotations?.destructiveHint !== true);
 	check("every tool declares openWorldHint (hits external API)", def.every((t) => t.annotations?.openWorldHint === true));
 	// Boundary cases the name-prefix heuristic must get right (not tautological):

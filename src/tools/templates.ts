@@ -13,7 +13,8 @@ import { envSchema, listQuery, ok, protoEnum, searchSchema, tagsPatch, tagsSchem
  * `tenki.sandbox.v1.SandboxService` protobuf (the wire contract the control
  * plane actually speaks). Notable shapes: sizing is a nested `resources` object
  * ({ cpuCores, memoryMb, diskSizeGb }); the env map is `envVars`; a build is
- * addressed by `buildId`; and ListActiveTemplateBuilds is scoped by `templateId`.
+ * addressed by `buildId`; and ListActiveTemplateBuilds / ListTemplateBuilds are scoped
+ * by `templateId`.
  */
 export function registerTemplates(server: McpServer, client: TenkiClient): void {
 	/** Assemble the nested TemplateResources object from flat sizing params (omitting any unset). */
@@ -220,4 +221,19 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 		async ({ template_id }) => ok(await client.control("ListActiveTemplateBuilds", { templateId: template_id })),
 	);
 
+	// ── List builds (history + storage) ─────────────────────────────────────────────
+	server.tool(
+		"tenki_list_template_builds",
+		"List every build of a template (not just active ones) with what each image holds in workspace storage: version, state, imageBytes, isCurrent, isLaunchable, and deleteBlockedReason (empty when tenki_delete_template_build can free it). Also returns the template-level storage totals.",
+		{ template_id: z.string().min(1).describe("The template ID whose builds to list.") },
+		async ({ template_id }) => ok(await client.control("ListTemplateBuilds", { templateId: template_id })),
+	);
+
+	// ── Delete build ────────────────────────────────────────────────────────────────
+	server.tool(
+		"tenki_delete_template_build",
+		"Delete one template build's image to free workspace storage and retire the build (irreversible; a published image version carrying this build is removed with it). Refused with failed_precondition when the image cannot be freed, e.g. the build is still running, its image is still being written or deleted, the template is published from it, a sandbox that is not terminated (running or paused) still uses it, or an image tag, share, snapshot variant or derived template references it — check deleteBlockedReason via tenki_list_template_builds first (empty = deletable). Deleting the template's current build repoints the template at its latest remaining launchable build, or leaves it with none. Returns freedBytes, or cleanupPending when the image is still being removed.",
+		{ build_id: z.string().min(1).describe("The template build ID to delete.") },
+		async ({ build_id }) => ok(await client.control("DeleteTemplateBuild", { buildId: build_id })),
+	);
 }
