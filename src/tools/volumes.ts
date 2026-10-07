@@ -15,7 +15,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
-import { ok, pathSchema, sessionIdSchema } from "./common.js";
+import { listQuery, ok, pathSchema, protoEnum, searchSchema, sessionIdSchema, tagsPatch, tagsSchema } from "./common.js";
 
 /** Volume size bounds the control plane accepts: 1 MiB … 100 GiB, in bytes. */
 const MIN_VOLUME_BYTES = 1_048_576; // 1 MiB
@@ -62,18 +62,26 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── List ──────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_list_volumes",
-		"List persistent volumes in a workspace (defaults to the key's first workspace). Supports pagination.",
+		"List persistent volumes in a workspace (defaults to the key's first workspace) with server-side search, state filter, sorting and optional state-count facets. Supports pagination.",
 		{
 			workspace_id: z.string().optional().describe("Workspace to list volumes from (defaults to the key's first workspace)."),
-			page_size: z.number().int().positive().optional().describe("Max volumes to return per page."),
+			search: searchSchema.describe("Free-text search over volume name/id (max 256 chars)."),
+			states: z.array(z.enum(["AVAILABLE", "IN_USE", "DELETING", "DELETED"])).max(16).optional().describe("Only volumes in any of these states."),
+			sort_by: z.enum(["NAME", "STATE", "SIZE_BYTES", "CREATED_AT"]).optional().describe("Column to sort by."),
+			sort_desc: z.boolean().optional().describe("Sort descending (default ascending)."),
+			include_facets: z.boolean().optional().describe("Also return per-state counts for the same filter scope."),
+			page_size: z.number().int().min(1).max(100).optional().describe("Max volumes to return per page (max 100)."),
 			page_token: z.string().optional().describe("Page token from a previous response's nextPageToken."),
 		},
-		async ({ workspace_id, page_size, page_token }) => {
+		async ({ workspace_id, search, states, sort_by, sort_desc, include_facets, page_size, page_token }) => {
 			const owner = await client.resolveOwner();
 			const workspaceId = workspace_id ?? owner.workspaceId;
 			return ok(
 				await client.control("ListVolumes", {
 					...(workspaceId ? { workspaceId } : {}),
+					...(states && states.length ? { states: states.map((s) => protoEnum("VOLUME_STATE", s)) } : {}),
+					...(sort_by ? { sortBy: protoEnum("VOLUME_SORT_FIELD", sort_by) } : {}),
+					...listQuery(search, include_facets, sort_desc),
 					...(page_size ? { pageSize: page_size } : {}),
 					...(page_token ? { pageToken: page_token } : {}),
 				}),
@@ -84,12 +92,26 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Update ────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_update_volume",
-		"Rename a volume (update its human-readable name). To change a volume's size use tenki_resize_volume instead.",
+		"Update a volume's name and/or tags (pass at least one). To change a volume's size use tenki_resize_volume instead.",
 		{
 			volume_id: z.string().describe("The volume id to update."),
-			name: z.string().describe("New human-readable name for the volume."),
+			name: z.string().min(1).max(64).optional().describe("New human-readable name for the volume."),
+			tags: tagsSchema.describe("Replacement tag list. Pass [] (or clear_tags) to remove all tags."),
+			clear_tags: z.boolean().optional().describe("Remove all tags from the volume."),
 		},
-		async ({ volume_id, name }) => ok(await client.control("UpdateVolume", { volumeId: volume_id, name })),
+		async ({ volume_id, name, tags, clear_tags }) => {
+			const tagPatch = tagsPatch(tags, clear_tags);
+			if (name === undefined && !Object.keys(tagPatch).length) {
+				throw new Error("tenki_update_volume: pass name, tags, or clear_tags — nothing was sent.");
+			}
+			return ok(
+				await client.control("UpdateVolume", {
+					volumeId: volume_id,
+					...(name !== undefined ? { name } : {}),
+					...tagPatch,
+				}),
+			);
+		},
 	);
 
 	// ── Delete ────────────────────────────────────────────────────────────────
@@ -131,7 +153,8 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 					volume: {
 						volumeId: volume_id,
 						mountPath: mount_path,
-						...(read_only !== undefined ? { readOnly: read_only } : {}),
+						// proto field is `readonly` (one word); `readOnly` is an unknown field the API discards.
+						...(read_only !== undefined ? { readonly: read_only } : {}),
 					},
 				}),
 			),
@@ -140,13 +163,14 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Detach ────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_detach_volume",
-		"Unmount a volume from a sandbox session.",
+		"Unmount a volume from a sandbox session. Set force to detach even when the guest still holds the mount busy.",
 		{
 			session_id: sessionIdSchema.describe("The sandbox session to detach the volume from."),
 			volume_id: z.string().describe("The volume id to detach."),
+			force: z.boolean().optional().describe("Force the detach even if the mount is busy (default false)."),
 		},
-		async ({ session_id, volume_id }) =>
-			ok(await client.control("DetachVolume", { sessionId: session_id, volumeId: volume_id })),
+		async ({ session_id, volume_id, force }) =>
+			ok(await client.control("DetachVolume", { sessionId: session_id, volumeId: volume_id, ...(force ? { forceDetach: true } : {}) })),
 	);
 
 }

@@ -14,7 +14,7 @@ Please **do not** open a public issue for security reports. Open a private [GitH
 
 ### Least privilege (MCP-07 — the main lever)
 Every tool is tagged with MCP **annotations** so clients can surface/gate danger:
-`readOnlyHint` on inspection tools, `destructiveHint` on the 13 that delete/terminate/revoke, `openWorldHint` on all (they call an external API). Plus two env controls:
+`readOnlyHint` on inspection tools, `destructiveHint` on the 11 that delete/terminate/revoke/detach/unbind, `openWorldHint` on all (they call an external API). Plus two env controls:
 
 | Env | Effect |
 |---|---|

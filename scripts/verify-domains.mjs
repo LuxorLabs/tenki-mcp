@@ -22,7 +22,7 @@ console.log(`owner: ${owner.ownerType}/${owner.ownerId?.slice(0,8)} ws=${ws?.sli
 
 console.log("── workspace + list ops (read-only, bodies as the tools send) ──");
 await check("GetWorkspaceSandboxUsage", () => client.control("GetWorkspaceSandboxUsage", { workspaceId: ws }));
-await check("GetWorkspaceSandboxSettings", () => client.control("GetWorkspaceSandboxSettings", { workspaceId: ws }));
+await check("GetWorkspacePreviewDomains", () => client.control("GetWorkspacePreviewDomains", { workspaceId: ws }));
 await check("ListVolumes", () => client.control("ListVolumes", { workspaceId: ws }));
 await check("ListSnapshots", () => client.control("ListSnapshots", {}));
 await check("ListDanglingSnapshots", () => client.control("ListDanglingSnapshots", {}));
@@ -62,6 +62,8 @@ try {
 	await check("ReportSessionActivity", () => client.control("ReportSessionActivity", { sessionId: sid }));
 	await check("ExtendSession", () => client.control("ExtendSession", { sessionId: sid, additionalDuration: "60s" }));
 	await check("UpdateSession (rename)", () => client.control("UpdateSession", { sessionId: sid, name: "mcp-verify" }));
+	await check("UpdateSession (max_duration implies sticky=false)", () => client.control("UpdateSession", { sessionId: sid, sticky: false, maxDuration: "900s" }));
+	await check("GetSessionMetrics", () => client.control("GetSessionMetrics", { sessionId: sid }));
 
 	const cs = await check("CreateSnapshot", () => client.control("CreateSnapshot", { sessionId: sid, name: "mcp-verify-snap" }));
 	snapId = cs?.snapshot?.id ?? cs?.id ?? cs?.snapshotId;
