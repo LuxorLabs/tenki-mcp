@@ -217,8 +217,8 @@ try {
 	{
 		const e1 = await call("tenki_update_snapshot", { snapshot_id: SNAP, expires_at: "2030-01-01T00:00:00Z", clear_expires_at: true });
 		check("update_snapshot: expires_at + clear_expires_at is rejected", e1.isError === true && /not both/.test(text(e1)));
-		const e2 = await call("tenki_create_sandbox", { egress_allow_domains: ["*.pypi.org"] });
-		check("create_sandbox: egress allowlist without allow_outbound is rejected pre-network", e2.isError === true && /allow_outbound: true/.test(text(e2)));
+		const e2 = await call("tenki_create_sandbox", { allow_outbound: false, egress_allow_domains: ["*.pypi.org"] });
+		check("create_sandbox: egress allowlist with allow_outbound:false is rejected pre-network", e2.isError === true && /allow_outbound: false/.test(text(e2)));
 		const e3 = await call("tenki_get_preview_url", { preview_url_id: "" });
 		check("get_preview_url: empty preview_url_id rejected pre-network", e3.isError === true && !/exactly one/.test(text(e3)) && (seen.get("GetPreviewUrl") ?? []).length === 2);
 		await call("tenki_update_template", { template_id: SNAP, tags: [] });
@@ -241,6 +241,65 @@ try {
 	check("list_template_builds: sends templateId", last("ListTemplateBuilds")?.templateId === SNAP, JSON.stringify(last("ListTemplateBuilds")));
 	await call("tenki_delete_template_build", { build_id: VOL });
 	check("delete_template_build: sends buildId", last("DeleteTemplateBuild")?.buildId === VOL, JSON.stringify(last("DeleteTemplateBuild")));
+
+	// Egress policies (tenki-app #6069): path oneof members are plain rule fields; revision is a number
+	const created = await call("tenki_create_egress_policy", {
+		name: "github_api",
+		allow_domains: ["api.github.com"],
+		intercept_https: true,
+		http_rules: [{ domains: ["api.github.com"], methods: ["GET"], path_prefix: "/repos/" }, { domains: ["*"], path_regex: "/health" }],
+	});
+	b = last("CreateEgressPolicy");
+	check("create_egress_policy: name + workspaceId + egress body", !created.isError && b?.name === "github_api" && b?.workspaceId === WS && b?.egress?.allowDomains?.[0] === "api.github.com" && b?.egress?.interceptHttps === true, JSON.stringify(b));
+	check("create_egress_policy: path_prefix → prefix, path_regex → regex, no path_* keys", b?.egress?.httpRules?.[0]?.prefix === "/repos/" && b?.egress?.httpRules?.[1]?.regex === "/health" && !JSON.stringify(b).includes("path_"), JSON.stringify(b?.egress?.httpRules));
+	check("create_egress_policy: methods sent, omitted when absent", b?.egress?.httpRules?.[0]?.methods?.[0] === "GET" && !("methods" in (b?.egress?.httpRules?.[1] ?? {})));
+	await call("tenki_update_egress_policy", { policy_id: "github_api", expected_revision: 3, allow_cidrs: ["10.0.0.0/8"] });
+	b = last("UpdateEgressPolicy");
+	check("update_egress_policy: policyId + numeric expectedRevision + egress", b?.policyId === "github_api" && b?.expectedRevision === 3 && b?.egress?.allowCidrs?.[0] === "10.0.0.0/8", JSON.stringify(b));
+	await call("tenki_get_egress_policy", { policy_id: "github_api", workspace_id: SID });
+	check("get_egress_policy: policyId + explicit workspaceId", last("GetEgressPolicy")?.policyId === "github_api" && last("GetEgressPolicy")?.workspaceId === SID, JSON.stringify(last("GetEgressPolicy")));
+	await call("tenki_list_egress_policies", { page_size: 10, cursor: "a" });
+	check("list_egress_policies: pageSize + cursor", last("ListEgressPolicies")?.pageSize === 10 && last("ListEgressPolicies")?.cursor === "a", JSON.stringify(last("ListEgressPolicies")));
+	await call("tenki_delete_egress_policy", { policy_id: "github_api", expected_revision: 4 });
+	check("delete_egress_policy: policyId + expectedRevision", last("DeleteEgressPolicy")?.policyId === "github_api" && last("DeleteEgressPolicy")?.expectedRevision === 4, JSON.stringify(last("DeleteEgressPolicy")));
+	{
+		const before = (seen.get("CreateEgressPolicy") ?? []).length;
+		const r1 = await call("tenki_create_egress_policy", { name: "p", allow_domains: ["a.com"], http_rules: [{ domains: ["a.com"] }] });
+		check("create_egress_policy: http_rules without intercept_https rejected pre-network", r1.isError === true && /intercept_https/.test(text(r1)));
+		const r2 = await call("tenki_create_egress_policy", { name: "p", allow_cidrs: ["10.0.0.0/8"], intercept_https: true });
+		check("create_egress_policy: intercept_https without a domain rejected pre-network", r2.isError === true && /domain/.test(text(r2)));
+		const r3 = await call("tenki_create_egress_policy", { name: "p", allow_domains: ["a.com"], intercept_https: true, http_rules: [{ domains: ["a.com"], path_exact: "/a", path_prefix: "/b" }] });
+		check("create_egress_policy: two path forms rejected", r3.isError === true && /at most one/.test(text(r3)));
+		const r4 = await call("tenki_create_egress_policy", { name: SID, allow_domains: ["a.com"] });
+		check("create_egress_policy: UUID-shaped name rejected", r4.isError === true && /UUID/.test(text(r4)));
+		const r5 = await call("tenki_create_egress_policy", { name: "p" });
+		check("create_egress_policy: empty body rejected", r5.isError === true && /domain or CIDR/.test(text(r5)));
+		check("create_egress_policy: no rejected call reached the API", (seen.get("CreateEgressPolicy") ?? []).length === before);
+		const r6 = await call("tenki_update_egress_policy", { policy_id: "p", allow_domains: ["a.com"] });
+		check("update_egress_policy: expected_revision is required", r6.isError === true && /expected_revision/.test(text(r6)));
+	}
+
+	// CreateSession: egress_policies pinned by name; inline interception + rules
+	await call("tenki_create_sandbox", { allow_outbound: true, egress_policies: ["github_api"], egress_http_rules: [{ domains: ["*"], methods: ["get"] }] });
+	b = last("CreateSession");
+	check("create_sandbox: egress_policies → egressPolicies", b?.egressPolicies?.[0] === "github_api", JSON.stringify(b));
+	check("create_sandbox: with named policies, inline http_rules go through without interceptHttps (the API merges first)", b?.egress?.httpRules?.[0]?.methods?.[0] === "get" && !("interceptHttps" in (b?.egress ?? {})), JSON.stringify(b?.egress));
+	await call("tenki_create_sandbox", { allow_outbound: true, egress_allow_domains: ["api.github.com"], egress_intercept_https: true, egress_http_rules: [{ domains: ["api.github.com"], path_exact: "/zen" }] });
+	b = last("CreateSession");
+	check("create_sandbox: egress_intercept_https + egress_http_rules → egress.interceptHttps/httpRules[].exact", b?.egress?.interceptHttps === true && b?.egress?.httpRules?.[0]?.exact === "/zen" && !("egressPolicies" in (b ?? {})), JSON.stringify(b?.egress));
+	{
+		const before = (seen.get("CreateSession") ?? []).length;
+		const r1 = await call("tenki_create_sandbox", { allow_outbound: false, egress_policies: ["github_api"] });
+		check("create_sandbox: egress_policies with allow_outbound:false rejected pre-network", r1.isError === true && /allow_outbound: false/.test(text(r1)));
+		const r2 = await call("tenki_create_sandbox", { allow_outbound: true, egress_allow_domains: ["a.com"], egress_http_rules: [{ domains: ["a.com"] }] });
+		check("create_sandbox: inline http_rules without interception (and no named policy) rejected", r2.isError === true && /intercept_https/.test(text(r2)));
+		const r3 = await call("tenki_create_sandbox", { allow_outbound: true, egress_policies: ["bad name"] });
+		check("create_sandbox: invalid egress policy name rejected", r3.isError === true);
+		check("create_sandbox: no rejected egress call reached the API", (seen.get("CreateSession") ?? []).length === before);
+	}
+	await call("tenki_create_sandbox", { egress_allow_domains: ["*.pypi.org"] });
+	b = last("CreateSession");
+	check("create_sandbox: egress allowlist with allow_outbound omitted is sent (API default is on) without an allowOutbound field", b?.egress?.allowDomains?.[0] === "*.pypi.org" && !("allowOutbound" in (b ?? {})), JSON.stringify(b));
 
 	// Removed workspace-settings RPCs are never called
 	check("no tool calls a removed workspace-settings RPC", ![...seen.keys()].some((m) => /WorkspaceSandboxSettings|SnapshotRetentionSettings/.test(m)));

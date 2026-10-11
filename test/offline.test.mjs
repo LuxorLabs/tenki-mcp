@@ -98,7 +98,7 @@ try {
 	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
-	check("advertises 72 tools (71 + tenki_auth_status)", tools.length === 72, `${tools.length}`);
+	check("advertises 77 tools (76 + tenki_auth_status)", tools.length === 77, `${tools.length}`);
 	const names = tools.map((t) => t.name);
 	check("standalone registry terminology is absent", !/registry/i.test(JSON.stringify(tools)));
 	check("no duplicate tool names", new Set(names).size === names.length);
@@ -196,6 +196,9 @@ try {
 		check("create_sandbox advertises egress + volumes + sticky", ["egress_allow_domains", "volumes", "sticky"].every((k) => props("tenki_create_sandbox").includes(k)));
 		check("create_sandbox advertises secret_files + secret_policies + tailnet", ["secret_files", "secret_policies", "tailnet"].every((k) => props("tenki_create_sandbox").includes(k)));
 		check("list tools advertise search/states/sort_by/include_facets", ["tenki_list_workspace_sandboxes", "tenki_list_volumes", "tenki_list_templates", "tenki_list_preview_urls"].every((n) => ["search", "states", "sort_by", "include_facets"].every((k) => props(n).includes(k))));
+		check("egress policy tools advertised", ["tenki_create_egress_policy", "tenki_update_egress_policy", "tenki_get_egress_policy", "tenki_list_egress_policies", "tenki_delete_egress_policy"].every((n) => byName[n]));
+		check("update/delete egress policy REQUIRE expected_revision", ["tenki_update_egress_policy", "tenki_delete_egress_policy"].every((n) => (byName[n]?.inputSchema?.required ?? []).includes("expected_revision")));
+		check("create_sandbox advertises egress_policies + egress_intercept_https + egress_http_rules", ["egress_policies", "egress_intercept_https", "egress_http_rules"].every((k) => props("tenki_create_sandbox").includes(k)));
 		check("template build history + delete tools advertised", props("tenki_list_template_builds").includes("template_id") && props("tenki_delete_template_build").includes("build_id"));
 	}
 
