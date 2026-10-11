@@ -125,7 +125,7 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Resize ────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_resize_volume",
-		"Grow a volume to a new size in bytes (1 MiB … 100 GiB). Volumes can grow but not shrink.",
+		"Change a volume's size in bytes (1 MiB … 100 GiB). Only a volume that has never been attached can be resized; once attached its size is fixed (failed_precondition), so create a new volume for a different size.",
 		{
 			volume_id: z.string().describe("The volume id to resize."),
 			size_bytes: sizeBytesSchema,
@@ -163,11 +163,11 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Detach ────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_detach_volume",
-		"Unmount a volume from a sandbox session. Set force to detach even when the guest still holds the mount busy.",
+		"Unmount a volume from a sandbox session and sync it back to storage. Set force to release an attachment stuck syncing (SYNC_PENDING) at once, or to unplug a volume the guest cannot unmount — writes the guest has not flushed are lost.",
 		{
 			session_id: sessionIdSchema.describe("The sandbox session to detach the volume from."),
 			volume_id: z.string().describe("The volume id to detach."),
-			force: z.boolean().optional().describe("Force the detach even if the mount is busy (default false)."),
+			force: z.boolean().optional().describe("Force the detach (default false). Unflushed guest writes are lost; on a host that does not support it yet the API returns failed_precondition."),
 		},
 		async ({ session_id, volume_id, force }) =>
 			ok(await client.control("DetachVolume", { sessionId: session_id, volumeId: volume_id, ...(force ? { forceDetach: true } : {}) })),

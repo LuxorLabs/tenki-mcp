@@ -135,7 +135,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 
 ## Tools
 
-**72 tools** — all 69 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
+**77 tools** — all 74 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
@@ -152,6 +152,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | **SSH** | `tenki_update_ssh_keys` · `tenki_issue_ssh_cert` · `tenki_list_ssh_gateways` |
 | **Snapshots** | create · get · list · list-session · list-workspace · list-dangling · update · delete · get-download-url |
 | **Volumes** | create · get · list · update · delete · resize · attach · detach |
+| **Egress policies** | create · get · list · update · delete (named workspace allowlists that `tenki_create_sandbox` pins via `egress_policies`) |
 | **Templates** | create · get · list · update · delete · build · cancel-build · get-build · list-active-builds · list-builds · delete-build |
 | **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_preview_domains` · `tenki_update_workspace_preview_domains` |
 

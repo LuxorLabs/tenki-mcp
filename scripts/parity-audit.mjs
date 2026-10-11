@@ -15,7 +15,7 @@
  * client.data(_, "X") calls, plus HELPER_COVERAGE for methods a tool reaches
  * through a client helper (e.g. read_file → ReadFile via client.readTextFile).
  *
- * Surface last synced to tenki-app origin/main c216496dc3 (2026-10-07). When the
+ * Surface last synced to tenki-app origin/main 17b6aba850 (2026-10-10). When the
  * proto changes, update SURFACE / DEPRECATED here in the same PR.
  */
 import fs from "node:fs";
@@ -53,6 +53,8 @@ const SURFACE = {
 		SetRegistryImageVisibility: "INTERNAL", DeleteRegistryImage: "INTERNAL", DeleteRegistryImageVersion: "INTERNAL",
 		ResolveRegistryRef: "INTERNAL", ShareImage: "INTERNAL", UnshareRegistryImage: "INTERNAL",
 		RevokeRegistryShareGrant: "INTERNAL", ListRegistryShareGrants: "INTERNAL",
+		CreateEgressPolicy: "TOOL", UpdateEgressPolicy: "TOOL", GetEgressPolicy: "TOOL", ListEgressPolicies: "TOOL",
+		DeleteEgressPolicy: "TOOL",
 		WhoAmI: "TOOL", GetWorkspaceSandboxUsage: "TOOL",
 		GetWorkspacePreviewDomains: "TOOL", UpdateWorkspacePreviewDomains: "TOOL",
 	},

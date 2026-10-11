@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
 import { ok, envSchema, pathSchema, protoEnum, sessionIdSchema, tagsSchema } from "./common.js";
+import { egressBodyToWire, httpRulesSchema, interceptHttpsSchema, policyNameSchema } from "./egress.js";
 
 /** Tailnet attachment (tenki-app #5818): join the sandbox to a Tailscale tailnet with a direct auth key. */
 const unique = (xs: readonly unknown[]) => new Set(xs).size === xs.length;
@@ -93,18 +94,27 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.optional()
 						.describe("Keep the sandbox alive with no hard lifetime cap (overrides max_duration/idle timeout with a warning). Not allowed for service credentials."),
 					clone_repo_url: z.string().optional().describe("Git URL to clone into the sandbox on boot."),
-					allow_outbound: z.boolean().optional().describe("Allow outbound networking (off by default)."),
+					allow_outbound: z.boolean().optional().describe("Allow outbound networking (on by default; a sandbox booted from a snapshot or template image inherits its parent's setting). false blocks all egress, including any egress allowlist."),
 					allow_inbound: z.boolean().optional().describe("Allow inbound networking (off by default)."),
 					egress_allow_domains: z
 						.array(z.string().max(253))
 						.max(256)
 						.optional()
-						.describe("Egress allowlist: exact hostnames or single-label '*.example.com' wildcards. Omit for unrestricted egress. Ignored when allow_outbound is false."),
+						.describe("Egress allowlist: exact hostnames or single-label '*.example.com' wildcards. Omit for unrestricted egress. Cannot be combined with allow_outbound: false. Any egress setting (this, egress_allow_cidrs, egress_intercept_https, egress_http_rules, egress_policies) is refused with failed_precondition if session egress policies are disabled for the workspace (on by default; Tenki staff can turn it off per workspace)."),
 					egress_allow_cidrs: z
 						.array(z.string().max(18))
 						.max(64)
 						.optional()
 						.describe("Egress allowlist: IPv4 prefixes reachable without a name lookup."),
+					egress_intercept_https: interceptHttpsSchema.optional(),
+					egress_http_rules: httpRulesSchema
+						.optional()
+						.describe("Per-host HTTP method/path rules (≤64). Need egress_intercept_https unless a pinned egress policy turns interception on. On ports 80 and 443 a request matching no rule is refused with 403."),
+					egress_policies: z
+						.array(policyNameSchema)
+						.max(16)
+						.optional()
+						.describe("Names of saved workspace egress policies to pin (≤16; see tenki_list_egress_policies). Merged with the inline egress_* fields at create; later edits or deletes of a policy do not change this sandbox. Cannot be combined with allow_outbound: false."),
 					snapshot_id: z.string().optional().describe("Boot from a snapshot."),
 					image: z
 						.string()
@@ -129,7 +139,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.optional()
 						.describe("Files to write into the guest at boot from workspace secrets or inline text (≤32)."),
 					secret_policies: z
-						.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/, "policy names: letters, digits, _ and -, max 128, no commas"))
+						.array(policyNameSchema)
 						.max(64)
 						.optional()
 						.describe("Names of saved secret access policies to attach (≤64). A policy holds the request rules that inject a workspace secret into matching outbound HTTPS requests, so the value never enters the sandbox; policies are managed in the Tenki dashboard / workspace secrets API, not through this server."),
@@ -165,12 +175,16 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 			const owner = await client.resolveOwner();
 			const workspaceId = a.workspace_id ?? owner.workspaceId;
 			const wait = a.wait_ready !== false;
-			const domains = a.egress_allow_domains?.length ? a.egress_allow_domains : undefined;
-			const cidrs = a.egress_allow_cidrs?.length ? a.egress_allow_cidrs : undefined;
-			const egress = domains || cidrs ? { ...(domains ? { allowDomains: domains } : {}), ...(cidrs ? { allowCidrs: cidrs } : {}) } : undefined;
-			// The API ignores the allowlist entirely unless outbound is on; refuse rather than boot a sandbox with no network.
-			if (egress && a.allow_outbound !== true) {
-				throw new Error("tenki_create_sandbox: egress_allow_domains/egress_allow_cidrs need allow_outbound: true — with outbound off (the default) the allowlist is ignored and the sandbox has no network at all.");
+			const egressPolicies = a.egress_policies?.length ? a.egress_policies : undefined;
+			// Named policies are merged with the inline fields server-side, so standalone checks only apply without them.
+			const egress = egressBodyToWire(
+				"tenki_create_sandbox",
+				{ allow_domains: a.egress_allow_domains, allow_cidrs: a.egress_allow_cidrs, intercept_https: a.egress_intercept_https, http_rules: a.egress_http_rules },
+				!egressPolicies,
+			);
+			// allow_outbound: false blocks all egress, so an allowlist alongside it is a contradiction.
+			if ((egress || egressPolicies) && a.allow_outbound === false) {
+				throw new Error("tenki_create_sandbox: egress_* fields and egress_policies cannot be combined with allow_outbound: false — that blocks all egress, so the allowlist would never apply.");
 			}
 			// allow_inbound / allow_outbound are `optional bool` with presence semantics on
 			// the wire, so an explicit false is sent, not dropped (sticky is a plain bool;
@@ -190,6 +204,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 				...(a.allow_outbound !== undefined ? { allowOutbound: a.allow_outbound } : {}),
 				...(a.allow_inbound !== undefined ? { allowInbound: a.allow_inbound } : {}),
 				...(egress ? { egress } : {}),
+				...(egressPolicies ? { egressPolicies } : {}),
 				...(a.snapshot_id ? { snapshotId: a.snapshot_id } : {}),
 				// The API still uses registryRef internally for template-image launches.
 				...(a.image ? { registryRef: a.image } : {}),
