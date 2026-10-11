@@ -31,12 +31,20 @@ export function registerFilesOps(server: McpServer, client: TenkiClient): void {
 			session_id: sessionIdSchema,
 			path: pathSchema.describe("Directory path under /home/tenki, e.g. /home/tenki/project/out"),
 			recursive: z.boolean().optional().describe("Create parent directories as needed (default false)."),
+			mode: z
+				.number()
+				.int()
+				.min(0)
+				.max(0o7777)
+				.optional()
+				.describe("Permission bits as a number (e.g. 448 for 0700). Default: the sandbox user's umask."),
 		},
-		async ({ session_id, path, recursive }) =>
+		async ({ session_id, path, recursive, mode }) =>
 			ok(
 				await client.data(session_id, "Mkdir", {
 					path,
 					...(recursive ? { recursive: true } : {}),
+					...(mode !== undefined ? { mode } : {}),
 				}),
 			),
 	);

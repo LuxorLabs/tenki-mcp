@@ -96,10 +96,11 @@ try {
 	// ── invalid-args-fail-fast: out-of-range args → zod InvalidParams pre-network ──────
 	await h.check("invalid-args: create_sandbox cpu/memory bounds rejected pre-network", async () => {
 		await expectZodReject("tenki_create_sandbox", { cpu_cores: 0 }); // min 1
-		await expectZodReject("tenki_create_sandbox", { cpu_cores: 17 }); // max 16
+		await expectZodReject("tenki_create_sandbox", { cpu_cores: 129 }); // max 128
 		await expectZodReject("tenki_create_sandbox", { cpu_cores: 1.5 }); // int
 		await expectZodReject("tenki_create_sandbox", { memory_mb: 127 }); // min 128
-		await expectZodReject("tenki_create_sandbox", { memory_mb: 65537 }); // max 65536
+		await expectZodReject("tenki_create_sandbox", { memory_mb: 524290 }); // max 524288
+		await expectZodReject("tenki_create_sandbox", { memory_mb: 1025 }); // must be even (2 MiB aligned)
 	});
 
 	await h.check("invalid-args: create_volume size bounds rejected pre-network (no volume created)", async () => {

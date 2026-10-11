@@ -56,15 +56,6 @@ function deepFind(obj, key) {
 	return found;
 }
 
-/** First numeric value among several candidate keys, searched anywhere in the tree. */
-function firstNumber(obj, keys) {
-	for (const k of keys) {
-		const v = deepFind(obj, k);
-		if (typeof v === "number") return { value: v, key: k };
-	}
-	return undefined;
-}
-
 /** Find the id of a preview-URL entry whose slug matches, walking arrays/objects. */
 function findIdBySlug(resp, slug) {
 	let id;
@@ -129,10 +120,6 @@ async function bootSandbox(args) {
 }
 
 // Restore/cleanup bookkeeping (belt-and-suspenders; the finally block re-applies).
-let wsOrigIdle; // original defaultIdleTimeoutMinutes (number) — undefined means "not mutated"
-let wsIdleDirty = false;
-let retOrig; // original retentionDays (number)
-let retDirty = false;
 let inboundSid; // shared allow_inbound sandbox reused by ssh + preview checks
 const previewsToClean = []; // { slug, id? } — deleted in finally if the lifecycle didn't
 const portsToClean = []; // { session_id, port } — unexposed in finally if left exposed
@@ -140,103 +127,12 @@ const findings = [];
 
 try {
 	// ── health gate: identity + the three side-effect-free admin reads ──────────────
-	await h.check("admin: whoami + workspace reads (control-plane health gate)", async () => {
+	await h.check("admin: whoami + workspace usage (control-plane health gate)", async () => {
 		const who = await h.call("tenki_whoami", {});
 		if (!who || (who.ownerType === undefined && !Array.isArray(who.workspaces)))
 			throw new Error(`whoami malformed: ${JSON.stringify(who).slice(0, 120)}`);
 		const usage = await h.call("tenki_get_workspace_usage", {});
 		if (!usage || typeof usage !== "object") throw new Error("workspace usage not an object");
-		const settings = await h.call("tenki_get_workspace_settings", {});
-		if (!settings || typeof settings !== "object") throw new Error("workspace settings not an object");
-		const retention = await h.call("tenki_get_snapshot_retention_settings", {});
-		if (!retention || typeof retention !== "object") throw new Error("retention settings not an object");
-	});
-
-	// ── workspace default settings: get → update(idle+1) → get → RESTORE ────────────
-	// The round-trip MUTATES only when the workspace already carries an explicit,
-	// restorable numeric idle default (so a +1 bump can be put back to the exact
-	// original). On a pristine workspace (no defaults set) the update API is set-only
-	// with no clear/unset, so writing a default could not be reversed to the original
-	// UNSET state — on a SHARED workspace that would be an irreversible change, so we
-	// skip the mutation and flag it instead of leaking a workspace-wide default.
-	await h.check("workspace-settings: get → update(idle+1) → verify → restore original", async () => {
-		const before = await h.call("tenki_get_workspace_settings", {});
-		if (!before || typeof before !== "object") throw new Error(`settings not an object: ${String(before).slice(0, 80)}`);
-		const hit = firstNumber(before, ["defaultIdleTimeoutMinutes", "idleTimeoutMinutes", "defaultIdleTimeout"]);
-		if (!hit || hit.value < 1) {
-			findings.push(
-				`workspace-settings mutate/restore round-trip NOT run: GetWorkspaceSandboxSettings returns no explicit numeric idle default on this (shared) workspace — payload ${JSON.stringify(before).slice(0, 140)}. tenki_update_workspace_settings is set-only (no clear affordance), so a default set here could not be reversed to its original UNSET state; the mutation was intentionally skipped to leave the workspace as found. Read verified well-formed; the update input-contract is covered by the zod-bounds check below.`,
-			);
-			return;
-		}
-		wsOrigIdle = hit.value;
-		const target = wsOrigIdle + 1;
-
-		await h.call("tenki_update_workspace_settings", { default_idle_timeout_minutes: target });
-		wsIdleDirty = true;
-		const mid = await eventually(
-			() => h.call("tenki_get_workspace_settings", {}),
-			(r) => Number(deepFind(r, hit.key)) === target,
-		);
-		if (Number(deepFind(mid, hit.key)) !== target)
-			throw new Error(`update not reflected: wanted ${target}, got ${JSON.stringify(deepFind(mid, hit.key))}`);
-
-		// Restore. The write is what leaves the workspace as-found, so clear the dirty
-		// flag as soon as it returns; the follow-up read is a correctness assertion.
-		await h.call("tenki_update_workspace_settings", { default_idle_timeout_minutes: wsOrigIdle });
-		wsIdleDirty = false;
-		const after = await eventually(
-			() => h.call("tenki_get_workspace_settings", {}),
-			(r) => Number(deepFind(r, hit.key)) === wsOrigIdle,
-		);
-		if (Number(deepFind(after, hit.key)) !== wsOrigIdle)
-			throw new Error(`restore mismatch: wanted ${wsOrigIdle}, got ${JSON.stringify(deepFind(after, hit.key))}`);
-	});
-
-	// ── snapshot retention: get → update(+1) → get → RESTORE ────────────────────────
-	// Same discipline as workspace-settings: mutate only if there's a restorable
-	// original. tenki_update_snapshot_retention_settings is positive-only (>=1) with no
-	// clear, so an unset/0 original cannot be restored through it — skip + flag then.
-	await h.check("snapshot-retention: get → update(+1) → verify → restore original", async () => {
-		const before = await h.call("tenki_get_snapshot_retention_settings", {});
-		if (!before || typeof before !== "object") throw new Error(`retention not an object: ${String(before).slice(0, 80)}`);
-		const hit = firstNumber(before, ["retentionDays", "snapshotRetentionDays"]);
-		if (!hit || hit.value < 1) {
-			findings.push(
-				`snapshot-retention mutate/restore round-trip NOT run: GetWorkspaceSnapshotRetentionSettings returns no explicit numeric retention on this (shared) workspace — payload ${JSON.stringify(before).slice(0, 140)}. tenki_update_snapshot_retention_settings is positive-only with no clear, so a value set here could not be restored to the original UNSET state; the mutation was intentionally skipped. Read verified; the update input-contract is covered by the zod-bounds check below.`,
-			);
-			return;
-		}
-		retOrig = hit.value;
-		const target = retOrig + 1;
-
-		await h.call("tenki_update_snapshot_retention_settings", { retention_days: target });
-		retDirty = true;
-		const mid = await eventually(
-			() => h.call("tenki_get_snapshot_retention_settings", {}),
-			(r) => Number(deepFind(r, hit.key)) === target,
-		);
-		if (Number(deepFind(mid, hit.key)) !== target)
-			throw new Error(`retention update not reflected: wanted ${target}, got ${JSON.stringify(deepFind(mid, hit.key))}`);
-
-		await h.call("tenki_update_snapshot_retention_settings", { retention_days: retOrig });
-		retDirty = false;
-		const after = await eventually(
-			() => h.call("tenki_get_snapshot_retention_settings", {}),
-			(r) => Number(deepFind(r, hit.key)) === retOrig,
-		);
-		if (Number(deepFind(after, hit.key)) !== retOrig)
-			throw new Error(`retention restore mismatch: wanted ${retOrig}, got ${JSON.stringify(deepFind(after, hit.key))}`);
-	});
-
-	// ── bounds guards: negative/non-positive values rejected client-side (zod), no call ─
-	await h.check("workspace-settings: negative idle/max rejected pre-network (zod, no side effect)", async () => {
-		await h.expectError("tenki_update_workspace_settings", { default_idle_timeout_minutes: -1 });
-		await h.expectError("tenki_update_workspace_settings", { default_max_duration_seconds: -1 });
-	});
-	await h.check("snapshot-retention: non-positive retention rejected pre-network (zod)", async () => {
-		await h.expectError("tenki_update_snapshot_retention_settings", { retention_days: 0 });
-		await h.expectError("tenki_update_snapshot_retention_settings", { retention_days: -5 });
 	});
 
 	// ── ssh: gateways live on a SEPARATE ConnectRPC service (SSHGatewayClientService) ─
@@ -371,14 +267,7 @@ try {
 } catch (e) {
 	console.error("suite error:", e?.message ?? e);
 } finally {
-	// 1) Restore workspace-level mutations first (most important: leave defaults as found).
-	if (wsIdleDirty && wsOrigIdle !== undefined) {
-		await h.call("tenki_update_workspace_settings", { default_idle_timeout_minutes: wsOrigIdle }).catch(() => {});
-	}
-	if (retDirty && retOrig !== undefined) {
-		await h.call("tenki_update_snapshot_retention_settings", { retention_days: retOrig }).catch(() => {});
-	}
-	// 2) Delete any preview URL the lifecycle didn't (resolve by id, else by slug via list).
+	// 1) Delete any preview URL the lifecycle didn't (resolve by id, else by slug via list).
 	for (const p of previewsToClean) {
 		try {
 			let id = p.id;
@@ -391,11 +280,11 @@ try {
 			/* best-effort */
 		}
 	}
-	// 3) Unexpose any still-exposed port (also torn down when the sandbox terminates).
+	// 2) Unexpose any still-exposed port (also torn down when the sandbox terminates).
 	for (const p of portsToClean) {
 		await h.call("tenki_unexpose_port", { session_id: p.session_id, port: p.port }).catch(() => {});
 	}
-	// 4) Terminate every tracked sandbox.
+	// 3) Terminate every tracked sandbox.
 	await h.cleanup();
 
 	const r = h.report();

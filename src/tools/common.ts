@@ -9,6 +9,8 @@ const PUBLIC_KEYS: Record<string, string> = {
 	source_registry_workspace_id: "source_image_workspace_id",
 	sourceRegistryRef: "sourceImage",
 	source_registry_ref: "source_image",
+	registryImageName: "publishedImageName",
+	registry_image_name: "published_image_name",
 };
 
 /** Keep registry-backed implementation fields out of public MCP responses. */
@@ -66,3 +68,41 @@ export const slugSchema = z
 	.max(63)
 	.regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, "lowercase letters, digits, and hyphens; cannot start or end with a hyphen")
 	.describe("Subdomain slug for the preview URL (3-63 chars, lowercase letters/digits/hyphens, no leading/trailing hyphen).");
+
+/**
+ * Shared tag-list schema, matching the API's repeated-string constraint on
+ * sessions, snapshots, volumes and templates: ≤20 tags, each ≤32 chars of
+ * [a-z0-9_:.-] starting with a letter or digit.
+ */
+export const tagsSchema = z
+	.array(z.string().max(32).regex(/^[a-z0-9][a-z0-9_:.-]*$/, "lowercase letters, digits, and _:.- ; must start with a letter or digit"))
+	.max(20)
+	.optional()
+	.describe("Tags (≤20, each ≤32 chars of a-z 0-9 _ : . -).");
+
+/**
+ * Wire mapping for the tags/clear_tags pair shared by sessions, snapshots and
+ * volumes. proto3 drops an empty repeated field, so `[]` becomes clear_tags;
+ * a non-empty list together with clear_tags is rejected because the server
+ * applies clear_tags first and would silently discard the list.
+ */
+export function tagsPatch(tags?: string[], clearTags?: boolean): { tags?: string[]; clearTags?: true } {
+	if (clearTags && tags && tags.length) {
+		throw new Error("pass either tags (a replacement list) or clear_tags, not both — clear_tags would win and the tags would be silently dropped.");
+	}
+	if (clearTags || (tags !== undefined && tags.length === 0)) return { clearTags: true };
+	return tags && tags.length ? { tags } : {};
+}
+
+/** Free-text search across a list (server-side; API max 256 chars). */
+export const searchSchema = z.string().max(256).optional();
+
+/** Prefix a bare enum name the way protobuf JSON expects it (e.g. RUNNING → SESSION_STATE_RUNNING). */
+export const protoEnum = (prefix: string, value: string): string => `${prefix}_${value}`;
+
+/** Common server-side list options shared by the sandbox, volume, template and preview-URL lists. */
+export const listQuery = (search?: string, includeFacets?: boolean, sortDesc?: boolean): Record<string, unknown> => ({
+	...(search && search.trim() ? { search: search.trim() } : {}),
+	...(includeFacets ? { includeFacets: true } : {}),
+	...(sortDesc ? { sortDesc: true } : {}),
+});

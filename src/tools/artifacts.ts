@@ -7,9 +7,9 @@
  * GetArtifactDownloadUrl to GET one out. These tools return the signed URL; the
  * caller performs the actual HTTP PUT/GET.
  *
- * GetArtifactUploadUrlRequest { sessionId, path, contentType } is verified from the
- * published Tenki API surface. GetArtifactDownloadUrl takes an artifactId only — the API
- * rejects a path (command stdout/stderr are surfaced as artifact ids).
+ * GetArtifactUploadUrlRequest is { session_id, path, content_type }.
+ * GetArtifactDownloadUrlRequest is { artifact_id } ONLY — there is no session_id
+ * field (the API discards unknown fields silently), so the tool no longer requires one.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -38,13 +38,13 @@ export function registerArtifacts(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_get_download_url",
-		"Get a short-lived signed URL to download (HTTP GET) a command artifact from a sandbox by its artifact id (e.g. a command's stdout/stderr artifact). Note: the API supports download-by-artifact-id only, not download-by-path.",
+		"Get a short-lived signed URL to download (HTTP GET) an artifact by its artifact id (e.g. the artifactId returned by tenki_get_upload_url, or a template build's buildLogArtifactId). The API supports download-by-artifact-id only, not download-by-path.",
 		{
-			session_id: sessionIdSchema,
-			artifact_id: z.string().describe("Artifact id to download (e.g. a command's stdout/stderr artifact)."),
+			artifact_id: z.string().describe("Artifact id (UUID) to download."),
+			session_id: sessionIdSchema
+				.optional()
+				.describe("Ignored — kept for backwards compatibility; the API addresses artifacts by id alone."),
 		},
-		// GetArtifactDownloadUrl only accepts an artifact UUID; a `path` is rejected (live-verified).
-		async ({ session_id, artifact_id }) =>
-			ok(await client.control("GetArtifactDownloadUrl", { sessionId: session_id, artifactId: artifact_id })),
+		async ({ artifact_id }) => ok(await client.control("GetArtifactDownloadUrl", { artifactId: artifact_id })),
 	);
 }

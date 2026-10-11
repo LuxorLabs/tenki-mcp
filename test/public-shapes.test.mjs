@@ -2,6 +2,7 @@ import { publicValue } from "../dist/tools/common.js";
 
 const source = {
 	registryRef: "workspace/template:latest",
+	registryImageName: "ws/tmpl:v1",
 	session: {
 		sourceRegistryImageId: "image-id",
 		sourceRegistryWorkspaceId: "workspace-id",
@@ -17,6 +18,7 @@ if (/registry/i.test(encoded)) {
 	throw new Error(`public response leaked internal field names: ${encoded}`);
 }
 if (result.image !== source.registryRef) throw new Error("registryRef was not exposed as image");
+if (result.publishedImageName !== source.registryImageName || "registryImageName" in result) throw new Error("registryImageName was not exposed as publishedImageName");
 if (result.session.sourceImageId !== "image-id") throw new Error("source image id was not normalized");
 if (result.session.sourceImageWorkspaceId !== "workspace-id") throw new Error("source image workspace was not normalized");
 if (result.session.sourceImage !== source.registryRef) throw new Error("source image was not normalized");
