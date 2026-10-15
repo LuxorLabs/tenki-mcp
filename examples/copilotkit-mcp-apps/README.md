@@ -93,6 +93,7 @@ node scripts/deploy-vercel.mjs   # chat app → Vercel (uses the CLI token alrea
 
 Three things that bite:
 
+- **The host must be sticky.** `npm run deploy` creates it with `sticky: true`, which exempts it from the workspace lifetime cap (`timeoutAt` comes back as 9999-12-31). Without it, the next point applies to the host too.
 - **Tenki caps a sandbox's lifetime and PAUSES it at the cap** — 2h in this workspace, whatever `maxDuration` asks for. A paused host is frozen and its preview route disappears, so the hosted chat quietly loses its tools; the agent then says the sandbox tools "aren't available". Resuming a paused host has hung in RESUMING for minutes, so `npm run deploy` replaces it instead. Run `npm run keepalive` during a demo: it watches `/healthz` and redeploys when the host goes down (about a minute). The warm pool pauses the same way — re-run `npm run warm`.
 - The host sandbox carries **only** `mcp-host`, never the demo tag. Tagged as a demo sandbox, "destroy all demo sandboxes" terminates the server serving that request (it did, once).
 - Anyone who opens the deployed chat can spend your model credits and boot sandboxes in that workspace. Take the deployment down, or put Vercel protection on it, once the talk is over.

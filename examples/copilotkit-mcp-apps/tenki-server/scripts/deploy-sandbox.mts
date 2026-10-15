@@ -74,7 +74,7 @@ if (drop) {
 }
 
 let sessionId: string;
-if (existing && String(existing.state).includes("RUNNING")) {
+if (existing && String(existing.state).includes("RUNNING") && existing.sticky) {
 	sessionId = existing.id;
 	console.log(`Reusing host sandbox ${existing.name} (${sessionId})`);
 } else {
@@ -91,10 +91,14 @@ if (existing && String(existing.state).includes("RUNNING")) {
 		...(owner.ownerId ? { ownerId: owner.ownerId } : {}),
 		...(owner.workspaceId ? { workspaceId: owner.workspaceId } : {}),
 		name: HOST_NAME,
-		cpuCores: 2,
-		memoryMb: 4096,
-		maxDuration: "86400s",
-		idleTimeoutMinutes: 1440,
+		// Sticky: exempt from the workspace lifetime cap. An ordinary sandbox is
+		// paused at the cap (2h here) whatever maxDuration asks for, which froze
+		// this host and withdrew its preview route every two hours; it took a
+		// keepalive on someone's laptop to put it back. A sticky host just stays.
+		// It is always on, so it is sized for an Express server, not a workload.
+		sticky: true,
+		cpuCores: 1,
+		memoryMb: 2048,
 		allowInbound: true,
 		allowOutbound: true,
 		// HOST_TAG only, never the demo tag: the demo's own teardown must not be
