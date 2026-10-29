@@ -1,0 +1,43 @@
+name: Fork PR probe
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-small-2c-4g' }}
+    steps:
+      - name: Runner identity
+        run: |
+          echo "runner=$RUNNER_NAME os=$RUNNER_OS fork=${{ github.event.pull_request.head.repo.fork }}"
+          echo "head_repo=${{ github.event.pull_request.head.repo.full_name }} base=${{ github.repository }}"
+          echo "self-hosted check: $(uname -a)"
+      - name: Secret visibility
+        env:
+          S_NPM: ${{ secrets.NPM_TOKEN }}
+          S_BUF: ${{ secrets.BUF_TOKEN }}
+          S_GITHUB: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for v in S_NPM S_BUF S_GITHUB; do
+            val="${!v}"
+            if [ -n "$val" ]; then echo "$v=PRESENT len=${#val}"; else echo "$v=EMPTY"; fi
+          done
+      - name: OIDC token
+        run: |
+          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then echo "OIDC: no request url"; exit 0; fi
+          tok=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=pentest" | python3 -c 'import sys,json;print(json.load(sys.stdin)["value"])')
+          echo "OIDC: token len=${#tok}"
+          python3 - "$tok" <<'PY'
+          import sys,base64,json
+          p=sys.argv[1].split('.')[1]; p+='='*(-len(p)%4)
+          c=json.loads(base64.urlsafe_b64decode(p))
+          for k in ('iss','aud','sub','repository','repository_owner','ref','event_name'):
+              print(f"  {k}={c.get(k)}")
+          PY
+      - name: Can a fork PR reach the registry
+        run: npm view @tenkicloud/mcp version
