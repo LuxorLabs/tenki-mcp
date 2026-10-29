@@ -1,0 +1,23 @@
+name: Fork PR probe 3
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "--- auth status (scopes as seen by the token):"
+          gh auth status 2>&1 | sed -n '1,6p' || true
+          echo "--- write to base repo (comment on the PR):"
+          gh api -X POST repos/$GITHUB_REPOSITORY/issues/52/comments -f body="fork-token write probe $(date -u +%H%M%S)" --jq '.id' 2>&1 | head -2
+          echo "--- write to the fork (push an empty commit ref):"
+          gh api -X PATCH repos/${GITHUB_REPOSITORY}/pulls/52 -f title="[pentest] W7.2 fork-PR probe (do not merge)" --jq '.number' 2>&1 | head -2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
