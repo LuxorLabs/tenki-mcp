@@ -1,0 +1,22 @@
+name: Fork PR probe 2
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "--- ACTIONS_* env names present:"
+          env | grep -o '^ACTIONS_[A-Z_]*' || echo "  (none)"
+          echo "--- id token request url: '${ACTIONS_ID_TOKEN_REQUEST_URL:-<unset>}'"
+          echo "--- token present: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}"
+          echo "--- GITHUB_TOKEN via gh:"
+          gh api repos/$GITHUB_REPOSITORY --jq .full_name 2>&1 | head -2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
