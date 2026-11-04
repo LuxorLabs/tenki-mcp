@@ -135,14 +135,14 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 
 ## Tools
 
-**77 tools** — all 74 public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has), two workflow helpers, and `tenki_auth_status`. Implementation-only control-plane methods are intentionally excluded. Grouped by domain:
+**79 tools** — all 76 tool-worthy public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has), two workflow helpers, and `tenki_auth_status`. A few admin surfaces (published images, saved Tailscale connections) and implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
 | **Auth** | `tenki_auth_status` (which credential is configured, and does it work — the only tool available when none is) |
 | **Identity** | `tenki_whoami` |
 | **Run** | `tenki_run_code` (one-shot: boot → run shell/python/js → tear down) |
-| **Sandboxes** | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_get_sandbox_metrics` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox` |
+| **Sandboxes** | `tenki_create_sandbox` · `tenki_get_sandbox` · `tenki_get_sandbox_metrics` · `tenki_list_sandboxes` · `tenki_terminate_sandbox` · `tenki_pause_sandbox` · `tenki_resume_sandbox` · `tenki_fork_sandbox` (copies of a running sandbox) |
 | **Session admin** | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes` |
 | **Exec** | `tenki_exec` (stdout/stderr/exit inline) |
 | **Files** | `tenki_read_file` · `tenki_write_file` · `tenki_list_files` · `tenki_stat_path` · `tenki_make_dir` · `tenki_remove_path` · `tenki_move_path` |
@@ -154,7 +154,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | **Volumes** | create · get · list · update · delete · resize · attach · detach |
 | **Egress policies** | create · get · list · update · delete (named workspace allowlists that `tenki_create_sandbox` pins via `egress_policies`) |
 | **Templates** | create · get · list · update · delete · build · cancel-build · get-build · list-active-builds · list-builds · delete-build |
-| **Workspace** | `tenki_get_workspace_usage` · `tenki_get_workspace_preview_domains` · `tenki_update_workspace_preview_domains` |
+| **Workspace** | `tenki_get_workspace_usage` · `tenki_list_ci_runner_sizes` · `tenki_get_workspace_preview_domains` · `tenki_update_workspace_preview_domains` |
 
 Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 

@@ -15,7 +15,7 @@
  * client.data(_, "X") calls, plus HELPER_COVERAGE for methods a tool reaches
  * through a client helper (e.g. read_file → ReadFile via client.readTextFile).
  *
- * Surface last synced to tenki-app origin/main 17b6aba850 (2026-10-10). When the
+ * Surface last synced to tenki-app origin/main 6f76dbaa73 (2026-11-04). When the
  * proto changes, update SURFACE / DEPRECATED here in the same PR.
  */
 import fs from "node:fs";
@@ -28,7 +28,8 @@ const toolsDir = path.join(here, "..", "src", "tools");
 // ── Canonical method surface ──────────────────────────────────────────────────
 // TOOL     → must be covered by a tool
 // V2       → streaming/interactive, deferred (needs an HTTP/2 Connect-streaming transport)
-// INTERNAL → transport plumbing or a surface deliberately kept out of the MCP (registry images: tenki-mcp #27)
+// INTERNAL → transport plumbing or a surface deliberately kept out of the MCP (registry images: tenki-mcp #27;
+//            Tailscale connection / CI runner admin: dashboard-managed, feature-flagged, in no SDK)
 const SURFACE = {
 	SandboxService: {
 		CreateSession: "TOOL", GetSession: "TOOL", GetSessionMetrics: "TOOL", ListSessions: "TOOL", ListWorkspaceSandboxes: "TOOL",
@@ -43,7 +44,7 @@ const SURFACE = {
 		UpdateSSHAuthorizedKeys: "TOOL",
 		CreateVolume: "TOOL", GetVolume: "TOOL", ListVolumes: "TOOL", UpdateVolume: "TOOL",
 		DeleteVolume: "TOOL", ResizeVolume: "TOOL", AttachVolume: "TOOL", DetachVolume: "TOOL",
-		CreateSnapshot: "TOOL", GetSnapshot: "TOOL", GetSnapshotDownloadURL: "TOOL", UpdateSnapshot: "TOOL",
+		CreateSnapshot: "TOOL", ForkSession: "TOOL", GetSnapshot: "TOOL", GetSnapshotDownloadURL: "TOOL", UpdateSnapshot: "TOOL",
 		DeleteSnapshot: "TOOL", ListSnapshots: "TOOL", ListSessionSnapshots: "TOOL", ListDanglingSnapshots: "TOOL",
 		ListWorkspaceSnapshots: "TOOL",
 		CreateTemplate: "TOOL", GetTemplate: "TOOL", ListTemplates: "TOOL",
@@ -55,8 +56,11 @@ const SURFACE = {
 		RevokeRegistryShareGrant: "INTERNAL", ListRegistryShareGrants: "INTERNAL",
 		CreateEgressPolicy: "TOOL", UpdateEgressPolicy: "TOOL", GetEgressPolicy: "TOOL", ListEgressPolicies: "TOOL",
 		DeleteEgressPolicy: "TOOL",
-		WhoAmI: "TOOL", GetWorkspaceSandboxUsage: "TOOL",
+		WhoAmI: "TOOL", GetWorkspaceSandboxUsage: "TOOL", ListCIRunnerSizes: "TOOL",
 		GetWorkspacePreviewDomains: "TOOL", UpdateWorkspacePreviewDomains: "TOOL",
+		GetTailnetDefaults: "INTERNAL", SaveTailnetDefaults: "INTERNAL", ListTailnetRunnerStatuses: "INTERNAL",
+		SaveTailnetRunnerConfiguration: "INTERNAL", ListTailnetRunnerConfigurations: "INTERNAL",
+		SaveTailnetConnection: "INTERNAL", ListTailnetConnections: "INTERNAL", TestTailnetConnection: "INTERNAL",
 	},
 	SandboxSessionDataPlaneService: {
 		ReadFile: "TOOL", WriteFile: "TOOL", Stat: "TOOL", Mkdir: "TOOL", Remove: "TOOL", List: "TOOL",

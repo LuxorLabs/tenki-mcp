@@ -9,8 +9,8 @@ import { ok } from "./common.js";
  * that tenki_create_sandbox pins by name via `egress_policies`. A session keeps
  * the expansion it was created with; later edits or deletes do not change it.
  * Wire shape: SessionEgressPolicy { allowDomains, allowCidrs, interceptHttps,
- * httpRules[{ domains, methods, exact | prefix | regex }] } — the path oneof
- * members are plain fields on the rule.
+ * httpRules[{ domains, methods, exact | prefix | regex }], allowedPorts } — the
+ * path oneof members are plain fields on the rule.
  */
 
 const POLICY_NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,127}$/;
@@ -64,17 +64,26 @@ export const allowCidrsSchema = z
 	.describe("Allowed IPv4 prefixes reachable without a name lookup (≤64; not 0.0.0.0/0).");
 export const interceptHttpsSchema = z
 	.boolean()
-	.describe("Terminate port-443 TLS with the sandbox's managed CA so each request's Host is checked; requires at least one allowed domain.");
+	.describe(
+		"Terminate port-443 TLS with the sandbox's managed CA so each request's Host is checked; requires at least one allowed domain. With interception on, public egress is limited to TCP 80/443 through the proxy; other ports are blocked unless listed in allowed_ports.",
+	);
 export const httpRulesSchema = z
 	.array(httpRuleSchema)
 	.max(64)
 	.describe("Per-host HTTP method/path rules (≤64; requires intercept_https). On ports 80 and 443 a request matching no rule is refused with 403.");
+export const allowedPortsSchema = z
+	.array(z.number().int().min(1).max(65535))
+	.max(64)
+	.describe(
+		"Extra public TCP ports to open besides 80/443 (≤64; requires intercept_https). They skip HTTP inspection but still reach only allowed destinations, so 22 permits git over SSH, including pushes.",
+	);
 
 export interface EgressBody {
 	allow_domains?: string[];
 	allow_cidrs?: string[];
 	intercept_https?: boolean;
 	http_rules?: HttpRule[];
+	allowed_ports?: number[];
 }
 
 /**
@@ -86,17 +95,20 @@ export function egressBodyToWire(tool: string, b: EgressBody, requireComplete: b
 	const domains = b.allow_domains?.length ? b.allow_domains : undefined;
 	const cidrs = b.allow_cidrs?.length ? b.allow_cidrs : undefined;
 	const rules = b.http_rules?.length ? b.http_rules : undefined;
+	const ports = b.allowed_ports?.length ? b.allowed_ports : undefined;
 	if (requireComplete) {
-		if (!domains && !cidrs && (b.intercept_https || rules)) throw new Error(`${tool}: an egress policy must list at least one allowed domain or CIDR.`);
+		if (!domains && !cidrs && (b.intercept_https || rules || ports)) throw new Error(`${tool}: an egress policy must list at least one allowed domain or CIDR.`);
 		if (b.intercept_https && !domains) throw new Error(`${tool}: intercept_https requires at least one allowed domain.`);
 		if (rules && !b.intercept_https) throw new Error(`${tool}: http_rules require intercept_https: true (without interception HTTPS requests would bypass them).`);
+		if (ports && !b.intercept_https) throw new Error(`${tool}: allowed_ports require intercept_https: true (without interception other ports already follow the domain and CIDR allowlist).`);
 	}
-	if (!domains && !cidrs && !b.intercept_https && !rules) return undefined;
+	if (!domains && !cidrs && !b.intercept_https && !rules && !ports) return undefined;
 	return {
 		...(domains ? { allowDomains: domains } : {}),
 		...(cidrs ? { allowCidrs: cidrs } : {}),
 		...(b.intercept_https ? { interceptHttps: true } : {}),
 		...(rules ? { httpRules: rules.map(httpRuleToWire) } : {}),
+		...(ports ? { allowedPorts: ports } : {}),
 	};
 }
 
@@ -124,13 +136,14 @@ export function registerEgress(server: McpServer, client: TenkiClient): void {
 
 	server.tool(
 		"tenki_create_egress_policy",
-		`Save a named egress policy (allowed domains/CIDRs, optional HTTPS interception and per-host HTTP rules) in the workspace, for tenki_create_sandbox's egress_policies to pin by name. ${ENABLE_NOTE}`,
+		`Save a named egress policy (allowed domains/CIDRs, optional HTTPS interception, per-host HTTP rules and extra ports) in the workspace, for tenki_create_sandbox's egress_policies to pin by name. ${ENABLE_NOTE}`,
 		{
 			name: policyNameSchema.refine((n) => !UUID.test(n), "a policy name must not be a UUID").describe("Policy name (letters, digits, _ and -; not a UUID). Exact, never trimmed."),
 			allow_domains: allowDomainsSchema.optional(),
 			allow_cidrs: allowCidrsSchema.optional(),
 			intercept_https: interceptHttpsSchema.optional(),
 			http_rules: httpRulesSchema.optional(),
+			allowed_ports: allowedPortsSchema.optional(),
 			workspace_id: workspaceIdSchema,
 		},
 		async ({ name, workspace_id, ...b }) =>
@@ -147,6 +160,7 @@ export function registerEgress(server: McpServer, client: TenkiClient): void {
 			allow_cidrs: allowCidrsSchema.optional(),
 			intercept_https: interceptHttpsSchema.optional(),
 			http_rules: httpRulesSchema.optional(),
+			allowed_ports: allowedPortsSchema.optional(),
 			workspace_id: workspaceIdSchema,
 		},
 		async ({ policy_id, expected_revision, workspace_id, ...b }) =>

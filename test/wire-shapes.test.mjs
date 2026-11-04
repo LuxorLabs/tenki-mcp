@@ -42,6 +42,11 @@ const REPLIES = {
 	ListActiveSSHGateways: { gateways: [] },
 	ListPreviewUrls: {},
 };
+/** Method → { status, body } connect error to return instead of a reply. */
+const ERRORS = {};
+/** Methods the stub never answers; `dropped` counts requests whose connection the client closed. */
+const HANG = new Set();
+const dropped = new Map();
 
 const stub = createServer((req, res) => {
 	let raw = "";
@@ -49,8 +54,13 @@ const stub = createServer((req, res) => {
 	req.on("end", () => {
 		const method = req.url.split("/").pop();
 		record(method, raw ? JSON.parse(raw) : {});
-		res.writeHead(200, { "content-type": "application/json" });
-		res.end(JSON.stringify(REPLIES[method] ?? {}));
+		if (HANG.has(method)) {
+			res.on("close", () => dropped.set(method, (dropped.get(method) ?? 0) + 1));
+			return;
+		}
+		const err = ERRORS[method];
+		res.writeHead(err?.status ?? 200, { "content-type": "application/json" });
+		res.end(JSON.stringify(err?.body ?? REPLIES[method] ?? {}));
 	});
 });
 await new Promise((r) => stub.listen(0, "127.0.0.1", r));
@@ -300,6 +310,97 @@ try {
 	await call("tenki_create_sandbox", { egress_allow_domains: ["*.pypi.org"] });
 	b = last("CreateSession");
 	check("create_sandbox: egress allowlist with allow_outbound omitted is sent (API default is on) without an allowOutbound field", b?.egress?.allowDomains?.[0] === "*.pypi.org" && !("allowOutbound" in (b ?? {})), JSON.stringify(b));
+
+	// allowed_ports (tenki-app #6183): requires interception standalone; merged with named policies server-side
+	{
+		await call("tenki_create_egress_policy", { name: "ssh_git", allow_domains: ["github.com"], intercept_https: true, allowed_ports: [22, 2222] });
+		b = last("CreateEgressPolicy");
+		check("create_egress_policy: allowed_ports → egress.allowedPorts", b?.egress?.allowedPorts?.[0] === 22 && b?.egress?.allowedPorts?.[1] === 2222, JSON.stringify(b?.egress));
+		const before = (seen.get("CreateEgressPolicy") ?? []).length;
+		const r1 = await call("tenki_create_egress_policy", { name: "p", allow_domains: ["github.com"], allowed_ports: [22] });
+		check("create_egress_policy: allowed_ports without intercept_https rejected pre-network", r1.isError === true && /allowed_ports require intercept_https/.test(text(r1)) && (seen.get("CreateEgressPolicy") ?? []).length === before, text(r1).slice(0, 160));
+		const r2 = await call("tenki_create_egress_policy", { name: "p", allow_domains: ["github.com"], intercept_https: true, allowed_ports: [0] });
+		check("create_egress_policy: port 0 rejected pre-network", r2.isError === true && (seen.get("CreateEgressPolicy") ?? []).length === before);
+		await call("tenki_create_sandbox", { egress_allow_domains: ["github.com"], egress_intercept_https: true, egress_allowed_ports: [22] });
+		check("create_sandbox: egress_allowed_ports → egress.allowedPorts", last("CreateSession")?.egress?.allowedPorts?.[0] === 22 && last("CreateSession")?.egress?.interceptHttps === true, JSON.stringify(last("CreateSession")?.egress));
+		await call("tenki_create_sandbox", { egress_policies: ["ssh_git"], egress_allowed_ports: [2222] });
+		check("create_sandbox: with a named policy, egress_allowed_ports go through without interceptHttps", last("CreateSession")?.egress?.allowedPorts?.[0] === 2222 && !("interceptHttps" in (last("CreateSession")?.egress ?? {})), JSON.stringify(last("CreateSession")?.egress));
+	}
+
+	// Saved Tailscale connections + the workspace default opt-out (tenki-app #6348)
+	{
+		const CONN = "66666666-6666-4666-8666-666666666666";
+		await call("tenki_create_sandbox", { tailnet: { connection_id: CONN, connection_revision: 3, tags: ["tag:ci"] } });
+		let t = last("CreateSession")?.tailnet;
+		check("create_sandbox: tailnet.connection_id → profileId + profileRevision, no authKey", t?.profileId === CONN && t?.profileRevision === 3 && t?.tags?.[0] === "tag:ci" && !("authKey" in (t ?? {})) && !("connectionId" in (t ?? {})), JSON.stringify(t));
+		await call("tenki_create_sandbox", { tailnet: { connection_id: CONN } });
+		t = last("CreateSession")?.tailnet;
+		check("create_sandbox: connection_revision omitted → no profileRevision (API uses the current one)", t?.profileId === CONN && !("profileRevision" in (t ?? {})), JSON.stringify(t));
+		await call("tenki_create_sandbox", { disable_tailnet: true });
+		check("create_sandbox: disable_tailnet → disableTailnet:true, no tailnet", last("CreateSession")?.disableTailnet === true && !("tailnet" in (last("CreateSession") ?? {})));
+		await call("tenki_create_sandbox", { name: "plain" });
+		check("create_sandbox: disableTailnet omitted unless asked", !("disableTailnet" in (last("CreateSession") ?? {})));
+		const before = (seen.get("CreateSession") ?? []).length;
+		const r1 = await call("tenki_create_sandbox", { disable_tailnet: true, tailnet: { auth_key: "tskey-x" } });
+		check("create_sandbox: tailnet + disable_tailnet rejected pre-network", r1.isError === true && /not both/.test(text(r1)));
+		const r2 = await call("tenki_create_sandbox", { tailnet: { auth_key: "tskey-x", connection_id: CONN } });
+		check("create_sandbox: auth_key + connection_id rejected pre-network", r2.isError === true && /exactly one of auth_key or connection_id/.test(text(r2)));
+		const r3 = await call("tenki_create_sandbox", { tailnet: { hostname: "box" } });
+		check("create_sandbox: tailnet without a credential rejected pre-network", r3.isError === true && /exactly one of auth_key or connection_id/.test(text(r3)));
+		const r4 = await call("tenki_create_sandbox", { tailnet: { auth_key: "tskey-x", connection_revision: 2 } });
+		check("create_sandbox: connection_revision without connection_id rejected", r4.isError === true && /connection_revision requires connection_id/.test(text(r4)));
+		const r5 = await call("tenki_create_sandbox", { tailnet: { connection_id: CONN, exit_node: "exit-1" } });
+		check("create_sandbox: saved connection + exit_node rejected", r5.isError === true && /saved Tailscale connection/.test(text(r5)));
+		check("create_sandbox: no rejected tailnet call reached the API", (seen.get("CreateSession") ?? []).length === before);
+	}
+
+	// ListCIRunnerSizes: workspace resolved like the other workspace tools
+	const ci = await call("tenki_list_ci_runner_sizes", {});
+	check("list_ci_runner_sizes: workspaceId resolved from WhoAmI", last("ListCIRunnerSizes")?.workspaceId === WS, JSON.stringify(last("ListCIRunnerSizes")));
+	check("list_ci_runner_sizes: an empty reply ({}) normalizes to sizes [] + defaultRunsOnLabel ''", /"sizes":\s*\[\]/.test(text(ci)) && /"defaultRunsOnLabel":\s*""/.test(text(ci)), text(ci));
+	await call("tenki_list_ci_runner_sizes", { workspace_id: SID });
+	check("list_ci_runner_sizes: explicit workspace_id passed through", last("ListCIRunnerSizes")?.workspaceId === SID);
+
+	// ForkSession: body shape, defaults omitted, partial failures surfaced and never retried
+	{
+		REPLIES.ForkSession = { snapshotId: SNAP, sessions: [{ id: SID, state: "SESSION_STATE_RUNNING" }] };
+		const fr = await call("tenki_fork_sandbox", { session_id: SID, count: 3, name_prefix: "exp", wait: true });
+		b = last("ForkSession");
+		check("fork_sandbox: sessionId + count + namePrefix + wait", b?.sessionId === SID && b?.count === 3 && b?.namePrefix === "exp" && b?.wait === true, JSON.stringify(b));
+		check("fork_sandbox: returns snapshotId + sessions", !fr.isError && new RegExp(SNAP).test(text(fr)), text(fr).slice(0, 160));
+		await call("tenki_fork_sandbox", { session_id: SID });
+		b = last("ForkSession");
+		check("fork_sandbox: defaults send only sessionId", b?.sessionId === SID && Object.keys(b ?? {}).length === 1, JSON.stringify(b));
+		const before = (seen.get("ForkSession") ?? []).length;
+		const r0 = await call("tenki_fork_sandbox", { session_id: SID, count: 0 });
+		check("fork_sandbox: count 0 rejected pre-network", r0.isError === true && (seen.get("ForkSession") ?? []).length === before);
+		const CHILD = "77777777-7777-4777-8777-777777777777";
+		ERRORS.ForkSession = {
+			status: 429,
+			body: { code: "resource_exhausted", message: "max concurrent sandboxes reached", details: [{ type: "tenki.sandbox.v1.ForkSessionResponse", value: "", debug: { snapshotId: SNAP, sessions: [{ id: CHILD }] } }] },
+		};
+		const r1 = await call("tenki_fork_sandbox", { session_id: SID, count: 2 });
+		check("fork_sandbox: partial failure names the snapshot and created children", r1.isError === true && text(r1).includes(SNAP) && text(r1).includes(CHILD) && /resource_exhausted/.test(text(r1)), text(r1).slice(0, 240));
+		check("fork_sandbox: a partial failure is NOT retried (even resource_exhausted)", (seen.get("ForkSession") ?? []).length === before + 1, `${(seen.get("ForkSession") ?? []).length - before} calls`);
+		ERRORS.ForkSession = { status: 409, body: { code: "aborted", message: "child failed", details: [{ type: "tenki.sandbox.v1.ForkSessionResponse", value: "CiQ0NDQ0" }] } };
+		const r2 = await call("tenki_fork_sandbox", { session_id: SID });
+		check("fork_sandbox: detail without debug still warns to check snapshots/sandboxes", r2.isError === true && /tenki_list_snapshots/.test(text(r2)), text(r2).slice(0, 240));
+		ERRORS.ForkSession = { status: 400, body: { code: "failed_precondition", message: "session has attached volumes; detach volume x before forking" } };
+		const r3 = await call("tenki_fork_sandbox", { session_id: SID });
+		check("fork_sandbox: a denial with no partial result passes through unchanged", r3.isError === true && /attached volumes/.test(text(r3)) && !/already created/.test(text(r3)), text(r3).slice(0, 200));
+		delete ERRORS.ForkSession;
+		// An MCP-side cancellation must drop the API request so the server tears down undelivered children.
+		HANG.add("ForkSession");
+		const forkCalls = (seen.get("ForkSession") ?? []).length;
+		const ac = new AbortController();
+		const pending = client.callTool({ name: "tenki_fork_sandbox", arguments: { session_id: SID } }, undefined, { signal: ac.signal }).catch((e) => e);
+		for (let i = 0; i < 50 && (seen.get("ForkSession") ?? []).length === forkCalls; i++) await new Promise((r) => setTimeout(r, 20));
+		ac.abort();
+		await pending;
+		for (let i = 0; i < 50 && !dropped.get("ForkSession"); i++) await new Promise((r) => setTimeout(r, 20));
+		check("fork_sandbox: cancelling the MCP call closes the API request (not left open for 600s)", dropped.get("ForkSession") === 1 && (seen.get("ForkSession") ?? []).length === forkCalls + 1, `dropped=${dropped.get("ForkSession")} calls=${(seen.get("ForkSession") ?? []).length - forkCalls}`);
+		HANG.delete("ForkSession");
+	}
 
 	// Removed workspace-settings RPCs are never called
 	check("no tool calls a removed workspace-settings RPC", ![...seen.keys()].some((m) => /WorkspaceSandboxSettings|SnapshotRetentionSettings/.test(m)));

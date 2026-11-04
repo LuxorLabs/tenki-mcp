@@ -98,7 +98,7 @@ try {
 	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
-	check("advertises 77 tools (76 + tenki_auth_status)", tools.length === 77, `${tools.length}`);
+	check("advertises 79 tools (78 + tenki_auth_status)", tools.length === 79, `${tools.length}`);
 	const names = tools.map((t) => t.name);
 	check("standalone registry terminology is absent", !/registry/i.test(JSON.stringify(tools)));
 	check("no duplicate tool names", new Set(names).size === names.length);
@@ -200,6 +200,10 @@ try {
 		check("update/delete egress policy REQUIRE expected_revision", ["tenki_update_egress_policy", "tenki_delete_egress_policy"].every((n) => (byName[n]?.inputSchema?.required ?? []).includes("expected_revision")));
 		check("create_sandbox advertises egress_policies + egress_intercept_https + egress_http_rules", ["egress_policies", "egress_intercept_https", "egress_http_rules"].every((k) => props("tenki_create_sandbox").includes(k)));
 		check("template build history + delete tools advertised", props("tenki_list_template_builds").includes("template_id") && props("tenki_delete_template_build").includes("build_id"));
+		check("fork_sandbox advertised with session_id (required) + count/name_prefix/wait", (byName["tenki_fork_sandbox"]?.inputSchema?.required ?? []).includes("session_id") && ["count", "name_prefix", "wait"].every((k) => props("tenki_fork_sandbox").includes(k)));
+		check("list_ci_runner_sizes advertised as a read tool", byName["tenki_list_ci_runner_sizes"]?.annotations?.readOnlyHint === true);
+		check("allowed_ports on egress policies + create_sandbox; disable_tailnet on create_sandbox", props("tenki_create_egress_policy").includes("allowed_ports") && props("tenki_update_egress_policy").includes("allowed_ports") && ["egress_allowed_ports", "disable_tailnet"].every((k) => props("tenki_create_sandbox").includes(k)));
+		check("Tailscale connection admin methods are not tools", !names.some((n) => /tailnet_(connection|default|runner)/.test(n)));
 	}
 
 	// 4) unknown tool → clean error (thrown JSON-RPC error OR isError result), not a crash

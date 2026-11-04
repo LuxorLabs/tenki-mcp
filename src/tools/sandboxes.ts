@@ -3,14 +3,32 @@ import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
 import { ok, envSchema, pathSchema, protoEnum, sessionIdSchema, tagsSchema } from "./common.js";
-import { egressBodyToWire, httpRulesSchema, interceptHttpsSchema, policyNameSchema } from "./egress.js";
+import { allowedPortsSchema, egressBodyToWire, httpRulesSchema, interceptHttpsSchema, policyNameSchema } from "./egress.js";
 
-/** Tailnet attachment (tenki-app #5818): join the sandbox to a Tailscale tailnet with a direct auth key. */
+/**
+ * Tailnet attachment: join the sandbox to a Tailscale tailnet with a direct auth key (tenki-app #5818)
+ * or a Tailscale connection saved in the dashboard (wire `profileId`, #6348).
+ */
 const unique = (xs: readonly unknown[]) => new Set(xs).size === xs.length;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // wake_on_connect and ephemeral_pause_policy=RECREATE_ON_RESUME exist in the proto but the API
 // rejects them as Unimplemented ("requires milestone 2"), so they are not exposed yet.
 const tailnetSchema = z.object({
-	auth_key: z.string().min(1).max(4096).describe("Tailscale auth key (write-only; sent once to the API, never returned)."),
+	auth_key: z.string().min(1).max(4096).optional().describe("Tailscale auth key (write-only; sent once to the API, never returned). Pass this or connection_id."),
+	connection_id: z
+		.string()
+		.regex(UUID, "connection_id is a UUID")
+		.optional()
+		.describe(
+			"ID of a Tailscale connection saved in the Tenki dashboard, instead of auth_key (permission_denied unless Tailscale connections are enabled for the workspace). Tags default to the connection's authorized tags and must be a subset of them; the node is always ephemeral; control_url and exit nodes are not allowed.",
+		),
+	connection_revision: z
+		.number()
+		.int()
+		.min(1)
+		.max(4294967295)
+		.optional()
+		.describe("Pin the saved connection's revision; the create is refused (aborted) if the connection changed since. Omit to use its current revision."),
 	provider: z.enum(["tailscale"]).optional().describe("Tailnet provider (default tailscale)."),
 	hostname: z
 		.string()
@@ -44,7 +62,14 @@ const tailnetSchema = z.object({
 		.enum(["TENKI_ALLOWLIST", "EXIT_NODE_MANAGED"])
 		.optional()
 		.describe("Egress policy while attached: TENKI_ALLOWLIST keeps Tenki's egress rules; EXIT_NODE_MANAGED routes all egress through exit_node (requires exit_node and must be enabled for the workspace)."),
-}).refine((t) => t.exit_policy !== "EXIT_NODE_MANAGED" || !!t.exit_node, "exit_policy EXIT_NODE_MANAGED requires exit_node");
+})
+	.refine((t) => (t.auth_key !== undefined) !== (t.connection_id !== undefined), "pass exactly one of auth_key or connection_id")
+	.refine((t) => t.connection_revision === undefined || t.connection_id !== undefined, "connection_revision requires connection_id")
+	.refine(
+		(t) => t.connection_id === undefined || (!t.control_url && !t.exit_node && t.exit_policy !== "EXIT_NODE_MANAGED"),
+		"a saved Tailscale connection does not take control_url, exit_node or EXIT_NODE_MANAGED",
+	)
+	.refine((t) => t.exit_policy !== "EXIT_NODE_MANAGED" || !!t.exit_node, "exit_policy EXIT_NODE_MANAGED requires exit_node");
 
 /** Secret files: materialize a workspace secret (or inline text) as a file in the guest at runtime. */
 const secretFileSchema = z
@@ -100,7 +125,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.array(z.string().max(253))
 						.max(256)
 						.optional()
-						.describe("Egress allowlist: exact hostnames or single-label '*.example.com' wildcards. Omit for unrestricted egress. Cannot be combined with allow_outbound: false. Any egress setting (this, egress_allow_cidrs, egress_intercept_https, egress_http_rules, egress_policies) is refused with failed_precondition if session egress policies are disabled for the workspace (on by default; Tenki staff can turn it off per workspace)."),
+						.describe("Egress allowlist: exact hostnames or single-label '*.example.com' wildcards. Omit for unrestricted egress. Cannot be combined with allow_outbound: false. Any egress setting (this, egress_allow_cidrs, egress_intercept_https, egress_http_rules, egress_allowed_ports, egress_policies) is refused with failed_precondition if session egress policies are disabled for the workspace (on by default; Tenki staff can turn it off per workspace)."),
 					egress_allow_cidrs: z
 						.array(z.string().max(18))
 						.max(64)
@@ -110,12 +135,20 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 					egress_http_rules: httpRulesSchema
 						.optional()
 						.describe("Per-host HTTP method/path rules (≤64). Need egress_intercept_https unless a pinned egress policy turns interception on. On ports 80 and 443 a request matching no rule is refused with 403."),
+					egress_allowed_ports: allowedPortsSchema
+						.optional()
+						.describe(
+							"Extra public TCP ports to open besides 80/443 (≤64). Need egress_intercept_https unless a pinned egress policy turns interception on. They skip HTTP inspection but still reach only allowed destinations, so 22 permits git over SSH, including pushes.",
+						),
 					egress_policies: z
 						.array(policyNameSchema)
 						.max(16)
 						.optional()
 						.describe("Names of saved workspace egress policies to pin (≤16; see tenki_list_egress_policies). Merged with the inline egress_* fields at create; later edits or deletes of a policy do not change this sandbox. Cannot be combined with allow_outbound: false."),
-					snapshot_id: z.string().optional().describe("Boot from a snapshot."),
+					snapshot_id: z
+						.string()
+						.optional()
+						.describe("Boot from a snapshot. Expired snapshots and pause snapshots are refused (failed_precondition); resume a paused sandbox with tenki_resume_sandbox instead."),
 					image: z
 						.string()
 						.optional()
@@ -132,7 +165,9 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.record(z.string(), z.string())
 						.refine((o) => Object.keys(o).length <= MAX_ENV_PAIRS, `at most ${MAX_ENV_PAIRS} pairs`)
 						.optional()
-						.describe("Map of a declared runtime secret name to the workspace secret to use instead (≤64 pairs)."),
+						.describe(
+							"Map of a declared runtime secret name to the workspace secret to use instead (≤64 pairs). Booting another workspace's image that declares runtime secrets needs an entry for each of them (map a name to itself to keep it), otherwise failed_precondition.",
+						),
 					secret_files: z
 						.array(secretFileSchema)
 						.max(32)
@@ -145,7 +180,13 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.describe("Names of saved secret access policies to attach (≤64). A policy holds the request rules that inject a workspace secret into matching outbound HTTPS requests, so the value never enters the sandbox; policies are managed in the Tenki dashboard / workspace secrets API, not through this server."),
 					tailnet: tailnetSchema
 						.optional()
-						.describe("Join the sandbox to a Tailscale tailnet at boot (requires tailnet attachments to be enabled for the workspace; otherwise the API returns permission_denied). The session then carries a tailnetStatus (state, fqdn, ips)."),
+						.describe(
+							"Join the sandbox to a Tailscale tailnet at boot with an auth key or a saved connection (requires tailnet attachments to be enabled for the workspace; otherwise the API returns permission_denied). The session then carries a tailnetStatus (state, fqdn, ips). A tailnet-attached sandbox cannot be paused yet. Without this, a sandbox joins the workspace's default Tailscale connection if one is set, unless disable_tailnet is true.",
+						),
+					disable_tailnet: z
+						.boolean()
+						.optional()
+						.describe("Do not join the workspace's default Tailscale connection (a tailnet-attached sandbox cannot be paused yet). Cannot be combined with tailnet."),
 					volumes: z
 						.array(
 							z.object({
@@ -179,12 +220,21 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 			// Named policies are merged with the inline fields server-side, so standalone checks only apply without them.
 			const egress = egressBodyToWire(
 				"tenki_create_sandbox",
-				{ allow_domains: a.egress_allow_domains, allow_cidrs: a.egress_allow_cidrs, intercept_https: a.egress_intercept_https, http_rules: a.egress_http_rules },
+				{
+					allow_domains: a.egress_allow_domains,
+					allow_cidrs: a.egress_allow_cidrs,
+					intercept_https: a.egress_intercept_https,
+					http_rules: a.egress_http_rules,
+					allowed_ports: a.egress_allowed_ports,
+				},
 				!egressPolicies,
 			);
 			// allow_outbound: false blocks all egress, so an allowlist alongside it is a contradiction.
 			if ((egress || egressPolicies) && a.allow_outbound === false) {
 				throw new Error("tenki_create_sandbox: egress_* fields and egress_policies cannot be combined with allow_outbound: false — that blocks all egress, so the allowlist would never apply.");
+			}
+			if (a.disable_tailnet && a.tailnet) {
+				throw new Error("tenki_create_sandbox: pass tailnet or disable_tailnet, not both.");
 			}
 			// allow_inbound / allow_outbound are `optional bool` with presence semantics on
 			// the wire, so an explicit false is sent, not dropped (sticky is a plain bool;
@@ -224,7 +274,12 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 				...(a.tailnet
 					? {
 							tailnet: {
-								authKey: a.tailnet.auth_key,
+								...(a.tailnet.auth_key !== undefined
+									? { authKey: a.tailnet.auth_key }
+									: {
+											profileId: a.tailnet.connection_id,
+											...(a.tailnet.connection_revision ? { profileRevision: a.tailnet.connection_revision } : {}),
+										}),
 								...(a.tailnet.provider ? { provider: a.tailnet.provider } : {}),
 								...(a.tailnet.hostname ? { hostname: a.tailnet.hostname } : {}),
 								...(a.tailnet.tags?.length ? { tags: a.tailnet.tags } : {}),
@@ -238,6 +293,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 							},
 						}
 					: {}),
+				...(a.disable_tailnet ? { disableTailnet: true } : {}),
 				...(a.volumes && a.volumes.length
 					? {
 							volumes: a.volumes.map((v) => ({
@@ -327,7 +383,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_pause_sandbox",
-		"Pause a sandbox (snapshot + suspend) so it can be resumed later. By default the call blocks until the pause snapshot is durable (can take ~40s); pass async to return as soon as the pause is accepted and poll tenki_get_sandbox for PAUSED.",
+		"Pause a sandbox (snapshot + suspend) so it can be resumed later. By default the call blocks until the pause checkpoint is saved on the sandbox's host (replication to storage continues in the background); pass async to return as soon as the pause is accepted and poll tenki_get_sandbox for PAUSED. A sandbox attached to a tailnet cannot be paused yet (failed_precondition).",
 		{
 			session_id: sessionIdSchema,
 			async: z.boolean().optional().describe("Return once the pause is accepted instead of waiting for it to finish (default false)."),
@@ -342,4 +398,65 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 		{ session_id: sessionIdSchema },
 		async ({ session_id }) => ok(await client.control("ResumeSession", { sessionId: session_id })),
 	);
+
+	server.tool(
+		"tenki_fork_sandbox",
+		"Fork a RUNNING sandbox: snapshot its memory and disk, then start child sandboxes that continue from that state while the source keeps running. Children get the source's size, lifetime limits, inbound/outbound and egress settings and tags, plus fork_of_session_id / fork_snapshot_id metadata; they do not copy its tailnet attachment (they join the workspace's default Tailscale connection, if one is set). Returns snapshotId and the child sessions. Refused while volumes are attached (failed_precondition; detach them first) or when forking is disabled for the workspace (permission_denied). The fork snapshot stays in tenki_list_snapshots, named after the prefix, and counts toward snapshot storage until you delete it. If the fork fails after the snapshot exists, the error names the snapshot and any children already created; if the call times out or is cancelled, check tenki_list_snapshots and tenki_list_sandboxes for what it left behind.",
+		{
+			session_id: sessionIdSchema.describe("The RUNNING sandbox to fork."),
+			count: z
+				.number()
+				.int()
+				.min(1)
+				.max(2147483647)
+				.optional()
+				.describe("Children to create (default 1). The workspace caps children per request (10 by default; Tenki staff can change it; more is resource_exhausted) and each child counts toward the concurrent-sandbox limit."),
+			name_prefix: z
+				.string()
+				.max(64)
+				.optional()
+				.describe("Children are named <name_prefix>-1 … <name_prefix>-<count> (default '<source name>-fork', or 'fork-<first 8 characters of its id>' for an unnamed sandbox)."),
+			wait: z.boolean().optional().describe("Return only once every child is RUNNING (or has ended) instead of as soon as each is created (default false)."),
+		},
+		async ({ session_id, count, name_prefix, wait }, extra) => {
+			try {
+				return ok(
+					await client.control(
+						"ForkSession",
+						{
+							sessionId: session_id,
+							...(count ? { count } : {}),
+							...(name_prefix ? { namePrefix: name_prefix } : {}),
+							...(wait ? { wait: true } : {}),
+						},
+						undefined,
+						// A dropped request makes the API terminate the children it could not return.
+						extra?.signal,
+					),
+				);
+			} catch (e) {
+				throw forkFailure(e);
+			}
+		},
+	);
+}
+
+/** A failed fork that got as far as its snapshot attaches the partial ForkSessionResponse as an error detail. */
+function forkFailure(e: unknown): unknown {
+	const details = (e as { details?: unknown[] })?.details;
+	const detail = details?.find((d) => (d as { type?: string })?.type === "tenki.sandbox.v1.ForkSessionResponse") as
+		| { debug?: { snapshotId?: string; sessions?: { id?: string }[] } }
+		| undefined;
+	if (!detail && e instanceof Error && /timed out|cancelled/.test(e.message)) {
+		return new Error(
+			`${e.message} — the fork may have left a snapshot (named after the prefix) and children behind; check tenki_list_snapshots and tenki_list_sandboxes.`,
+		);
+	}
+	if (!detail || !(e instanceof Error)) return e;
+	const snapshotId = detail.debug?.snapshotId;
+	const children = (detail.debug?.sessions ?? []).map((s) => s.id).filter(Boolean);
+	const created = snapshotId
+		? `snapshot ${snapshotId}${children.length ? ` and child sandboxes ${children.join(", ")}` : ""}`
+		: "a snapshot and possibly child sandboxes (check tenki_list_snapshots and tenki_list_sandboxes)";
+	return new Error(`${e.message} — the fork had already created ${created}; terminate or delete them if they are not needed.`);
 }

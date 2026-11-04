@@ -16,7 +16,7 @@ async function resolveWorkspaceId(client: TenkiClient, provided?: string): Promi
 }
 
 /**
- * Workspace-level sandbox usage + wildcard preview domains.
+ * Workspace-level sandbox usage, CI runner sizes and wildcard preview domains.
  *
  * The workspace quota/retention settings RPCs (Get/UpdateWorkspaceSandboxSettings,
  * Get/UpdateWorkspaceSnapshotRetentionSettings) were REMOVED from the API
@@ -41,6 +41,23 @@ export function registerWorkspace(server: McpServer, client: TenkiClient): void 
 					...(workspaceId ? { workspaceId } : {}),
 				}),
 			);
+		},
+	);
+
+	server.tool(
+		"tenki_list_ci_runner_sizes",
+		"List the Linux x64 runner sizes Tenki CI can run for a workspace — each runs-on label with its vCPUs and memory in GiB, smallest first, limited to the workspace's job-size limits — and defaultRunsOnLabel, the size a job gets when its runs-on names none. Use it to pick a runs-on label for a GitHub Actions workflow.",
+		{
+			workspace_id: z
+				.string()
+				.optional()
+				.describe("Workspace to list sizes for. Omit to use the API key's first workspace."),
+		},
+		async ({ workspace_id }) => {
+			const workspaceId = await resolveWorkspaceId(client, workspace_id);
+			const resp = await client.control("ListCIRunnerSizes", { ...(workspaceId ? { workspaceId } : {}) });
+			// protojson omits empty fields; an empty workspace would otherwise come back as {}.
+			return ok({ ...resp, sizes: resp.sizes ?? [], defaultRunsOnLabel: resp.defaultRunsOnLabel ?? "" });
 		},
 	);
 

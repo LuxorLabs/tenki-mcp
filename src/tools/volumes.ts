@@ -163,11 +163,14 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Detach ────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_detach_volume",
-		"Unmount a volume from a sandbox session and sync it back to storage. Set force to release an attachment stuck syncing (SYNC_PENDING) at once, or to unplug a volume the guest cannot unmount — writes the guest has not flushed are lost.",
+		"Unmount a volume from a sandbox session and sync it back to storage. A volume whose sync back is still pending (SYNC_PENDING) cannot be detached, even with force (failed_precondition): wait for the upload to finish or ask Tenki support to recover it. Set force to unplug an attached volume the guest cannot unmount — writes the guest has not flushed are lost.",
 		{
 			session_id: sessionIdSchema.describe("The sandbox session to detach the volume from."),
 			volume_id: z.string().describe("The volume id to detach."),
-			force: z.boolean().optional().describe("Force the detach (default false). Unflushed guest writes are lost; on a host that does not support it yet the API returns failed_precondition."),
+			force: z
+				.boolean()
+				.optional()
+				.describe("Force-unplug an ATTACHED volume (default false). Unflushed guest writes are lost. Never releases a SYNC_PENDING attachment; on a host that cannot force detach yet the API returns failed_precondition."),
 		},
 		async ({ session_id, volume_id, force }) =>
 			ok(await client.control("DetachVolume", { sessionId: session_id, volumeId: volume_id, ...(force ? { forceDetach: true } : {}) })),

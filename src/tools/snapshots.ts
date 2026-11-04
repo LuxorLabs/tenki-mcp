@@ -103,7 +103,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_update_snapshot",
-		"Update a snapshot's mutable metadata: name, expiry (set or clear), and tags.",
+		"Update a snapshot's mutable metadata: name, expiry (set or clear), and tags. An expired snapshot can no longer be updated, and a pause snapshot's expiry is managed by its sandbox (both failed_precondition).",
 		{
 			snapshot_id: z.string(),
 			name: z.string().max(64).optional().describe("New human-readable name (max 64 chars)."),
