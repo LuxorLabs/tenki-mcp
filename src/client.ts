@@ -34,7 +34,7 @@ const RATE_LIMIT_CODES = new Set(["rate_limited", "ratelimited", "resource_exhau
 // Skipping a teardown retry is the expensive mistake: runCode's finally
 // swallows terminate errors, so a transient blip would silently leave a
 // billing sandbox running.
-const NON_IDEMPOTENT_METHOD = /^(Create|Build|Publish|Resume|Extend|ExecuteCommand)/;
+const NON_IDEMPOTENT_METHOD = /^(Create|Build|Publish|Resume|Extend|Fork|ExecuteCommand)/;
 // Data-plane methods safe to retry: read-shaped only. A retried Remove that
 // had actually applied would surface a spurious "not found" for an op that
 // succeeded.
@@ -46,6 +46,7 @@ const RETRY_AFTER_CAP_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_EXEC_TIMEOUT_MS = 630_000; // runCode's 600s hard cap + margin
 const EXEC_TIMEOUT_MARGIN_MS = 30_000; // headroom over a command's own timeout
+const CREATE_WAIT_READY_TIMEOUT_MS = 90_000; // server holds wait_ready up to 60s + margin
 
 /**
  * Methods whose RPC does not return until a long storage/VM operation finishes,
@@ -62,8 +63,12 @@ const EXEC_TIMEOUT_MARGIN_MS = 30_000; // headroom over a command's own timeout
  * ~278ms, so giving them a 10-minute budget would only delay a genuinely hung
  * call. Their orphan-on-timeout hazard is real but needs idempotency, not a
  * bigger timeout.
+ *
+ * ForkSession holds until its snapshot is READY and every child exists (and is
+ * RUNNING with wait); if the caller disconnects first the server terminates the
+ * children it could not deliver, so a short budget would destroy the fork.
  */
-const SLOW_METHOD = /^(CreateSnapshot|PauseSession)$/;
+const SLOW_METHOD = /^(CreateSnapshot|PauseSession|ForkSession)$/;
 const DEFAULT_SLOW_TIMEOUT_MS = 600_000;
 
 // Session-credential cache lifetime handling: a credential whose expiry the API
@@ -200,7 +205,12 @@ export class TenkiClient {
 	 * the command's own timeout (plus margin) instead of the unary default.
 	 */
 	private timeoutFor(method: string, body: Record<string, unknown>): number {
-		if (SLOW_METHOD.test(method)) return this.slowTimeoutMs;
+		// With `async: true` these RPCs return once the work is accepted, so the
+		// long storage budget would only delay a genuinely hung call.
+		if (SLOW_METHOD.test(method)) return body.async === true ? this.timeoutMs : this.slowTimeoutMs;
+		// CreateSession{waitReady} is held server-side for up to 60s (createWaitReadyMaxWait);
+		// a 30s client budget would abort a slow boot and orphan the (billing) sandbox.
+		if (method === "CreateSession" && body.waitReady === true) return Math.max(this.timeoutMs, CREATE_WAIT_READY_TIMEOUT_MS);
 		if (method !== "ExecuteCommand") return this.timeoutMs;
 		const t = typeof body.timeout === "string" ? Number.parseInt(body.timeout, 10) : Number.NaN; // "30s"
 		return Number.isFinite(t) && t > 0 ? t * 1000 + EXEC_TIMEOUT_MARGIN_MS : this.execTimeoutMs;
@@ -217,14 +227,17 @@ export class TenkiClient {
 		init: RequestInit,
 		timeoutMs: number,
 		what: string,
+		cancel?: AbortSignal,
 	): Promise<{ ok: boolean; status: number; headers: Headers; text: string }> {
 		const budget = Math.max(1, Math.floor(timeoutMs));
+		const timeout = AbortSignal.timeout(budget);
 		try {
-			const res = await fetch(url, { ...init, signal: AbortSignal.timeout(budget) });
+			const res = await fetch(url, { ...init, signal: cancel ? AbortSignal.any([timeout, cancel]) : timeout });
 			const text = await res.text();
 			return { ok: res.ok, status: res.status, headers: res.headers, text };
 		} catch (e) {
 			const name = (e as Error)?.name;
+			if (cancel?.aborted && !timeout.aborted) throw new Error(`Tenki ${what} was cancelled by the MCP client before it returned.`);
 			if (name === "TimeoutError" || name === "AbortError") {
 				throw new Error(`Tenki ${what} timed out after ${budget}ms with no response.`);
 			}
@@ -236,8 +249,14 @@ export class TenkiClient {
 	 * Retry policy: rate limits always; `unavailable` and gateway-shaped
 	 * 502/503/504 (load balancers and CDNs return these with an HTML or empty
 	 * body, no ConnectRPC code) for every method that cannot double-apply.
+	 * For a method that cannot double-apply, a Connect `resource_exhausted` (the
+	 * handler's own quota or limit check; edge rate limits arrive as an uncoded
+	 * 429) or any rejection carrying error details (a fork's partial snapshot and
+	 * children) means the handler ran, so it is never retried.
 	 */
-	private shouldRetry(method: string, status: number, code: string): boolean {
+	private shouldRetry(method: string, status: number, code: string, hasDetails: boolean): boolean {
+		const handlerRan = hasDetails || code === "resource_exhausted" || code === "resourceexhausted";
+		if (handlerRan && NON_IDEMPOTENT_METHOD.test(method)) return false;
 		if (status === 429 || RATE_LIMIT_CODES.has(code)) return true;
 		const transient = code === "unavailable" || status === 502 || status === 503 || status === 504;
 		return transient && !NON_IDEMPOTENT_METHOD.test(method);
@@ -261,8 +280,16 @@ export class TenkiClient {
 	 * connection reset, DNS) retry for every method that cannot double-apply.
 	 * `service` defaults to SandboxService; pass another fully-qualified ConnectRPC
 	 * service (e.g. the SSH gateway service) for methods hosted elsewhere.
+	 * `cancel` (the MCP request's abort signal) drops the HTTP request when the
+	 * MCP client gives up, so the API sees the disconnect; a cancelled call is
+	 * never retried.
 	 */
-	async control(method: string, body: Record<string, unknown> = {}, service: string = CONTROL_SERVICE): Promise<Record<string, any>> {
+	async control(
+		method: string,
+		body: Record<string, unknown> = {},
+		service: string = CONTROL_SERVICE,
+		cancel?: AbortSignal,
+	): Promise<Record<string, any>> {
 		const url = `${this.baseUrl}/${service}/${method}`;
 		const deadline = Date.now() + this.timeoutFor(method, body ?? {});
 		for (let attempt = 0; ; attempt++) {
@@ -277,11 +304,12 @@ export class TenkiClient {
 					},
 					deadline - Date.now(),
 					method,
+					cancel,
 				);
 			} catch (e) {
 				// Transport failure: the request may or may not have reached the
 				// server, so only methods that cannot double-apply are retried.
-				if (attempt < MAX_RETRIES && !NON_IDEMPOTENT_METHOD.test(method)) {
+				if (attempt < MAX_RETRIES && !cancel?.aborted && !NON_IDEMPOTENT_METHOD.test(method)) {
 					const wait = this.backoffMs(attempt, null);
 					if (Date.now() + wait < deadline) {
 						await sleep(wait);
@@ -294,7 +322,8 @@ export class TenkiClient {
 
 			const parsed = safeJson(res.text);
 			const code = typeof parsed?.code === "string" ? parsed.code.toLowerCase() : "";
-			if (attempt < MAX_RETRIES && this.shouldRetry(method, res.status, code)) {
+			const details = Array.isArray(parsed?.details) ? (parsed.details as unknown[]) : [];
+			if (attempt < MAX_RETRIES && this.shouldRetry(method, res.status, code, details.length > 0)) {
 				const wait = this.backoffMs(attempt, res.headers.get("retry-after"));
 				if (Date.now() + wait < deadline) {
 					await sleep(wait);
@@ -302,7 +331,8 @@ export class TenkiClient {
 				}
 			}
 			const msg = (parsed?.message as string) || res.text || `HTTP ${res.status}`;
-			throw new Error(`Tenki ${method} failed (${res.status}${code ? ` ${code}` : ""}): ${msg}`);
+			// Connect error details (type, value, optional protojson `debug`) carry partial results, e.g. a failed fork's snapshot.
+			throw Object.assign(new Error(`Tenki ${method} failed (${res.status}${code ? ` ${code}` : ""}): ${msg}`), { code, details });
 		}
 	}
 
