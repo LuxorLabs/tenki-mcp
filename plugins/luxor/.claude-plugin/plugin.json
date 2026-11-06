@@ -1,0 +1,29 @@
+{
+  "name": "luxor",
+  "displayName": "Luxor Sandbox",
+  "version": "0.2.0",
+  "description": "Disposable microVM sandboxes for AI agents: create sandboxes, run code, read/write files, run git, expose preview URLs.",
+  "author": { "name": "Luxor AI", "url": "https://luxor.ai" },
+  "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
+  "repository": "https://github.com/LuxorLabs/tenki-mcp",
+  "license": "MIT",
+  "keywords": ["luxor", "sandbox", "microvm", "code-execution", "mcp"],
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "Luxor API key",
+      "description": "Your Luxor API key (starts with lx_ or tk_).",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "luxor": {
+      "command": "npx",
+      "args": ["-y", "@tenkicloud/mcp"],
+      "env": {
+        "LUXORAI_API_KEY": "${user_config.api_key}"
+      }
+    }
+  }
+}

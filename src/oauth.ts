@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type http from "node:http";
+import { readEnv } from "./env.js";
 
 const DEFAULT_SCOPE = "mcp";
 const FETCH_TIMEOUT_MS = 8_000;
@@ -12,6 +13,8 @@ type JsonRecord = Record<string, any>;
 export interface OAuthConfig {
 	issuer: string;
 	resource: string;
+	/** Every accepted resource URI (first is `resource`), e.g. one per served domain. */
+	resources: string[];
 	publicUrl: string;
 	metadataUrl: string;
 	identityUrl: string;
@@ -34,10 +37,10 @@ function trimUrl(value: string): string {
 }
 
 export function loadOAuthConfig(): OAuthConfig | null {
-	const issuer = trimUrl(process.env.TENKI_MCP_OAUTH_ISSUER || "");
-	const identityUrl = trimUrl(process.env.TENKI_MCP_IDENTITY_URL || "");
-	const identityServiceToken = (process.env.TENKI_MCP_IDENTITY_SERVICE_TOKEN || "").trim();
-	const publicUrl = trimUrl(process.env.TENKI_MCP_PUBLIC_URL || "");
+	const issuer = trimUrl(readEnv("MCP_OAUTH_ISSUER") || "");
+	const identityUrl = trimUrl(readEnv("MCP_IDENTITY_URL") || "");
+	const identityServiceToken = (readEnv("MCP_IDENTITY_SERVICE_TOKEN") || "").trim();
+	const publicUrl = trimUrl(readEnv("MCP_PUBLIC_URL") || "");
 	if (!issuer && !identityUrl && !identityServiceToken && !publicUrl) return null;
 	if (!issuer || !identityUrl || !identityServiceToken || !publicUrl) {
 		throw new Error(
@@ -45,15 +48,17 @@ export function loadOAuthConfig(): OAuthConfig | null {
 		);
 	}
 
-	const resource = trimUrl(process.env.TENKI_MCP_OAUTH_RESOURCE || `${publicUrl}/mcp`);
+	const configured = (readEnv("MCP_OAUTH_RESOURCE") || "").split(",").map(trimUrl).filter(Boolean);
+	const resources = configured.length ? Array.from(new Set(configured)) : [`${publicUrl}/mcp`];
 	return {
 		issuer,
-		resource,
+		resource: resources[0]!,
+		resources,
 		publicUrl,
 		metadataUrl: `${publicUrl}/.well-known/oauth-protected-resource/mcp`,
 		identityUrl,
 		identityServiceToken,
-		scope: (process.env.TENKI_MCP_OAUTH_SCOPE || DEFAULT_SCOPE).trim(),
+		scope: (readEnv("MCP_OAUTH_SCOPE") || DEFAULT_SCOPE).trim(),
 	};
 }
 
@@ -151,10 +156,10 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
 export class OAuthResourceRoutes {
 	constructor(private readonly config: OAuthConfig) {}
 
-	async handle(_req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> {
+	async handle(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> {
 		if (url.pathname === "/.well-known/oauth-protected-resource/mcp" || url.pathname === "/.well-known/oauth-protected-resource") {
 			json(res, 200, {
-				resource: this.config.resource,
+				resource: resourceForHost(this.config, req.headers.host),
 				authorization_servers: [this.config.issuer],
 				scopes_supported: [this.config.scope, "offline_access"],
 				bearer_methods_supported: ["header"],
@@ -168,6 +173,12 @@ export class OAuthResourceRoutes {
 		}
 		return false;
 	}
+}
+
+/** The configured resource whose host matches the request (RFC 9728 requires an exact match), else the first. */
+export function resourceForHost(config: Pick<OAuthConfig, "resource" | "resources">, host: string | undefined): string {
+	const wanted = (host ?? "").toLowerCase();
+	return config.resources.find((resource) => new URL(resource).host.toLowerCase() === wanted) ?? config.resource;
 }
 
 export function bearerToken(header: string | undefined): string | null {

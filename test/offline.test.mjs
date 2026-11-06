@@ -76,6 +76,18 @@ async function connectWith(env, name) {
 	await c.close();
 }
 
+// 1c) LUXORAI_* env wins over TENKI_*, and lx_ keys are API keys (Bearer).
+{
+	const LX = "lx_offline_dummy_key";
+	const c = await connectWith({ LUXORAI_API_KEY: LX, TENKI_API_KEY: DUMMY, TENKI_AUTH_TOKEN: "ory_st_legacy" }, "offline-luxorai");
+	const res = await c.callTool({ name: "tenki_auth_status", arguments: {} });
+	const s = res.structuredContent ?? {};
+	check("LUXORAI_API_KEY wins over TENKI_AUTH_TOKEN/TENKI_API_KEY", s.source === "LUXORAI_API_KEY", JSON.stringify(s.source));
+	check("lx_ key classified as api_key", s.credential === "api_key", JSON.stringify(s.credential));
+	check("auth_status never echoes the lx_ key", !JSON.stringify(res).includes(LX));
+	await c.close();
+}
+
 // 2) the server over a real MCP client (spawned with a dummy key) — no network hit.
 // The API endpoint is pinned to a dead loopback port so the suite's "ZERO
 // network calls" promise is enforced, not assumed: if a validation regression
