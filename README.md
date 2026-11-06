@@ -128,10 +128,12 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | `TENKI_MCP_HTTP_TOKEN` | — | Bearer token for the HTTP endpoint; optional on loopback, required on a non-loopback host. |
 | `TENKI_MCP_PUBLIC_URL` | — | Public base URL for an OAuth-protected hosted server. |
 | `TENKI_MCP_OAUTH_ISSUER` | — | OAuth authorization-server issuer. Enables delegated OAuth HTTP mode. |
-| `TENKI_MCP_OAUTH_RESOURCE` | `<public URL>/mcp` | RFC 8707 resource identifier accepted in access-token audiences. |
+| `TENKI_MCP_OAUTH_RESOURCE` | `<public URL>/mcp` | RFC 8707 resource identifier accepted in access-token audiences. A comma-separated list serves one resource per domain; metadata returns the one matching the request host, else the first. |
 | `TENKI_MCP_OAUTH_SCOPE` | `mcp` | Required delegated scope. |
 | `TENKI_MCP_IDENTITY_URL` | — | Internal Tenki Identity service endpoint used to exchange OAuth access tokens. |
 | `TENKI_MCP_IDENTITY_SERVICE_TOKEN` | — | Service credential for the private Identity token-exchange RPC. |
+
+Every `TENKI_*` variable above also has a `LUXORAI_*` equivalent (for example `LUXORAI_API_KEY`, `LUXORAI_MCP_TRANSPORT`). All `LUXORAI_*` credentials are read before any `TENKI_*` one, and `lx_…` API keys are accepted alongside `tk_…`.
 
 ## Tools
 

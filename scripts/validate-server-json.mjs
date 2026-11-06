@@ -16,7 +16,6 @@ import { readFileSync } from "node:fs";
 
 const read = (f) => JSON.parse(readFileSync(new URL(`../${f}`, import.meta.url), "utf8"));
 const pkg = read("package.json");
-const srv = read("server.json");
 // Read from source rather than dist/ so this stays a fast fail that needs no build.
 const serverTs = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
 
@@ -28,54 +27,65 @@ const problems = [];
 const check = (ok, msg) => { if (!ok) problems.push(msg); };
 const len = (s) => [...(s ?? "")].length;
 
-// $schema is required and must be a recognizable versioned schema URL.
-check(SCHEMA_RE.test(srv.$schema ?? ""), `server.json $schema is missing or malformed: ${srv.$schema}`);
+// The Luxor AI listing ships the same tarball republished as @luxorai/mcp with
+// package.json name and mcpName rewritten to these values (see npm-publish.yml).
+const targets = [
+  { file: "server.json", name: pkg.name, mcpName: pkg.mcpName },
+  { file: "server.luxor.json", name: "@luxorai/mcp", mcpName: "io.github.LuxorLabs/luxor-mcp" },
+];
 
-// name: required, 3-200 chars, exactly one slash, restricted charset.
-check(NAME_RE.test(srv.name ?? ""), `server.json name does not match ${NAME_RE}: ${srv.name}`);
-check(len(srv.name) >= 3 && len(srv.name) <= 200, `server.json name must be 3-200 chars (is ${len(srv.name)})`);
+for (const target of targets) {
+  const { file } = target;
+  const srv = read(file);
+  // $schema is required and must be a recognizable versioned schema URL.
+  check(SCHEMA_RE.test(srv.$schema ?? ""), `${file} $schema is missing or malformed: ${srv.$schema}`);
 
-// description: required, 1-100 chars. This is the limit that is easy to blow
-// past, because package.json.description has no such cap.
-check(
-  len(srv.description) >= 1 && len(srv.description) <= 100,
-  `server.json description must be 1-100 chars (is ${len(srv.description)})`,
-);
+  // name: required, 3-200 chars, exactly one slash, restricted charset.
+  check(NAME_RE.test(srv.name ?? ""), `${file} name does not match ${NAME_RE}: ${srv.name}`);
+  check(len(srv.name) >= 3 && len(srv.name) <= 200, `${file} name must be 3-200 chars (is ${len(srv.name)})`);
 
-// title: optional, but capped at 100 when present.
-if (srv.title !== undefined) {
-  check(len(srv.title) >= 1 && len(srv.title) <= 100, `server.json title must be 1-100 chars (is ${len(srv.title)})`);
-}
+  // description: required, 1-100 chars. This is the limit that is easy to blow
+  // past, because package.json.description has no such cap.
+  check(
+    len(srv.description) >= 1 && len(srv.description) <= 100,
+    `${file} description must be 1-100 chars (is ${len(srv.description)})`,
+  );
 
-// version: required, <= 255, and must not be a range.
-check(len(srv.version) >= 1 && len(srv.version) <= 255, `server.json version must be 1-255 chars`);
-check(!/^[~^><=]|[*x]$/i.test(srv.version ?? ""), `server.json version looks like a range, not a version: ${srv.version}`);
+  // title: optional, but capped at 100 when present.
+  if (srv.title !== undefined) {
+    check(len(srv.title) >= 1 && len(srv.title) <= 100, `${file} title must be 1-100 chars (is ${len(srv.title)})`);
+  }
 
-// The registry proves npm ownership by comparing the published package's
-// mcpName to server.json name with an exact, case-sensitive string compare.
-check(
-  pkg.mcpName === srv.name,
-  `package.json mcpName (${pkg.mcpName}) must exactly equal server.json name (${srv.name})`,
-);
+  // version: required, <= 255, and must not be a range.
+  check(len(srv.version) >= 1 && len(srv.version) <= 255, `${file} version must be 1-255 chars`);
+  check(!/^[~^><=]|[*x]$/i.test(srv.version ?? ""), `${file} version looks like a range, not a version: ${srv.version}`);
 
-// Versions must be in lockstep or the registry validates the wrong npm version.
-check(pkg.version === srv.version, `package.json version ${pkg.version} != server.json version ${srv.version}`);
-for (const [i, p] of (srv.packages ?? []).entries()) {
-  check(p.version === pkg.version, `server.json packages[${i}].version ${p.version} != package.json version ${pkg.version}`);
-  check(!!p.registryType, `server.json packages[${i}] is missing registryType`);
-  check(!!p.identifier, `server.json packages[${i}] is missing identifier`);
-  check(!!p.transport?.type, `server.json packages[${i}] is missing transport.type`);
-  if (p.registryType === "npm") {
-    // ValidateNPM requires an exact base-URL match, and the identifier must be
-    // the real npm package name (that is what gets fetched for the mcpName check).
-    check(
-      (p.registryBaseUrl ?? NPM_REGISTRY_URL) === NPM_REGISTRY_URL,
-      `server.json packages[${i}].registryBaseUrl must be exactly ${NPM_REGISTRY_URL}`,
-    );
-    check(
-      p.identifier === pkg.name,
-      `server.json packages[${i}].identifier (${p.identifier}) != package.json name (${pkg.name})`,
-    );
+  // The registry proves npm ownership by comparing the published package's
+  // mcpName to server.json name with an exact, case-sensitive string compare.
+  check(
+    target.mcpName === srv.name,
+    `${file}: package.json mcpName (${target.mcpName}) must exactly equal ${file} name (${srv.name})`,
+  );
+
+  // Versions must be in lockstep or the registry validates the wrong npm version.
+  check(pkg.version === srv.version, `package.json version ${pkg.version} != ${file} version ${srv.version}`);
+  for (const [i, p] of (srv.packages ?? []).entries()) {
+    check(p.version === pkg.version, `${file} packages[${i}].version ${p.version} != package.json version ${pkg.version}`);
+    check(!!p.registryType, `${file} packages[${i}] is missing registryType`);
+    check(!!p.identifier, `${file} packages[${i}] is missing identifier`);
+    check(!!p.transport?.type, `${file} packages[${i}] is missing transport.type`);
+    if (p.registryType === "npm") {
+      // ValidateNPM requires an exact base-URL match, and the identifier must be
+      // the real npm package name (that is what gets fetched for the mcpName check).
+      check(
+        (p.registryBaseUrl ?? NPM_REGISTRY_URL) === NPM_REGISTRY_URL,
+        `${file} packages[${i}].registryBaseUrl must be exactly ${NPM_REGISTRY_URL}`,
+      );
+      check(
+        p.identifier === target.name,
+        `${file} packages[${i}].identifier (${p.identifier}) != npm name (${target.name})`,
+      );
+    }
   }
 }
 
@@ -99,4 +109,4 @@ if (problems.length) {
   console.error(`\n✗ ${problems.length} problem(s) would be rejected by the MCP Registry.`);
   process.exit(1);
 }
-console.log(`✓ server.json is publish-ready: ${srv.name}@${srv.version} -> npm ${pkg.name}@${pkg.version}`);
+for (const t of targets) console.log(`✓ ${t.file} is publish-ready: ${t.mcpName}@${pkg.version} -> npm ${t.name}@${pkg.version}`);

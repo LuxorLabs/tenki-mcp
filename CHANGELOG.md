@@ -2,6 +2,13 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
+## Unreleased
+
+- Read `LUXORAI_*` environment variables before their `TENKI_*` equivalents (credentials, endpoint, and every `TENKI_MCP_*` option). `TENKI_*` keeps working.
+- Accept `lx_` API keys alongside `tk_`.
+- `TENKI_MCP_OAUTH_RESOURCE` accepts a comma-separated list; protected-resource metadata returns the entry matching the request host.
+- Add a `luxor-mcp` bin alias and a `luxor` Claude Code plugin. Prepare a gated dual publish as `@luxorai/mcp` (`io.github.LuxorLabs/luxor-mcp`, `ghcr.io/luxorlabs/luxor-mcp`).
+
 ## [0.2.0] — 2026-08-21
 
 - Remove standalone image management tools. Template images remain available through template builds and sandbox creation.
