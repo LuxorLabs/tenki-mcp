@@ -31,6 +31,7 @@ All notable changes to `@tenkicloud/mcp`. This project follows semantic versioni
 - A fork that fails partway names the snapshot and sandboxes it already created, and is never retried automatically. Create, fork and other non-repeatable calls refused by a workspace limit now fail at once instead of retrying.
 - `tenki_resize_volume` and `tenki_detach_volume` descriptions now match the API: only a never-attached volume can be resized, and a forced detach loses unflushed writes.
 - Update `@modelcontextprotocol/sdk` to 1.32.1 (fixes GHSA-6qxp-vccf-f47h: the OAuth client could send credentials to an authorization server chosen by the MCP server) and refresh transitive pins flagged by `npm audit`.
+- `tenki_resume_sandbox` matches the API's new resume behavior (sandbox-engine v2.35.0): it waits until the sandbox is RUNNING with the 600s slow-operation budget instead of 30s, takes `async` to return once the resume is accepted, and a wait that times out says the sandbox may still be resuming. Calling it again joins a resume in progress.
 
 ## [0.2.0] — 2026-08-21
 

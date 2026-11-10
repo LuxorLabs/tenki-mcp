@@ -394,7 +394,8 @@ const stop = (srv) => { srv.closeAllConnections?.(); srv.close(); };
 	// Slow storage/VM operations must NOT get the 30s unary budget: the RPC does not
 	// return until the operation finishes, and a client-side timeout leaves the
 	// resource created but its id unknown to the caller (measured e2e on both).
-	for (const m of ["CreateSnapshot", "PauseSession", "ForkSession"]) {
+	// ResumeSession joined them in tenki-app #6486: it now holds until the session leaves RESUMING.
+	for (const m of ["CreateSnapshot", "PauseSession", "ForkSession", "ResumeSession"]) {
 		check(`timeoutFor: ${m} → slow budget (600s), not 30s`, c.timeoutFor(m, {}) === 600_000, `${c.timeoutFor(m, {})}`);
 	}
 	check("timeoutFor: GetSnapshot (a read) stays on the unary default", c.timeoutFor("GetSnapshot", {}) === 30_000);
@@ -402,8 +403,9 @@ const stop = (srv) => { srv.closeAllConnections?.(); srv.close(); };
 	check("timeoutFor: CreateSession without waitReady stays on the unary default", c.timeoutFor("CreateSession", {}) === 30_000);
 	check("timeoutFor: PauseSession{async} drops to the unary default", c.timeoutFor("PauseSession", { async: true }) === 30_000);
 	check("timeoutFor: CreateSnapshot{async} drops to the unary default", c.timeoutFor("CreateSnapshot", { async: true }) === 30_000);
+	check("timeoutFor: ResumeSession{async} drops to the unary default", c.timeoutFor("ResumeSession", { async: true }) === 30_000);
 	// Async methods return a handle in <1s; a long budget would only delay a hung call.
-	for (const m of ["BuildTemplate", "PublishRegistryImage", "ResumeSession", "ResizeVolume"]) {
+	for (const m of ["BuildTemplate", "PublishRegistryImage", "ResizeVolume"]) {
 		check(`timeoutFor: ${m} (async/fast) stays on the unary default`, c.timeoutFor(m, {}) === 30_000, `${c.timeoutFor(m, {})}`);
 	}
 	{

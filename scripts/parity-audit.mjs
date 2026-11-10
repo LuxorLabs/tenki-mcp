@@ -15,7 +15,7 @@
  * client.data(_, "X") calls, plus HELPER_COVERAGE for methods a tool reaches
  * through a client helper (e.g. read_file → ReadFile via client.readTextFile).
  *
- * Surface last synced to tenki-app origin/main 6f76dbaa73 (2026-11-04). When the
+ * Surface last synced to tenki-app origin/main 3d435390a1 (2026-11-10). When the
  * proto changes, update SURFACE / DEPRECATED here in the same PR.
  */
 import fs from "node:fs";
@@ -30,6 +30,10 @@ const toolsDir = path.join(here, "..", "src", "tools");
 // V2       → streaming/interactive, deferred (needs an HTTP/2 Connect-streaming transport)
 // INTERNAL → transport plumbing or a surface deliberately kept out of the MCP (registry images: tenki-mcp #27;
 //            Tailscale connection / CI runner admin: dashboard-managed, feature-flagged, in no SDK)
+// UNRELEASED → on tenki-app main but in no released sandbox-engine yet, so a tool would fail against
+//            production; listed on every run and becomes TOOL once released. Storage connections/mounts
+//            (#5900, 5d54afc862): newest tag sandbox-engine-v2.35.0 predates it, and it is behind the
+//            `sandbox-storage-mounts` PostHog flag. All three SDKs and the dashboard already have it.
 const SURFACE = {
 	SandboxService: {
 		CreateSession: "TOOL", GetSession: "TOOL", GetSessionMetrics: "TOOL", ListSessions: "TOOL", ListWorkspaceSandboxes: "TOOL",
@@ -61,6 +65,10 @@ const SURFACE = {
 		GetTailnetDefaults: "INTERNAL", SaveTailnetDefaults: "INTERNAL", ListTailnetRunnerStatuses: "INTERNAL",
 		SaveTailnetRunnerConfiguration: "INTERNAL", ListTailnetRunnerConfigurations: "INTERNAL",
 		SaveTailnetConnection: "INTERNAL", ListTailnetConnections: "INTERNAL", TestTailnetConnection: "INTERNAL",
+		CreateStorageConnection: "UNRELEASED", TestStorageConnection: "UNRELEASED", ListStorageConnections: "UNRELEASED",
+		UpdateStorageConnection: "UNRELEASED", DeleteStorageConnection: "UNRELEASED", ListStorageMounts: "UNRELEASED",
+		AttachStorageMount: "UNRELEASED", DetachStorageMount: "UNRELEASED", GetStorageDefaults: "UNRELEASED",
+		SaveStorageDefaults: "UNRELEASED",
 	},
 	SandboxSessionDataPlaneService: {
 		ReadFile: "TOOL", WriteFile: "TOOL", Stat: "TOOL", Mkdir: "TOOL", Remove: "TOOL", List: "TOOL",
@@ -101,11 +109,13 @@ for (const f of fs.readdirSync(toolsDir)) {
 // ── Report ────────────────────────────────────────────────────────────────────
 const known = new Set(Object.values(SURFACE).flatMap((methods) => Object.keys(methods)));
 let toolCount = 0, coveredCount = 0, v2 = 0, internal = 0;
+const unreleased = [];
 const missing = [];
 for (const [svc, methods] of Object.entries(SURFACE)) {
 	for (const [method, kind] of Object.entries(methods)) {
 		if (kind === "V2") { v2++; continue; }
 		if (kind === "INTERNAL") { internal++; continue; }
+		if (kind === "UNRELEASED") { unreleased.push(`${svc}/${method}`); continue; }
 		toolCount++;
 		if (called.has(method)) coveredCount++;
 		else missing.push(`${svc}/${method}`);
@@ -119,10 +129,15 @@ console.log(`  tool-worthy methods: ${toolCount}`);
 console.log(`  covered:             ${coveredCount}`);
 console.log(`  deferred to v2 (streaming): ${v2}`);
 console.log(`  internal (excluded):        ${internal}`);
+console.log(`  unreleased (on main, not shipped): ${unreleased.length}`);
 console.log(`  coverage: ${((coveredCount / toolCount) * 100).toFixed(1)}%`);
 if (deprecatedInUse.length) {
 	console.log(`\n! ${deprecatedInUse.length} deprecated method(s) still called by a tool (allowed, but plan the migration):`);
 	for (const m of deprecatedInUse) console.log(`    - ${m} → ${DEPRECATED[m]}`);
+}
+if (unreleased.length) {
+	console.log(`\n! ${unreleased.length} method(s) on tenki-app main but not in a released sandbox-engine — make them TOOL once shipped:`);
+	for (const m of unreleased) console.log(`    - ${m}`);
 }
 let failed = false;
 if (unknown.length) {
