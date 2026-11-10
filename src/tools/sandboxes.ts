@@ -394,9 +394,31 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_resume_sandbox",
-		"Resume a previously paused sandbox.",
-		{ session_id: sessionIdSchema },
-		async ({ session_id }) => ok(await client.control("ResumeSession", { sessionId: session_id })),
+		"Resume a previously paused sandbox. By default the call blocks until the sandbox is RUNNING (or the resume fails, as aborted with the reason); pass async to return as soon as the resume is accepted and poll tenki_get_sandbox for RUNNING. Calling it while a resume is already in progress joins that resume instead of failing.",
+		{
+			session_id: sessionIdSchema,
+			async: z.boolean().optional().describe("Return once the resume is accepted instead of waiting for RUNNING (default false)."),
+		},
+		async ({ session_id, async: isAsync }, extra) => {
+			try {
+				return ok(
+					await client.control(
+						"ResumeSession",
+						{ sessionId: session_id, ...(isAsync ? { async: true } : {}) },
+						undefined,
+						extra?.signal,
+					),
+				);
+			} catch (e) {
+				// The deadline ends the wait for RUNNING, not the resume itself (it runs detached server-side).
+				if (!isAsync && e instanceof Error && /timed out|cancelled/.test(e.message)) {
+					throw new Error(
+						`${e.message} — the sandbox may still be resuming; check tenki_get_sandbox, or call tenki_resume_sandbox again (it joins the resume in progress).`,
+					);
+				}
+				throw e;
+			}
+		},
 	);
 
 	server.tool(

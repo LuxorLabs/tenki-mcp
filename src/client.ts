@@ -69,8 +69,14 @@ const CREATE_WAIT_READY_TIMEOUT_MS = 90_000; // server holds wait_ready up to 60
  * ForkSession holds until its snapshot is READY and every child exists (and is
  * RUNNING with wait); if the caller disconnects first the server terminates the
  * children it could not deliver, so a short budget would destroy the fork.
+ *
+ * ResumeSession (since tenki-app #6486, sandbox-engine v2.35.0) holds until the
+ * session leaves RESUMING. The server's wait has no deadline of its own, and
+ * the restore it waits on runs detached for up to 6 minutes
+ * (resumeDispatchDetachedTimeout), so a 30s budget reports a slow but
+ * successful resume as failed.
  */
-const SLOW_METHOD = /^(CreateSnapshot|PauseSession|ForkSession)$/;
+const SLOW_METHOD = /^(CreateSnapshot|PauseSession|ForkSession|ResumeSession)$/;
 const DEFAULT_SLOW_TIMEOUT_MS = 600_000;
 
 // Session-credential cache lifetime handling: a credential whose expiry the API

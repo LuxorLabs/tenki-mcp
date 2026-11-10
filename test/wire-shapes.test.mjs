@@ -136,6 +136,10 @@ try {
 	// PauseSession / CreateSnapshot: async
 	await call("tenki_pause_sandbox", { session_id: SID, async: true });
 	check("pause_sandbox: async → async:true", last("PauseSession")?.async === true);
+	await call("tenki_resume_sandbox", { session_id: SID });
+	check("resume_sandbox: default waits (no async field sent)", last("ResumeSession")?.sessionId === SID && !("async" in (last("ResumeSession") ?? {})), JSON.stringify(last("ResumeSession")));
+	await call("tenki_resume_sandbox", { session_id: SID, async: true });
+	check("resume_sandbox: async → async:true", last("ResumeSession")?.async === true);
 	await call("tenki_create_snapshot", { session_id: SID, async: true, name: "s" });
 	check("create_snapshot: async → async:true", last("CreateSnapshot")?.async === true);
 
@@ -404,6 +408,24 @@ try {
 
 	// Removed workspace-settings RPCs are never called
 	check("no tool calls a removed workspace-settings RPC", ![...seen.keys()].some((m) => /WorkspaceSandboxSettings|SnapshotRetentionSettings/.test(m)));
+
+	// ResumeSession now holds until RUNNING; a client-side deadline ends the wait, not the resume.
+	// A second server with a 1.5s slow budget proves the timeout says the resume may still land.
+	{
+		HANG.add("ResumeSession");
+		const t2 = new StdioClientTransport({
+			command: process.execPath,
+			args: [SERVER],
+			env: { ...process.env, TENKI_API_KEY: "tk_wire_dummy", TENKI_API_ENDPOINT: endpoint, TENKI_MCP_SLOW_TIMEOUT_MS: "1500" },
+			stderr: "ignore",
+		});
+		const c2 = new Client({ name: "wire-shapes-resume", version: "1.0.0" });
+		await c2.connect(t2);
+		const r = await c2.callTool({ name: "tenki_resume_sandbox", arguments: { session_id: SID } });
+		check("resume_sandbox: a wait that times out says the sandbox may still be resuming", r.isError === true && /timed out/.test(text(r)) && /may still be resuming/.test(text(r)) && /tenki_get_sandbox/.test(text(r)), text(r).slice(0, 220));
+		await c2.close();
+		HANG.delete("ResumeSession");
+	}
 } catch (e) {
 	console.error("  ✗ " + (e?.message ?? e));
 	fail++;
