@@ -2,7 +2,7 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
-## Unreleased
+## [0.4.0] - 2026-11-10
 
 - Read `LUXORAI_*` environment variables before their `TENKI_*` equivalents (credentials, endpoint, and every `TENKI_MCP_*` option). `TENKI_*` keeps working.
 - Accept `lx_` API keys alongside `tk_`.

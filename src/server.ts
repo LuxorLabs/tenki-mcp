@@ -34,7 +34,7 @@ import { registerSsh } from "./tools/ssh.js";
 import { registerAuthStatus } from "./tools/auth_status.js";
 import { readEnv } from "./env.js";
 
-export const VERSION = "0.3.1";
+export const VERSION = "0.4.0";
 
 const modules = [
 	registerIdentity,
