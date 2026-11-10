@@ -157,6 +157,11 @@ try {
 	if (metadataUrlForHost(config, "unknown.test") !== config.metadataUrl) {
 		throw new Error("unknown host challenge does not fall back to the public metadata URL");
 	}
+	for (const host of ["mcp.luxor.test:8443", undefined]) {
+		if (resourceForHost(config, host) !== "http://127.0.0.1/mcp" || metadataUrlForHost(config, host) !== config.metadataUrl) {
+			throw new Error(`host ${host} matched a resource on another port or without a Host header`);
+		}
+	}
 
 	const unauthorized = await fetch(`${base}/mcp`, { method: "POST" });
 	if (unauthorized.status !== 401) throw new Error(`unauthorized request returned ${unauthorized.status}`);
