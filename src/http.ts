@@ -26,8 +26,10 @@ import {
 	authorizationBinding,
 	bearerToken,
 	loadOAuthConfig,
+	metadataUrlForHost,
 } from "./oauth.js";
 import { createServer } from "./server.js";
+import { readEnv } from "./env.js";
 
 const MAX_BODY_BYTES = 1 << 20; // 1 MiB — reject larger POST bodies (memory-DoS guard)
 const MAX_SESSIONS = 256; // cap concurrent sessions (init-flood DoS guard)
@@ -117,16 +119,17 @@ function authOk(header: string | undefined, expected: string): boolean {
  * an ephemeral `port: 0` bind still accepts its own address). Anything else —
  * e.g. a rebound attacker domain — is rejected by the transport.
  */
-function allowedHostsFor(server: http.Server, host: string, port: number, publicUrl?: string): string[] {
+function allowedHostsFor(server: http.Server, host: string, port: number, publicUrls: string[] = []): string[] {
 	const addr = server.address();
 	const bound = addr && typeof addr === "object" ? addr.port : port;
 	const ports = Array.from(new Set([port, bound]));
 	const hosts = Array.from(new Set([host, "127.0.0.1", "localhost", "[::1]", "::1"]));
-	const configured = (process.env.TENKI_MCP_ALLOWED_HOSTS || "")
+	const configured = (readEnv("MCP_ALLOWED_HOSTS") || "")
 		.split(",")
 		.map((value) => value.trim())
 		.filter(Boolean);
-	if (publicUrl) {
+	for (const publicUrl of publicUrls) {
+		if (!URL.canParse(publicUrl)) continue;
 		const url = new URL(publicUrl);
 		configured.push(url.host, url.hostname);
 	}
@@ -144,8 +147,8 @@ function oauthUnauthorized(res: http.ServerResponse, metadataUrl: string, scope:
 }
 
 export function startHttp(client: TenkiClient | null, port: number): http.Server {
-	const host = process.env.TENKI_MCP_HTTP_HOST || "127.0.0.1";
-	const httpToken = process.env.TENKI_MCP_HTTP_TOKEN || "";
+	const host = readEnv("MCP_HTTP_HOST") || "127.0.0.1";
+	const httpToken = readEnv("MCP_HTTP_TOKEN") || "";
 	const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
 	const oauthConfig = loadOAuthConfig();
 	const oauthVerifier = oauthConfig ? new OAuthTokenVerifier(oauthConfig) : null;
@@ -196,7 +199,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 				const token = bearerToken(req.headers["authorization"]);
 				delegated = token ? await oauthVerifier.verify(token) : null;
 				if (!delegated) {
-					oauthUnauthorized(res, oauthConfig.metadataUrl, oauthConfig.scope);
+					oauthUnauthorized(res, metadataUrlForHost(oauthConfig, req.headers.host), oauthConfig.scope);
 					return;
 				}
 			} else if (!authOk(req.headers["authorization"], httpToken)) {
@@ -210,7 +213,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 				delegated &&
 				existingEntry.authorization.binding !== authorizationBinding(delegated)
 			) {
-				oauthUnauthorized(res, oauthConfig!.metadataUrl, oauthConfig!.scope);
+				oauthUnauthorized(res, metadataUrlForHost(oauthConfig!, req.headers.host), oauthConfig!.scope);
 				return;
 			}
 			if (existingEntry?.authorization && delegated) {
@@ -251,7 +254,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 						// DNS-rebinding defense: only accept these Host headers, so a rebound
 						// attacker-domain request from a browser is rejected.
 						enableDnsRebindingProtection: true,
-						allowedHosts: allowedHostsFor(httpServer, host, port, oauthConfig?.publicUrl),
+						allowedHosts: allowedHostsFor(httpServer, host, port, oauthConfig ? [oauthConfig.publicUrl, ...oauthConfig.resources] : []),
 						onsessioninitialized: (id) => {
 							sessions.set(id, {
 								transport,
@@ -265,7 +268,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 						if (id) sessions.delete(id);
 					};
 					const sessionClient = delegated
-						? new TenkiClient("", process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || undefined, {
+						? new TenkiClient("", readEnv("API_ENDPOINT", "API_URL") || undefined, {
 								workspaceId: delegated.workspaceId,
 								bearerTokenProvider: () => sessionAuthorization!.apiDelegationToken,
 							})

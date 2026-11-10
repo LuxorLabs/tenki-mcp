@@ -13,6 +13,8 @@
  * (github.com/opencolin/n8n-nodes-tenki).
  */
 
+import { isApiKey } from "./env.js";
+
 const CONTROL_SERVICE = "tenki.sandbox.v1.SandboxService";
 const DATA_SERVICE = "tenki.sandbox.v1.SandboxSessionDataPlaneService";
 const DEFAULT_BASE_URL = "https://api.tenki.cloud";
@@ -153,11 +155,11 @@ function shellQuote(value: string): string {
 
 /**
  * Tenki's auth header is chosen by token prefix (verbatim from the SDK's auth.ts):
- * `tk_` → Bearer, `ory_st_` → X-Session-Token, otherwise a `tenki_session` cookie.
+ * `lx_`/`tk_` → Bearer, `ory_st_` → X-Session-Token, otherwise a `tenki_session` cookie.
  */
 function authHeaders(token: string): Record<string, string> {
 	const t = token.trim();
-	if (t.startsWith("tk_")) return { Authorization: `Bearer ${t}` };
+	if (isApiKey(t)) return { Authorization: `Bearer ${t}` };
 	if (t.startsWith("ory_st_")) return { "X-Session-Token": t };
 	return { Cookie: `tenki_session=${t}` };
 }

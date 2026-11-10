@@ -18,6 +18,12 @@ name: Release
 #
 # Use the workflow_dispatch entry with dry_run (the default) to exercise every gate
 # without publishing anything.
+#
+# Luxor AI dual publish: the same tarball is also published as @luxorai/mcp
+# (registry name io.github.LuxorLabs/luxor-mcp, image ghcr.io/luxorlabs/luxor-mcp).
+# Those steps stay off until a human sets the repository variable
+# LUXORAI_PUBLISH=true, after configuring the @luxorai/mcp trusted publisher (or the
+# LUXORAI_NPM_TOKEN bootstrap secret) for this workflow and environment.
 
 on:
   push:
@@ -57,6 +63,8 @@ jobs:
       # `if:` conditions, while `env` is. Empty when the secret is absent, which is
       # exactly how the workflow decides between the bootstrap and keyless paths.
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      LUXORAI_NPM_TOKEN: ${{ secrets.LUXORAI_NPM_TOKEN }}
+      LUXORAI_PUBLISH: ${{ vars.LUXORAI_PUBLISH == 'true' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,9 +95,12 @@ jobs:
           const srv = require("./server.json");
           const fail = (m) => { console.error(`::error::${m}`); process.exitCode = 1; };
           if (pkg.version !== tag) fail(`package.json version ${pkg.version} != tag ${tag}`);
-          if (srv.version !== tag) fail(`server.json version ${srv.version} != tag ${tag}`);
-          for (const [i, p] of (srv.packages ?? []).entries())
-            if (p.version !== tag) fail(`server.json packages[${i}].version ${p.version} != tag ${tag}`);
+          for (const file of ["server.json", "server.luxor.json"]) {
+            const s = require(`./${file}`);
+            if (s.version !== tag) fail(`${file} version ${s.version} != tag ${tag}`);
+            for (const [i, p] of (s.packages ?? []).entries())
+              if (p.version !== tag) fail(`${file} packages[${i}].version ${p.version} != tag ${tag}`);
+          }
           // The registry proves npm ownership with an exact, case-sensitive compare
           // of the published package's mcpName against server.json's name.
           if (pkg.mcpName !== srv.name) fail(`mcpName ${pkg.mcpName} != server.json name ${srv.name}`);
@@ -113,6 +124,23 @@ jobs:
 
       - name: Show the tarball that will be published
         run: npm pack --dry-run
+
+      # The Luxor AI package is this exact tarball with name and mcpName rewritten,
+      # staged outside the checkout so the steps below still see the original manifest.
+      - name: Stage the @luxorai/mcp tarball
+        id: luxor
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/luxorai-mcp"
+          mkdir -p "$dir"
+          tarball=$(npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP" | tail -n1)
+          tar xzf "$RUNNER_TEMP/$tarball" -C "$dir" --strip-components=1
+          name=$(node -p 'require("./server.luxor.json").packages[0].identifier')
+          mcp=$(node -p 'require("./server.luxor.json").name')
+          (cd "$dir" && npm pkg set "name=$name" "mcpName=$mcp")
+          (cd "$dir" && npm pack --dry-run --ignore-scripts)
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "npm_name=$name" >> "$GITHUB_OUTPUT"
 
       # ── Irreversible from here ────────────────────────────────────────────────
 
@@ -197,13 +225,46 @@ jobs:
           name=$(node -p 'require("./server.json").name')
           curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=${name}" | tee /dev/stderr | grep -q "$name"
 
+      # ── Luxor AI dual publish (gated on vars.LUXORAI_PUBLISH) ──────────────────
+
+      - name: Publish @luxorai/mcp to npm (bootstrap, LUXORAI_NPM_TOKEN present)
+        if: (github.event_name == 'push' || !inputs.dry_run) && env.LUXORAI_PUBLISH == 'true' && env.LUXORAI_NPM_TOKEN != ''
+        working-directory: ${{ steps.luxor.outputs.dir }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.LUXORAI_NPM_TOKEN }}
+        run: npm publish --provenance --access public --ignore-scripts
+
+      - name: Publish @luxorai/mcp to npm (trusted publishing, keyless)
+        if: (github.event_name == 'push' || !inputs.dry_run) && env.LUXORAI_PUBLISH == 'true' && env.LUXORAI_NPM_TOKEN == ''
+        working-directory: ${{ steps.luxor.outputs.dir }}
+        run: npm publish --provenance --access public --ignore-scripts
+
+      - name: Wait for npm to serve @luxorai/mcp
+        if: (github.event_name == 'push' || !inputs.dry_run) && env.LUXORAI_PUBLISH == 'true'
+        env:
+          PKG: ${{ steps.luxor.outputs.npm_name }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/${PKG}/${VERSION}" || echo 000)
+            if [ "$code" = "200" ]; then echo "npm is serving ${PKG}@${VERSION}"; exit 0; fi
+            echo "attempt ${i}/30: HTTP ${code}"; sleep 10
+          done
+          echo "::error::npm did not serve ${PKG}@${VERSION} within 5 minutes"
+          exit 1
+
+      - name: Publish io.github.LuxorLabs/luxor-mcp to the MCP Registry
+        if: (github.event_name == 'push' || !inputs.dry_run) && env.LUXORAI_PUBLISH == 'true'
+        run: ./mcp-publisher login github-oidc && ./mcp-publisher publish server.luxor.json
+
       - name: Set up Docker Buildx
         if: github.event_name == 'push' || !inputs.dry_run
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
         if: github.event_name == 'push' || !inputs.dry_run
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -219,6 +280,8 @@ jobs:
           tags: |
             ghcr.io/luxorlabs/tenki-mcp:${{ steps.ver.outputs.version }}
             ghcr.io/luxorlabs/tenki-mcp:latest
+            ${{ env.LUXORAI_PUBLISH == 'true' && format('ghcr.io/luxorlabs/luxor-mcp:{0}', steps.ver.outputs.version) || '' }}
+            ${{ env.LUXORAI_PUBLISH == 'true' && 'ghcr.io/luxorlabs/luxor-mcp:latest' || '' }}
 
       - name: Publish summary
         if: always()

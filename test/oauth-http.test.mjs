@@ -123,10 +123,11 @@ process.env.TENKI_MCP_OAUTH_ISSUER = "https://oauth.tenki.test";
 process.env.TENKI_MCP_IDENTITY_URL = `http://127.0.0.1:${identityAddress.port}`;
 process.env.TENKI_MCP_IDENTITY_SERVICE_TOKEN = identityServiceToken;
 process.env.TENKI_MCP_PUBLIC_URL = "http://127.0.0.1";
-process.env.TENKI_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp";
+process.env.LUXORAI_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp,https://mcp.luxor.test/mcp";
+process.env.TENKI_MCP_OAUTH_RESOURCE = "https://ignored.tenki.test/mcp";
 process.env.TENKI_API_ENDPOINT = `http://127.0.0.1:${apiAddress.port}`;
 
-const { authorizationBinding } = await import("../dist/oauth.js");
+const { authorizationBinding, loadOAuthConfig, metadataUrlForHost, resourceForHost } = await import("../dist/oauth.js");
 const { startHttp } = await import("../dist/http.js");
 const server = startHttp(null, 0);
 if (!server.listening) await once(server, "listening");
@@ -139,6 +140,27 @@ try {
 	const resource = await metadata.json();
 	if (resource.resource !== "http://127.0.0.1/mcp") {
 		throw new Error("protected-resource metadata has wrong resource");
+	}
+	const config = loadOAuthConfig();
+	if (config.resources.join(",") !== "http://127.0.0.1/mcp,https://mcp.luxor.test/mcp") {
+		throw new Error("LUXORAI_MCP_OAUTH_RESOURCE list was not preferred over TENKI_MCP_OAUTH_RESOURCE");
+	}
+	if (resourceForHost(config, "mcp.luxor.test") !== "https://mcp.luxor.test/mcp") {
+		throw new Error("metadata resource does not follow the request host");
+	}
+	if (resourceForHost(config, "unknown.test") !== "http://127.0.0.1/mcp") {
+		throw new Error("unknown host does not fall back to the first resource");
+	}
+	if (metadataUrlForHost(config, "mcp.luxor.test") !== "https://mcp.luxor.test/.well-known/oauth-protected-resource/mcp") {
+		throw new Error("challenge resource_metadata does not follow the request host");
+	}
+	if (metadataUrlForHost(config, "unknown.test") !== config.metadataUrl) {
+		throw new Error("unknown host challenge does not fall back to the public metadata URL");
+	}
+	for (const host of ["mcp.luxor.test:8443", undefined]) {
+		if (resourceForHost(config, host) !== "http://127.0.0.1/mcp" || metadataUrlForHost(config, host) !== config.metadataUrl) {
+			throw new Error(`host ${host} matched a resource on another port or without a Host header`);
+		}
 	}
 
 	const unauthorized = await fetch(`${base}/mcp`, { method: "POST" });
@@ -188,6 +210,7 @@ try {
 	await client.close();
 
 	console.log("✓ RFC 9728 protected-resource metadata is public");
+	console.log("✓ OAuth resource accepts a list and answers per request host");
 	console.log("✓ OAuth provider routes are owned by Tenki Identity");
 	console.log("✓ unauthenticated MCP requests return an OAuth challenge");
 	console.log("✓ MCP access tokens are exchanged through Tenki Identity");

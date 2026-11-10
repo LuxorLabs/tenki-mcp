@@ -2,8 +2,12 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
-## [Unreleased]
+## Unreleased
 
+- Read `LUXORAI_*` environment variables before their `TENKI_*` equivalents (credentials, endpoint, and every `TENKI_MCP_*` option). `TENKI_*` keeps working.
+- Accept `lx_` API keys alongside `tk_`.
+- `TENKI_MCP_OAUTH_RESOURCE` accepts a comma-separated list; protected-resource metadata returns the entry matching the request host.
+- Add a `luxor-mcp` bin alias and a `luxor` Claude Code plugin. Prepare a gated dual publish as `@luxorai/mcp` (`io.github.LuxorLabs/luxor-mcp`, `ghcr.io/luxorlabs/luxor-mcp`).
 - Remove `tenki_get_workspace_settings`, `tenki_update_workspace_settings`, `tenki_get_snapshot_retention_settings` and `tenki_update_snapshot_retention_settings`: their API methods were removed upstream and every call returned 404. Plan limits are visible through `tenki_get_workspace_usage`.
 - Add `tenki_get_sandbox_metrics` (CPU/memory averages over a window) and `tenki_get_workspace_preview_domains` / `tenki_update_workspace_preview_domains` (wildcard preview domains).
 - Fix `tenki_attach_volume` `read_only`, which the API silently ignored (wrong wire field name); the mount was always read-write.
