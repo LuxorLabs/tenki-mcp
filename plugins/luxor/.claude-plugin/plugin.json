@@ -22,7 +22,8 @@
       "command": "npx",
       "args": ["-y", "@tenkicloud/mcp"],
       "env": {
-        "LUXORAI_API_KEY": "${user_config.api_key}"
+        "LUXORAI_API_KEY": "${user_config.api_key}",
+        "TENKI_API_KEY": "${user_config.api_key}"
       }
     }
   }

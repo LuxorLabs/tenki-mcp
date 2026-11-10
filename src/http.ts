@@ -128,6 +128,7 @@ function allowedHostsFor(server: http.Server, host: string, port: number, public
 		.map((value) => value.trim())
 		.filter(Boolean);
 	for (const publicUrl of publicUrls) {
+		if (!URL.canParse(publicUrl)) continue;
 		const url = new URL(publicUrl);
 		configured.push(url.host, url.hostname);
 	}

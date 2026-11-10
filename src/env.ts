@@ -1,9 +1,9 @@
-/** Every `LUXORAI_<suffix>` is tried (in order) before any legacy `TENKI_<suffix>`. Empty values fall through. */
+/** Every `LUXORAI_<suffix>` is tried (in order) before any legacy `TENKI_<suffix>`. Empty or blank values fall through. */
 export function readEnv(...suffixes: string[]): string | undefined {
 	for (const prefix of ["LUXORAI_", "TENKI_"]) {
 		for (const suffix of suffixes) {
 			const value = process.env[`${prefix}${suffix}`];
-			if (value) return value;
+			if (value?.trim()) return value;
 		}
 	}
 	return undefined;

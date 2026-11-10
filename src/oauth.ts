@@ -178,7 +178,12 @@ export class OAuthResourceRoutes {
 /** The configured resource whose host matches the request (RFC 9728 requires an exact match), else the first. */
 export function resourceForHost(config: Pick<OAuthConfig, "resource" | "resources">, host: string | undefined): string {
 	const wanted = (host ?? "").toLowerCase();
-	return config.resources.find((resource) => new URL(resource).host.toLowerCase() === wanted) ?? config.resource;
+	return config.resources.find((resource) => urlHost(resource) === wanted) ?? config.resource;
+}
+
+/** Lowercased host of a URL, or undefined when it does not parse (a resource may be any absolute URI). */
+function urlHost(value: string): string | undefined {
+	return URL.canParse(value) ? new URL(value).host.toLowerCase() : undefined;
 }
 
 export function bearerToken(header: string | undefined): string | null {

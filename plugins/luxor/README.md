@@ -1,6 +1,6 @@
 # luxor - Claude Code plugin
 
-Installs the Luxor Sandbox MCP server into Claude Code. On install you are prompted for your Luxor API key (`lx_…` or `tk_…`); it is stored in your OS keychain and passed to the server as `LUXORAI_API_KEY`.
+Installs the Luxor Sandbox MCP server into Claude Code. On install you are prompted for your Luxor API key (`lx_…` or `tk_…`); it is stored in your OS keychain and passed to the server as `LUXORAI_API_KEY` (and as `TENKI_API_KEY`, so releases that predate `LUXORAI_*` support still start).
 
 ```
 /plugin marketplace add LuxorLabs/tenki-mcp
