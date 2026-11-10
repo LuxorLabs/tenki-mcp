@@ -123,7 +123,7 @@ const baseResult = {
 	const spacey = "/home/tenki/report ";
 	const seen = {};
 	const client = await connect({
-		readTextFile: async (_sid, path) => { seen.read = path; return "x"; },
+		readFileBytes: async (_sid, path) => { seen.read = path; return Buffer.from("x"); },
 		data: async (_sid, method, req) => { seen[method] = req.path; return {}; },
 		execCaptured: async (_sid, _cmd, opts) => { seen.mvArgs = opts.args; return { ...baseResult, command: "mv", args: opts.args ?? [], stdout: "" }; },
 	});

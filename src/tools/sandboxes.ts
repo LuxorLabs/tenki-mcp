@@ -360,7 +360,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 			tags: z.array(z.string()).optional().describe("Only sandboxes carrying all of these tags."),
 			sticky: z.boolean().optional().describe("Only sticky (true) or only non-sticky (false) sandboxes."),
 			page_size: z.number().int().min(1).max(100).optional().describe("Rows per page (max 100)."),
-			page_token: z.string().optional(),
+			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
 		async ({ include_terminated, tags, sticky, page_size, page_token }) =>
 			ok(

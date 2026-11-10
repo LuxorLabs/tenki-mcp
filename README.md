@@ -137,7 +137,7 @@ Every `TENKI_*` variable above also has a `LUXORAI_*` equivalent (for example `L
 
 ## Tools
 
-**79 tools** — all 76 tool-worthy public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has), two workflow helpers, and `tenki_auth_status`. A few admin surfaces (published images, saved Tailscale connections) and implementation-only control-plane methods are intentionally excluded. Grouped by domain:
+**82 tools** — all 76 tool-worthy public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has; `GitOperation` is exposed as one tool per operation), two workflow helpers, and `tenki_auth_status`. A few admin surfaces (published images, saved Tailscale connections) and implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain | Tools |
 |---|---|
@@ -148,8 +148,8 @@ Every `TENKI_*` variable above also has a `LUXORAI_*` equivalent (for example `L
 | **Session admin** | `tenki_extend_sandbox` · `tenki_update_sandbox` · `tenki_terminate_sandboxes` (bulk) · `tenki_report_sandbox_activity` · `tenki_list_workspace_sandboxes` |
 | **Exec** | `tenki_exec` (stdout/stderr/exit inline) |
 | **Files** | `tenki_read_file` · `tenki_write_file` · `tenki_list_files` · `tenki_stat_path` · `tenki_make_dir` · `tenki_remove_path` · `tenki_move_path` |
-| **Git** | `tenki_git` (clone/checkout/diff/log — the API supports exactly these four; run other git commands via `tenki_exec`) |
-| **Ports & previews** | expose · list-exposed · unexpose · create-preview-url · open-preview · list/get/delete-preview-url · touch-preview · bind/unbind-preview-url · resolve-preview-token |
+| **Git** | `tenki_git_clone` · `tenki_git_checkout` · `tenki_git_diff` · `tenki_git_log` (the four operations the API supports; pass `directory` to target a cloned repo; run other git commands via `tenki_exec`) |
+| **Ports & previews** | expose · list-exposed · unexpose · create-preview-url · open-preview (viewer-token-gated, not public; port 7681 is the web terminal) · list/get/delete-preview-url · touch-preview · bind/unbind-preview-url · resolve-preview-token |
 | **Artifacts** (binary transfer) | `tenki_get_upload_url` · `tenki_get_download_url` (signed URLs for binary PUT/GET) |
 | **SSH** | `tenki_update_ssh_keys` · `tenki_issue_ssh_cert` · `tenki_list_ssh_gateways` |
 | **Snapshots** | create · get · list · list-session · list-workspace · list-dangling · update · delete · get-download-url |
@@ -205,7 +205,7 @@ The wire details are ported from the live-verified [n8n community node](https://
 
 This server holds a Tenki API key and can run code + spend credits, so treat it as a capability. Full model + [CSA MCP Server Top-10](https://modelcontextprotocol-security.io/top10/server/) mapping in **[SECURITY.md](SECURITY.md)**. Quick controls:
 
-- **Least privilege:** every tool carries MCP annotations (`readOnlyHint` / `destructiveHint`). Run `TENKI_MCP_READONLY=1` for an inspection-only server (read tools only), or `TENKI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
+- **Least privilege:** every tool carries a title and MCP annotations: `readOnlyHint` on reads, and `destructiveHint` on every tool that can overwrite, modify, interrupt or delete existing state (only tools that create, resume, extend, attach or keep alive without changing existing state are non-destructive). Run `TENKI_MCP_READONLY=1` for an inspection-only server (read tools only), or `TENKI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
 - **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http-v20-beta)).
 - **Audit:** `TENKI_MCP_AUDIT=1` logs each tool call's name to stderr.
 - **Untrusted output:** `tenki_run_code`/`tenki_exec`/`tenki_read_file` return output from untrusted code — clients should treat tool results as data, not instructions.

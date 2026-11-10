@@ -19,6 +19,9 @@ import { z } from "zod";
 import type { TenkiClient } from "../client.js";
 import { listQuery, ok, portSchema, protoEnum, searchSchema, sessionIdSchema, slugSchema } from "./common.js";
 
+/** The sandbox web terminal (ttyd) port — tenki-app previewports.WebTerminalPort. */
+const WEB_TERMINAL_PORT = 7681;
+
 export function registerPreviews(server: McpServer, client: TenkiClient): void {
 	// ── Unexpose a port (tear down its exposure + preview) ────────────────────────
 	server.tool(
@@ -55,13 +58,23 @@ export function registerPreviews(server: McpServer, client: TenkiClient): void {
 			),
 	);
 
-	// ── Open (get) a live preview for a port ──────────────────────────────────────
+	// ── Open a viewer-token-gated (authenticated) preview of a port ──────────────
+	// OpenPreview creates an AUTHENTICATED-mode preview. The API resolves a
+	// regional edge URL for the web terminal port (7681); any other port, and any
+	// sandbox with runtime secrets, gets the authenticated fallback domain served
+	// by the sandbox gateway, for which it registers a gateway route
+	// (resolveAuthenticatedPreviewURLForPort / registerAuthenticatedGatewayPreview
+	// in tenki-app backend/internal/domain/sandbox/service/port.go). An earlier
+	// description claimed those fallback URLs 404; that was not reproducible
+	// from the current code or production config and was dropped — confirm with
+	// a live OpenPreview on a non-terminal port. It replaces any earlier
+	// authenticated preview on the same port (deleteAuthenticatedPreviewExposures).
 	server.tool(
 		"tenki_open_preview",
-		"Open a viewer-token-gated (AUTHENTICATED-mode) preview. USE tenki_expose_port OR tenki_create_preview_url INSTEAD for an ordinary web server: for any port other than the web terminal (7681) the API deliberately returns a non-regional fallback host that currently has no edge route, so the URL 404s (live-verified). The returned viewerToken does resolve via tenki_resolve_preview_token; only the URL is unreachable. Requires allow_inbound.",
+		`Open a viewer-token-gated preview of a port in a sandbox and return its URL and viewer token; unlike tenki_expose_port and tenki_create_preview_url, the URL is not public. Port ${WEB_TERMINAL_PORT} is the sandbox's browser web terminal (ttyd, in the standard images). Requires a sandbox created with allow_inbound; port 22 is reserved. Opening the same port again replaces its earlier preview URL.`,
 		{
-			session_id: sessionIdSchema.describe("The sandbox session serving the port."),
-			port: portSchema.describe("The TCP port inside the sandbox to open a preview for (1-65535)."),
+			session_id: sessionIdSchema.describe("The sandbox serving the port."),
+			port: portSchema.describe(`The TCP port inside the sandbox to open a preview for (1-65535, not 22). ${WEB_TERMINAL_PORT} opens the web terminal.`),
 			expires_at: z
 				.string()
 				.optional()

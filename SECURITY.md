@@ -13,8 +13,8 @@ Please **do not** open a public issue for security reports. Open a private [GitH
 ## Controls this server provides
 
 ### Least privilege (MCP-07 — the main lever)
-Every tool is tagged with MCP **annotations** so clients can surface/gate danger:
-`readOnlyHint` on inspection tools, `destructiveHint` on the 12 that delete/terminate/revoke/detach/unbind, `openWorldHint` on all (they call an external API). Plus two env controls:
+Every tool has a human-readable **title** and MCP **annotations** so clients can surface/gate danger:
+`readOnlyHint` on the 35 inspection tools; `destructiveHint` on the 30 that can overwrite, modify, interrupt or delete existing state (delete/terminate/detach, but also `tenki_exec`, `tenki_write_file`, `tenki_move_path`, `tenki_git_checkout`, every `update` tool, `tenki_pause_sandbox`, `tenki_build_template` (a named build repoints `workspace/name`), and `tenki_get_upload_url`, whose signed PUT can overwrite a file); neither on the 17 additive tools that only add, never change or remove what exists: create (sandboxes, forks, clones, snapshots, volumes, templates, egress policies, preview URLs, port exposures, directories, SSH certificates), resume, extend, attach a volume, keep-alive; `openWorldHint` on all (they call an external API). Destructive is the default: a new tool is non-destructive only once it is listed as additive in `src/server.ts`. Plus two env controls:
 
 | Env | Effect |
 |---|---|

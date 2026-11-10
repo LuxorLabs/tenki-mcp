@@ -34,17 +34,19 @@ async function toolsWith(env) {
 try {
 	// 1) Default mode: annotations present + correct
 	const def = await toolsWith({});
-	check("default advertises 79 tools (78 + tenki_auth_status)", def.length === 79, `${def.length}`);
+	check("default advertises 82 tools (81 + tenki_auth_status)", def.length === 82, `${def.length}`);
 	const byName = Object.fromEntries(def.map((t) => [t.name, t]));
 	check("read tools carry readOnlyHint", byName["tenki_whoami"]?.annotations?.readOnlyHint === true && byName["tenki_get_sandbox"]?.annotations?.readOnlyHint === true);
 	check("destructive tools carry destructiveHint", byName["tenki_terminate_sandbox"]?.annotations?.destructiveHint === true && byName["tenki_delete_volume"]?.annotations?.destructiveHint === true && byName["tenki_delete_template_build"]?.annotations?.destructiveHint === true && byName["tenki_delete_egress_policy"]?.annotations?.destructiveHint === true);
 	check("egress policy reads are read-only, create/update are not", byName["tenki_get_egress_policy"]?.annotations?.readOnlyHint === true && byName["tenki_list_egress_policies"]?.annotations?.readOnlyHint === true && byName["tenki_create_egress_policy"]?.annotations?.readOnlyHint !== true && byName["tenki_update_egress_policy"]?.annotations?.readOnlyHint !== true);
-	check("mutating (non-destructive) tools are NOT readOnly", byName["tenki_run_code"]?.annotations?.readOnlyHint !== true && byName["tenki_create_sandbox"]?.annotations?.destructiveHint !== true);
+	check("additive tools are NOT readOnly and NOT destructive", byName["tenki_run_code"]?.annotations?.readOnlyHint === false && byName["tenki_create_sandbox"]?.annotations?.readOnlyHint === false && byName["tenki_create_sandbox"]?.annotations?.destructiveHint === false);
+	check("overwrite/modify tools carry destructiveHint (exec, write_file, update_*, git checkout)", ["tenki_exec", "tenki_write_file", "tenki_update_sandbox", "tenki_update_egress_policy", "tenki_git_checkout"].every((n) => byName[n]?.annotations?.destructiveHint === true));
 	check("fork_sandbox spends (not read-only, not destructive); list_ci_runner_sizes is read-only", byName["tenki_fork_sandbox"]?.annotations?.readOnlyHint !== true && byName["tenki_fork_sandbox"]?.annotations?.destructiveHint !== true && byName["tenki_list_ci_runner_sizes"]?.annotations?.readOnlyHint === true);
 	check("every tool declares openWorldHint (hits external API)", def.every((t) => t.annotations?.openWorldHint === true));
 	// Boundary cases the name-prefix heuristic must get right (not tautological):
-	check("get_upload_url is NOT read-only (it grants a signed write/spend)", byName["tenki_get_upload_url"]?.annotations?.readOnlyHint !== true);
+	check("get_upload_url is NOT read-only and IS destructive (its signed PUT can overwrite a file)", byName["tenki_get_upload_url"]?.annotations?.readOnlyHint === false && byName["tenki_get_upload_url"]?.annotations?.destructiveHint === true);
 	check("read_file IS read-only", byName["tenki_read_file"]?.annotations?.readOnlyHint === true);
+	check("git diff/log ARE read-only although their names lack a read prefix", byName["tenki_git_diff"]?.annotations?.readOnlyHint === true && byName["tenki_git_log"]?.annotations?.readOnlyHint === true);
 
 	// 2) TENKI_MCP_READONLY: only read tools survive
 	const ro = await toolsWith({ TENKI_MCP_READONLY: "1" });
@@ -54,6 +56,7 @@ try {
 	check("read-only mode drops run_code / create / fork / delete", !ro.some((t) => ["tenki_run_code", "tenki_create_sandbox", "tenki_fork_sandbox", "tenki_delete_volume"].includes(t.name)));
 	check("read-only mode DROPS get_upload_url (write capability)", !ro.some((t) => t.name === "tenki_get_upload_url"));
 	check("read-only mode KEEPS read_file (pure read)", ro.some((t) => t.name === "tenki_read_file"));
+	check("read-only mode keeps git diff/log and drops git clone/checkout", ["tenki_git_diff", "tenki_git_log"].every((n) => ro.some((t) => t.name === n)) && !ro.some((t) => ["tenki_git_clone", "tenki_git_checkout"].includes(t.name)));
 
 	// 3) TENKI_MCP_DISABLED_TOOLS: named denylist. tenki_exec is included
 	// deliberately — it registers via registerTool, so this also proves the

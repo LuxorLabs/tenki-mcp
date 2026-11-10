@@ -27,6 +27,49 @@ export const ok = (value: unknown) => ({
 	content: [{ type: "text" as const, text: JSON.stringify(publicValue(value), null, 2) }],
 });
 
+// UTF-8 boundary handling for byte-capped text. A position is "inside a
+// character" only when a lead byte at most 3 bytes before it declares a
+// sequence long enough to cover it. Stray continuation bytes (binary data,
+// invalid UTF-8) are not inside anything, so a cut lands exactly there. Start
+// and end use the same rule, so consecutive pages tile the file with no gap or
+// overlap, on valid UTF-8 and on binary alike.
+const isContinuation = (b: number) => (b & 0xc0) === 0x80;
+/** Sequence length a lead byte declares (1 for ASCII and invalid leads). */
+const utf8SeqLen = (b: number) => (b >= 0xf0 && b <= 0xf7 ? 4 : b >= 0xe0 && b <= 0xef ? 3 : b >= 0xc0 && b <= 0xdf ? 2 : 1);
+
+/** Start of the character covering i, or -1 when i is a character start or a stray byte. */
+function coveringLead(buf: Buffer, i: number, floor: number): number {
+	if (i >= buf.length || !isContinuation(buf[i])) return -1;
+	for (let back = 1; back <= 3 && i - back >= floor; back++) {
+		const b = buf[i - back];
+		if (!isContinuation(b)) return utf8SeqLen(b) > back ? i - back : -1;
+	}
+	return -1;
+}
+
+/** First index ≥ i that starts a character: i itself unless i is inside one, then that character's end. */
+export function utf8CharStart(buf: Buffer, i: number): number {
+	const lead = coveringLead(buf, i, 0);
+	return lead < 0 ? i : Math.min(lead + utf8SeqLen(buf[lead]), buf.length);
+}
+
+/** Largest end ≤ limit that does not split a character; always > start when limit > start. */
+export function utf8CharEnd(buf: Buffer, start: number, limit: number): number {
+	if (limit >= buf.length) return buf.length;
+	const lead = coveringLead(buf, limit, start + 1);
+	return lead < 0 ? limit : lead;
+}
+
+/**
+ * Cap a text field at maxBytes without splitting a UTF-8 character. Returns the
+ * text unchanged when it fits; otherwise the head plus the original size.
+ */
+export function capText(text: string, maxBytes: number): { text: string; truncated: boolean; totalBytes: number } {
+	const buf = Buffer.from(text, "utf8");
+	if (buf.length <= maxBytes) return { text, truncated: false, totalBytes: buf.length };
+	return { text: buf.subarray(0, utf8CharEnd(buf, 0, maxBytes)).toString("utf8"), truncated: true, totalBytes: buf.length };
+}
+
 /** Shared env-map schema used by tools that accept environment variables. */
 export const envSchema = z.record(z.string(), z.string()).optional().describe("Environment variables as a key→value object.");
 

@@ -72,11 +72,13 @@ try {
 		if (!(r.ok && String(r.stdout).trim() === "42")) throw new Error(`run_code: ${JSON.stringify(r).slice(0, 120)}`);
 	});
 
-	// ── git (control-plane RPC; clone needs sandbox outbound). Clone arg key is `repo`, not `url`. ─
-	await h.checkData("git: clone a small public repo", async () => {
-		const r = await h.call("tenki_git", { session_id: net.sessionId, operation: "clone", args: { repo: "https://github.com/octocat/Hello-World", depth: "1" } });
+	// ── git (control-plane GitOperation; clone needs sandbox outbound) ───────────────
+	await h.checkData("git: clone a small public repo, then log it via directory", async () => {
+		const r = await h.call("tenki_git_clone", { session_id: net.sessionId, repo: "https://github.com/octocat/Hello-World", depth: 1, directory: "/home/tenki/hw" });
 		const exit = r.exitCode ?? r.execution?.exitCode ?? 0;
 		if (Number(exit) !== 0) throw new Error(`clone exit ${exit}: ${JSON.stringify(r).slice(0, 120)}`);
+		const log = await h.call("tenki_git_log", { session_id: net.sessionId, directory: "/home/tenki/hw", max_count: 1 });
+		if (!/commit [0-9a-f]{7,}/.test(String(log.output ?? ""))) throw new Error(`log: ${JSON.stringify(log).slice(0, 120)}`);
 	});
 
 	// ── ports / previews (control plane; needs allow_inbound) ────────────────────────

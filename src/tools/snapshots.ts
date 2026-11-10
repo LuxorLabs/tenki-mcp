@@ -47,7 +47,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 	server.tool(
 		"tenki_get_snapshot",
 		"Fetch one snapshot's status and metadata by ID.",
-		{ snapshot_id: z.string() },
+		{ snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.") },
 		async ({ snapshot_id }) => ok(await client.control("GetSnapshot", { snapshotId: snapshot_id })),
 	);
 
@@ -55,8 +55,8 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"tenki_list_snapshots",
 		"List the saved snapshots for the workspace (owner inferred from the API key).",
 		{
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
+			page_size: z.number().int().positive().optional().describe("Rows per page."),
+			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
 		async ({ page_size, page_token }) =>
 			ok(
@@ -72,8 +72,8 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"List the snapshots captured from a specific sandbox session.",
 		{
 			session_id: sessionIdSchema,
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
+			page_size: z.number().int().positive().optional().describe("Rows per page."),
+			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
 		async ({ session_id, page_size, page_token }) =>
 			ok(
@@ -89,8 +89,8 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"tenki_list_dangling_snapshots",
 		"List dangling snapshots — those whose source session no longer exists — for the workspace, useful for cleanup.",
 		{
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
+			page_size: z.number().int().positive().optional().describe("Rows per page."),
+			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
 		async ({ page_size, page_token }) =>
 			ok(
@@ -105,7 +105,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"tenki_update_snapshot",
 		"Update a snapshot's mutable metadata: name, expiry (set or clear), and tags. An expired snapshot can no longer be updated, and a pause snapshot's expiry is managed by its sandbox (both failed_precondition).",
 		{
-			snapshot_id: z.string(),
+			snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots."),
 			name: z.string().max(64).optional().describe("New human-readable name (max 64 chars)."),
 			expires_at: z
 				.string()
@@ -138,14 +138,14 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 	server.tool(
 		"tenki_delete_snapshot",
 		"Permanently delete a snapshot by ID.",
-		{ snapshot_id: z.string() },
+		{ snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.") },
 		async ({ snapshot_id }) => ok(await client.control("DeleteSnapshot", { snapshotId: snapshot_id })),
 	);
 
 	server.tool(
 		"tenki_get_snapshot_download_url",
 		"Get a short-lived, pre-signed URL to download a snapshot's raw disk image (requires the snapshot to have been created with store_raw_image).",
-		{ snapshot_id: z.string() },
+		{ snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.") },
 		async ({ snapshot_id }) => ok(await client.control("GetSnapshotDownloadURL", { snapshotId: snapshot_id })),
 	);
 
@@ -154,8 +154,8 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"List all snapshots in a workspace (defaults to the key's first workspace). Supports pagination. NOTE: the underlying RPC (ListWorkspaceSnapshots) is deprecated upstream in favour of the credential-scoped tenki_list_snapshots; prefer that unless you need an explicit workspace_id.",
 		{
 			workspace_id: z.string().optional().describe("Workspace to list (defaults to the key's first workspace)."),
-			page_size: z.number().int().positive().optional(),
-			page_token: z.string().optional(),
+			page_size: z.number().int().positive().optional().describe("Rows per page."),
+			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
 		async ({ workspace_id, page_size, page_token }) => {
 			const workspaceId = workspace_id ?? (await client.resolveOwner()).workspaceId;
