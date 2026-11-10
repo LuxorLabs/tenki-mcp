@@ -42,6 +42,13 @@ const directorySchema = gitArg(
 	"Repository directory in the sandbox, e.g. /home/tenki/myrepo (relative paths resolve from /home/tenki). Omit only if the repository is /home/tenki itself.",
 ).optional();
 
+/** How to get less output, per operation (only diff/log take narrowing args). */
+const NARROW: Record<string, string> = {
+	diff: "Narrow it with path or range/base/head, or run git through tenki_exec and page its output.",
+	log: "Narrow it with max_count, path or range, or run git through tenki_exec and page its output.",
+};
+const NARROW_DEFAULT = "Run git through tenki_exec to page the full output.";
+
 async function gitOperation(client: TenkiClient, sessionId: string, operation: string, args: Record<string, string | number | boolean | undefined>) {
 	const stringArgs = Object.fromEntries(
 		Object.entries(args)
@@ -57,7 +64,7 @@ async function gitOperation(client: TenkiClient, sessionId: string, operation: s
 		output: capped.text,
 		truncated: true,
 		totalBytes: capped.totalBytes,
-		note: `Output truncated to ${MAX_OUTPUT_BYTES} bytes. Narrow it with path, range or max_count, or run git through tenki_exec and page its output.`,
+		note: `Output truncated to ${MAX_OUTPUT_BYTES} bytes. ${NARROW[operation] ?? NARROW_DEFAULT}`,
 	});
 }
 

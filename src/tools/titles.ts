@@ -2,7 +2,7 @@
  * Human-readable tool titles, applied centrally by the registration guard in
  * server.ts so every tool advertises one (MCP `Tool.title` and
  * `annotations.title`). Connector directories require a title on every tool;
- * test/offline.test.mjs fails if a registered tool has no entry here or an
+ * test/presubmission.test.mjs fails if a registered tool has no entry here or an
  * entry names a tool that is not registered.
  */
 export const TOOL_TITLES: Readonly<Record<string, string>> = {

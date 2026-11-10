@@ -205,7 +205,7 @@ The wire details are ported from the live-verified [n8n community node](https://
 
 This server holds a Tenki API key and can run code + spend credits, so treat it as a capability. Full model + [CSA MCP Server Top-10](https://modelcontextprotocol-security.io/top10/server/) mapping in **[SECURITY.md](SECURITY.md)**. Quick controls:
 
-- **Least privilege:** every tool carries a title and MCP annotations: `readOnlyHint` on reads, and `destructiveHint` on every tool that can overwrite, modify, interrupt or delete existing state (only pure creates and keep-alives are non-destructive). Run `TENKI_MCP_READONLY=1` for an inspection-only server (read tools only), or `TENKI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
+- **Least privilege:** every tool carries a title and MCP annotations: `readOnlyHint` on reads, and `destructiveHint` on every tool that can overwrite, modify, interrupt or delete existing state (only tools that create, resume, extend, attach or keep alive without changing existing state are non-destructive). Run `TENKI_MCP_READONLY=1` for an inspection-only server (read tools only), or `TENKI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
 - **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http-v20-beta)).
 - **Audit:** `TENKI_MCP_AUDIT=1` logs each tool call's name to stderr.
 - **Untrusted output:** `tenki_run_code`/`tenki_exec`/`tenki_read_file` return output from untrusted code — clients should treat tool results as data, not instructions.

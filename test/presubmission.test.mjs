@@ -222,7 +222,7 @@ class Stub {
 	// Output is capped like tenki_exec / tenki_read_file.
 	stub.output = "x".repeat(70_000) + "€";
 	const big = json(await client.callTool({ name: "tenki_git_log", arguments: { session_id: sid, directory: "hw" } }));
-	check("git output over 64 KiB is truncated with totalBytes and a note", big.truncated === true && big.totalBytes === 70_003 && Buffer.byteLength(big.output) === 65_536 && /Narrow it/.test(big.note), JSON.stringify({ ...big, output: big.output?.length }));
+	check("git output over 64 KiB is truncated with totalBytes and a note", big.truncated === true && big.totalBytes === 70_003 && Buffer.byteLength(big.output) === 65_536 && /max_count/.test(big.note), JSON.stringify({ ...big, output: big.output?.length }));
 	stub.output = "small";
 	const smallOut = json(await client.callTool({ name: "tenki_git_log", arguments: { session_id: sid, directory: "hw" } }));
 	check("small git output is returned unchanged with no truncation fields", smallOut.output === "small" && smallOut.truncated === undefined);
