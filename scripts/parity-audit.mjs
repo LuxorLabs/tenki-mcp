@@ -1,16 +1,22 @@
 /**
- * Parity audit — the v1.0 "full CLI parity" gate.
+ * Parity audit — the "full API parity" gate.
  *
- * Enumerates every unary method of the Tenki API (from the published API surface map,
- * docs/research/rest-endpoints.md in the n8n node) and fails if any TOOL-worthy
- * method is not covered by a registered MCP tool. Streaming methods are deferred
- * to v2.0; transport-internal methods are excluded.
+ * Enumerates every unary method of the public Tenki API (SandboxService,
+ * SandboxSessionDataPlaneService, SSHGatewayClientService as declared in
+ * tenki-app `proto/tenki/sandbox/v1/*.proto`) and fails if any TOOL-worthy
+ * method is not covered by a registered MCP tool, or if a tool calls a method
+ * that is not in the surface at all (removed upstream → the tool can only 404).
+ * Methods the API marks `option deprecated = true` are listed in DEPRECATED:
+ * covering them is allowed but reported, so a migration is never silent.
  *
- *   node scripts/parity-audit.mjs        # exits 1 if any gap
+ *   node scripts/parity-audit.mjs        # exits 1 if any gap / unknown method
  *
  * Coverage is detected by grepping src/tools/*.ts for client.control("X") /
  * client.data(_, "X") calls, plus HELPER_COVERAGE for methods a tool reaches
  * through a client helper (e.g. read_file → ReadFile via client.readTextFile).
+ *
+ * Surface last synced to tenki-app origin/main 3d435390a1 (2026-11-10). When the
+ * proto changes, update SURFACE / DEPRECATED here in the same PR.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -19,16 +25,18 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const toolsDir = path.join(here, "..", "src", "tools");
 
-// ── Canonical unary method surface ────────────────────────────────────────────
-// TOOL   → must be covered by a tool for v1.0 parity
-// V2     → streaming/interactive, deferred to v2.0 (a Connect-streaming transport)
-// INTERNAL → transport plumbing, never a user tool
-// The ListProject* methods were REMOVED from the API (projects no longer exist:
-// every project_id field is proto-reserved and the RPCs 404 in production,
-// live-verified 2026-08-21), so they are gone from this surface too.
+// ── Canonical method surface ──────────────────────────────────────────────────
+// TOOL     → must be covered by a tool
+// V2       → streaming/interactive, deferred (needs an HTTP/2 Connect-streaming transport)
+// INTERNAL → transport plumbing or a surface deliberately kept out of the MCP (registry images: tenki-mcp #27;
+//            Tailscale connection / CI runner admin: dashboard-managed, feature-flagged, in no SDK)
+// UNRELEASED → on tenki-app main but in no released sandbox-engine yet, so a tool would fail against
+//            production; listed on every run and becomes TOOL once released. Storage connections/mounts
+//            (#5900, 5d54afc862): newest tag sandbox-engine-v2.35.0 predates it, and it is behind the
+//            `sandbox-storage-mounts` PostHog flag. All three SDKs and the dashboard already have it.
 const SURFACE = {
 	SandboxService: {
-		CreateSession: "TOOL", GetSession: "TOOL", ListSessions: "TOOL", ListWorkspaceSandboxes: "TOOL",
+		CreateSession: "TOOL", GetSession: "TOOL", GetSessionMetrics: "TOOL", ListSessions: "TOOL", ListWorkspaceSandboxes: "TOOL",
 		UpdateSession: "TOOL", PauseSession: "TOOL", ResumeSession: "TOOL",
 		ExtendSession: "TOOL", TerminateSession: "TOOL", TerminateSessions: "TOOL", ReportSessionActivity: "TOOL",
 		WaitSession: "V2", CreateSessionCredential: "INTERNAL",
@@ -40,19 +48,27 @@ const SURFACE = {
 		UpdateSSHAuthorizedKeys: "TOOL",
 		CreateVolume: "TOOL", GetVolume: "TOOL", ListVolumes: "TOOL", UpdateVolume: "TOOL",
 		DeleteVolume: "TOOL", ResizeVolume: "TOOL", AttachVolume: "TOOL", DetachVolume: "TOOL",
-		CreateSnapshot: "TOOL", GetSnapshot: "TOOL", GetSnapshotDownloadURL: "TOOL", UpdateSnapshot: "TOOL",
+		CreateSnapshot: "TOOL", ForkSession: "TOOL", GetSnapshot: "TOOL", GetSnapshotDownloadURL: "TOOL", UpdateSnapshot: "TOOL",
 		DeleteSnapshot: "TOOL", ListSnapshots: "TOOL", ListSessionSnapshots: "TOOL", ListDanglingSnapshots: "TOOL",
 		ListWorkspaceSnapshots: "TOOL",
 		CreateTemplate: "TOOL", GetTemplate: "TOOL", ListTemplates: "TOOL",
 		UpdateTemplate: "TOOL", DeleteTemplate: "TOOL", BuildTemplate: "TOOL", CancelTemplateBuild: "TOOL",
-		GetTemplateBuild: "TOOL", ListActiveTemplateBuilds: "TOOL",
+		GetTemplateBuild: "TOOL", ListActiveTemplateBuilds: "TOOL", ListTemplateBuilds: "TOOL", DeleteTemplateBuild: "TOOL",
 		PublishRegistryImage: "INTERNAL", GetRegistryImage: "INTERNAL", ListRegistryImages: "INTERNAL",
 		SetRegistryImageVisibility: "INTERNAL", DeleteRegistryImage: "INTERNAL", DeleteRegistryImageVersion: "INTERNAL",
 		ResolveRegistryRef: "INTERNAL", ShareImage: "INTERNAL", UnshareRegistryImage: "INTERNAL",
 		RevokeRegistryShareGrant: "INTERNAL", ListRegistryShareGrants: "INTERNAL",
-		WhoAmI: "TOOL", GetWorkspaceSandboxUsage: "TOOL", GetWorkspaceSandboxSettings: "TOOL",
-		UpdateWorkspaceSandboxSettings: "TOOL", GetWorkspaceSnapshotRetentionSettings: "TOOL",
-		UpdateWorkspaceSnapshotRetentionSettings: "TOOL",
+		CreateEgressPolicy: "TOOL", UpdateEgressPolicy: "TOOL", GetEgressPolicy: "TOOL", ListEgressPolicies: "TOOL",
+		DeleteEgressPolicy: "TOOL",
+		WhoAmI: "TOOL", GetWorkspaceSandboxUsage: "TOOL", ListCIRunnerSizes: "TOOL",
+		GetWorkspacePreviewDomains: "TOOL", UpdateWorkspacePreviewDomains: "TOOL",
+		GetTailnetDefaults: "INTERNAL", SaveTailnetDefaults: "INTERNAL", ListTailnetRunnerStatuses: "INTERNAL",
+		SaveTailnetRunnerConfiguration: "INTERNAL", ListTailnetRunnerConfigurations: "INTERNAL",
+		SaveTailnetConnection: "INTERNAL", ListTailnetConnections: "INTERNAL", TestTailnetConnection: "INTERNAL",
+		CreateStorageConnection: "UNRELEASED", TestStorageConnection: "UNRELEASED", ListStorageConnections: "UNRELEASED",
+		UpdateStorageConnection: "UNRELEASED", DeleteStorageConnection: "UNRELEASED", ListStorageMounts: "UNRELEASED",
+		AttachStorageMount: "UNRELEASED", DetachStorageMount: "UNRELEASED", GetStorageDefaults: "UNRELEASED",
+		SaveStorageDefaults: "UNRELEASED",
 	},
 	SandboxSessionDataPlaneService: {
 		ReadFile: "TOOL", WriteFile: "TOOL", Stat: "TOOL", Mkdir: "TOOL", Remove: "TOOL", List: "TOOL",
@@ -63,45 +79,77 @@ const SURFACE = {
 	},
 };
 
+// `option deprecated = true` in the proto. Still served; a tool may keep
+// calling them, but the audit says so on every run.
+const DEPRECATED = {
+	ExecuteCommand: "data-plane Run stream (bidi; needs HTTP/2 Connect streaming)",
+	StreamCommandOutput: "data-plane Run stream",
+	ExposePort: "CreatePreviewUrl (slug required)",
+	UnexposePort: "UnbindPreviewUrl / DeletePreviewUrl",
+	ListExposedPorts: "ListPreviewUrls(session_id)",
+	ListWorkspaceSandboxes: "ListSessions (credential-scoped)",
+	ListWorkspaceSnapshots: "ListSnapshots (credential-scoped)",
+};
+
 // Methods a tool reaches via a client helper rather than a direct client.control/data call.
 const HELPER_COVERAGE = new Set([
 	"ReadFile", "WriteFile", // read_file/write_file → client.readTextFile/writeTextFile
-	"ExecuteCommand", // exec/run_code → client.execCaptured
+	"ExecuteCommand", // exec/run_code/move_path → client.execCaptured
 ]);
 
-// ── Detect covered methods from the tool source ───────────────────────────────
-const covered = new Set(HELPER_COVERAGE);
+// ── Detect called methods from the tool source ────────────────────────────────
+const called = new Set(HELPER_COVERAGE);
 for (const f of fs.readdirSync(toolsDir)) {
 	if (!f.endsWith(".ts")) continue;
 	const src = fs.readFileSync(path.join(toolsDir, f), "utf8");
-	for (const m of src.matchAll(/client\.control\(\s*"([A-Za-z]+)"/g)) covered.add(m[1]);
-	for (const m of src.matchAll(/client\.data\(\s*[a-z_]+\s*,\s*"([A-Za-z]+)"/g)) covered.add(m[1]);
+	for (const m of src.matchAll(/client\.control\(\s*"([A-Za-z]+)"/g)) called.add(m[1]);
+	for (const m of src.matchAll(/client\.data\(\s*[a-z_]+\s*,\s*"([A-Za-z]+)"/g)) called.add(m[1]);
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────
+const known = new Set(Object.values(SURFACE).flatMap((methods) => Object.keys(methods)));
 let toolCount = 0, coveredCount = 0, v2 = 0, internal = 0;
+const unreleased = [];
 const missing = [];
 for (const [svc, methods] of Object.entries(SURFACE)) {
 	for (const [method, kind] of Object.entries(methods)) {
 		if (kind === "V2") { v2++; continue; }
 		if (kind === "INTERNAL") { internal++; continue; }
+		if (kind === "UNRELEASED") { unreleased.push(`${svc}/${method}`); continue; }
 		toolCount++;
-		if (covered.has(method)) coveredCount++;
+		if (called.has(method)) coveredCount++;
 		else missing.push(`${svc}/${method}`);
 	}
 }
+const unknown = [...called].filter((m) => !known.has(m)).sort();
+const deprecatedInUse = Object.keys(DEPRECATED).filter((m) => called.has(m));
 
 console.log(`Parity audit — Tenki unary API surface`);
 console.log(`  tool-worthy methods: ${toolCount}`);
 console.log(`  covered:             ${coveredCount}`);
 console.log(`  deferred to v2 (streaming): ${v2}`);
 console.log(`  internal (excluded):        ${internal}`);
+console.log(`  unreleased (on main, not shipped): ${unreleased.length}`);
 console.log(`  coverage: ${((coveredCount / toolCount) * 100).toFixed(1)}%`);
+if (deprecatedInUse.length) {
+	console.log(`\n! ${deprecatedInUse.length} deprecated method(s) still called by a tool (allowed, but plan the migration):`);
+	for (const m of deprecatedInUse) console.log(`    - ${m} → ${DEPRECATED[m]}`);
+}
+if (unreleased.length) {
+	console.log(`\n! ${unreleased.length} method(s) on tenki-app main but not in a released sandbox-engine — make them TOOL once shipped:`);
+	for (const m of unreleased) console.log(`    - ${m}`);
+}
+let failed = false;
+if (unknown.length) {
+	failed = true;
+	console.log(`\n✗ ${unknown.length} method(s) called by a tool that are NOT in the API surface (removed upstream? the tool can only fail):`);
+	for (const m of unknown) console.log(`    - ${m}`);
+}
 if (missing.length) {
+	failed = true;
 	console.log(`\n✗ ${missing.length} method(s) NOT covered by a tool:`);
 	for (const m of missing) console.log(`    - ${m}`);
-	console.log(`\nFull parity (v1.0) requires a tool for each. Add them, or mark a method V2/INTERNAL with justification.`);
-	process.exit(1);
-} else {
-	console.log(`\n✓ Full CLI parity: every tool-worthy method has a tool.`);
+	console.log(`\nFull parity requires a tool for each. Add them, or mark a method V2/INTERNAL with justification.`);
 }
+if (failed) process.exit(1);
+console.log(`\n✓ Full parity: every tool-worthy method has a tool, and every tool calls a live method.`);

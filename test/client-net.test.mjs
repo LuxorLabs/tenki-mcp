@@ -63,6 +63,41 @@ const stop = (srv) => { srv.closeAllConnections?.(); srv.close(); };
 	stop(srv);
 }
 
+// 2b) a handler's resource_exhausted (quota/limit) on a non-repeatable method is NOT retried;
+//     the same code on a read still is
+{
+	let calls = 0;
+	const { srv, url } = await startStub((req, res) => {
+		calls++;
+		json(res, 429, { code: "resource_exhausted", message: "requested 20 children, maximum 10" });
+	});
+	const c = new TenkiClient("tk_test", url);
+	for (const m of ["ForkSession", "CreateSession"]) {
+		calls = 0;
+		let msg = "";
+		try { await c.control(m, {}); } catch (e) { msg = e.message; }
+		check(`resource_exhausted on ${m} is NOT retried`, calls === 1 && /resource_exhausted/.test(msg), `calls=${calls} msg=${msg}`);
+	}
+	calls = 0;
+	try { await c.control("GetSession", {}); } catch { /* exhausts retries */ }
+	check("resource_exhausted on GetSession is still retried", calls === 4, `calls=${calls}`);
+	stop(srv);
+}
+
+// 2c) the caller's cancel signal aborts the request, names the cancellation, and is not retried
+{
+	let calls = 0;
+	const { srv, url } = await startStub(() => { calls++; /* never respond */ });
+	const c = new TenkiClient("tk_test", url, { timeoutMs: 5000 });
+	const ac = new AbortController();
+	setTimeout(() => ac.abort(), 100);
+	const t0 = Date.now();
+	let msg = "";
+	try { await c.control("GetSession", {}, undefined, ac.signal); } catch (e) { msg = e.message; }
+	check("cancel signal aborts promptly with a 'cancelled' error and no retry", calls === 1 && /cancelled by the MCP client/.test(msg) && Date.now() - t0 < 2000, `calls=${calls} ms=${Date.now() - t0} msg=${msg}`);
+	stop(srv);
+}
+
 // 3) `unavailable` on an idempotent method IS retried
 {
 	let calls = 0;
@@ -359,12 +394,18 @@ const stop = (srv) => { srv.closeAllConnections?.(); srv.close(); };
 	// Slow storage/VM operations must NOT get the 30s unary budget: the RPC does not
 	// return until the operation finishes, and a client-side timeout leaves the
 	// resource created but its id unknown to the caller (measured e2e on both).
-	for (const m of ["CreateSnapshot", "PauseSession"]) {
+	// ResumeSession joined them in tenki-app #6486: it now holds until the session leaves RESUMING.
+	for (const m of ["CreateSnapshot", "PauseSession", "ForkSession", "ResumeSession"]) {
 		check(`timeoutFor: ${m} → slow budget (600s), not 30s`, c.timeoutFor(m, {}) === 600_000, `${c.timeoutFor(m, {})}`);
 	}
 	check("timeoutFor: GetSnapshot (a read) stays on the unary default", c.timeoutFor("GetSnapshot", {}) === 30_000);
+	check("timeoutFor: CreateSession{waitReady} → 90s (server holds up to 60s)", c.timeoutFor("CreateSession", { waitReady: true }) === 90_000, `${c.timeoutFor("CreateSession", { waitReady: true })}`);
+	check("timeoutFor: CreateSession without waitReady stays on the unary default", c.timeoutFor("CreateSession", {}) === 30_000);
+	check("timeoutFor: PauseSession{async} drops to the unary default", c.timeoutFor("PauseSession", { async: true }) === 30_000);
+	check("timeoutFor: CreateSnapshot{async} drops to the unary default", c.timeoutFor("CreateSnapshot", { async: true }) === 30_000);
+	check("timeoutFor: ResumeSession{async} drops to the unary default", c.timeoutFor("ResumeSession", { async: true }) === 30_000);
 	// Async methods return a handle in <1s; a long budget would only delay a hung call.
-	for (const m of ["BuildTemplate", "PublishRegistryImage", "ResumeSession", "ResizeVolume"]) {
+	for (const m of ["BuildTemplate", "PublishRegistryImage", "ResizeVolume"]) {
 		check(`timeoutFor: ${m} (async/fast) stays on the unary default`, c.timeoutFor(m, {}) === 30_000, `${c.timeoutFor(m, {})}`);
 	}
 	{

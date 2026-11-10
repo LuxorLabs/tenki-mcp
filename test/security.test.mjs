@@ -34,11 +34,13 @@ async function toolsWith(env) {
 try {
 	// 1) Default mode: annotations present + correct
 	const def = await toolsWith({});
-	check("default advertises 71 tools (70 + tenki_auth_status)", def.length === 71, `${def.length}`);
+	check("default advertises 79 tools (78 + tenki_auth_status)", def.length === 79, `${def.length}`);
 	const byName = Object.fromEntries(def.map((t) => [t.name, t]));
 	check("read tools carry readOnlyHint", byName["tenki_whoami"]?.annotations?.readOnlyHint === true && byName["tenki_get_sandbox"]?.annotations?.readOnlyHint === true);
-	check("destructive tools carry destructiveHint", byName["tenki_terminate_sandbox"]?.annotations?.destructiveHint === true && byName["tenki_delete_volume"]?.annotations?.destructiveHint === true);
+	check("destructive tools carry destructiveHint", byName["tenki_terminate_sandbox"]?.annotations?.destructiveHint === true && byName["tenki_delete_volume"]?.annotations?.destructiveHint === true && byName["tenki_delete_template_build"]?.annotations?.destructiveHint === true && byName["tenki_delete_egress_policy"]?.annotations?.destructiveHint === true);
+	check("egress policy reads are read-only, create/update are not", byName["tenki_get_egress_policy"]?.annotations?.readOnlyHint === true && byName["tenki_list_egress_policies"]?.annotations?.readOnlyHint === true && byName["tenki_create_egress_policy"]?.annotations?.readOnlyHint !== true && byName["tenki_update_egress_policy"]?.annotations?.readOnlyHint !== true);
 	check("mutating (non-destructive) tools are NOT readOnly", byName["tenki_run_code"]?.annotations?.readOnlyHint !== true && byName["tenki_create_sandbox"]?.annotations?.destructiveHint !== true);
+	check("fork_sandbox spends (not read-only, not destructive); list_ci_runner_sizes is read-only", byName["tenki_fork_sandbox"]?.annotations?.readOnlyHint !== true && byName["tenki_fork_sandbox"]?.annotations?.destructiveHint !== true && byName["tenki_list_ci_runner_sizes"]?.annotations?.readOnlyHint === true);
 	check("every tool declares openWorldHint (hits external API)", def.every((t) => t.annotations?.openWorldHint === true));
 	// Boundary cases the name-prefix heuristic must get right (not tautological):
 	check("get_upload_url is NOT read-only (it grants a signed write/spend)", byName["tenki_get_upload_url"]?.annotations?.readOnlyHint !== true);
@@ -49,7 +51,7 @@ try {
 	check("read-only mode registers fewer tools", ro.length > 0 && ro.length < def.length, `${ro.length}`);
 	check("read-only mode exposes ZERO destructive tools", ro.every((t) => t.annotations?.destructiveHint !== true));
 	check("read-only mode exposes ONLY read-only tools", ro.every((t) => t.annotations?.readOnlyHint === true));
-	check("read-only mode drops run_code / create / delete", !ro.some((t) => ["tenki_run_code", "tenki_create_sandbox", "tenki_delete_volume"].includes(t.name)));
+	check("read-only mode drops run_code / create / fork / delete", !ro.some((t) => ["tenki_run_code", "tenki_create_sandbox", "tenki_fork_sandbox", "tenki_delete_volume"].includes(t.name)));
 	check("read-only mode DROPS get_upload_url (write capability)", !ro.some((t) => t.name === "tenki_get_upload_url"));
 	check("read-only mode KEEPS read_file (pure read)", ro.some((t) => t.name === "tenki_read_file"));
 
