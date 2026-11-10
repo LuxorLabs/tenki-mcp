@@ -425,6 +425,16 @@ try {
 		check("resume_sandbox: a wait that times out says the sandbox may still be resuming", r.isError === true && /timed out/.test(text(r)) && /may still be resuming/.test(text(r)) && /tenki_get_sandbox/.test(text(r)), text(r).slice(0, 220));
 		await c2.close();
 		HANG.delete("ResumeSession");
+
+		// A server-side failure that merely mentions a timeout is final, not "may still be resuming".
+		ERRORS.ResumeSession = { status: 409, body: { code: "aborted", message: "resume failed, session is PAUSED: restore timed out" } };
+		const failed = await call("tenki_resume_sandbox", { session_id: SID });
+		check("resume_sandbox: a server failure mentioning 'timed out' passes through unchanged", failed.isError === true && /resume failed/.test(text(failed)) && !/may still be resuming/.test(text(failed)), text(failed).slice(0, 200));
+		delete ERRORS.ResumeSession;
+		ERRORS.ForkSession = { status: 504, body: { code: "deadline_exceeded", message: "snapshot upload timed out" } };
+		const forkFailed = await call("tenki_fork_sandbox", { session_id: SID });
+		check("fork_sandbox: a server error mentioning 'timed out' is not relabeled as a client timeout", forkFailed.isError === true && /snapshot upload timed out/.test(text(forkFailed)) && !/may have left/.test(text(forkFailed)), text(forkFailed).slice(0, 200));
+		delete ERRORS.ForkSession;
 	}
 } catch (e) {
 	console.error("  ✗ " + (e?.message ?? e));
