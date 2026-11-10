@@ -15,6 +15,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
+import { isApiKey, readEnv, resolvedEnvName } from "../env.js";
 
 /** How the server authenticates API calls. */
 export type CredentialKind = "none" | "api_key" | "oauth_session_token" | "session_cookie" | "hosted_oauth";
@@ -22,23 +23,21 @@ export type CredentialKind = "none" | "api_key" | "oauth_session_token" | "sessi
 export interface CredentialInfo {
 	kind: CredentialKind;
 	/** Env var the token came from, or undefined when there is none. */
-	source?: "TENKI_AUTH_TOKEN" | "TENKI_API_KEY";
+	source?: "LUXORAI_AUTH_TOKEN" | "LUXORAI_API_KEY" | "TENKI_AUTH_TOKEN" | "TENKI_API_KEY";
 }
 
 /**
  * Classify the ambient credential WITHOUT returning any of its material.
- * Mirrors the header selection in client.ts (`tk_` → Bearer API key,
+ * Mirrors the header selection in client.ts (`lx_`/`tk_` → Bearer API key,
  * `ory_st_` → OAuth/Ory session token, anything else → session cookie) and
- * index.ts's precedence (TENKI_AUTH_TOKEN wins over TENKI_API_KEY).
+ * index.ts's precedence (LUXORAI_AUTH_TOKEN, LUXORAI_API_KEY, TENKI_AUTH_TOKEN, TENKI_API_KEY).
  */
 export function describeCredential(env: NodeJS.ProcessEnv = process.env): CredentialInfo {
-	const fromToken = env.TENKI_AUTH_TOKEN?.trim();
-	const fromKey = env.TENKI_API_KEY?.trim();
-	const raw = fromToken || fromKey;
-	if (!raw && env.TENKI_MCP_OAUTH_ISSUER?.trim()) return { kind: "hosted_oauth" };
+	const source = resolvedEnvName(env, "AUTH_TOKEN", "API_KEY") as CredentialInfo["source"];
+	const raw = source ? env[source]!.trim() : "";
+	if (!raw && resolvedEnvName(env, "MCP_OAUTH_ISSUER")) return { kind: "hosted_oauth" };
 	if (!raw) return { kind: "none" };
-	const source = fromToken ? "TENKI_AUTH_TOKEN" : "TENKI_API_KEY";
-	if (raw.startsWith("tk_")) return { kind: "api_key", source };
+	if (isApiKey(raw)) return { kind: "api_key", source };
 	if (raw.startsWith("ory_st_")) return { kind: "oauth_session_token", source };
 	return { kind: "session_cookie", source };
 }
@@ -93,7 +92,7 @@ export function registerAuthStatus(server: McpServer, client: TenkiClient | null
 		},
 		async () => {
 			const cred = describeCredential();
-			const endpoint = process.env.TENKI_API_ENDPOINT || process.env.TENKI_API_URL || "https://api.tenki.cloud";
+			const endpoint = readEnv("API_ENDPOINT", "API_URL") || "https://api.tenki.cloud";
 			const base = {
 				credential: cred.kind,
 				...(cred.source ? { source: cred.source } : {}),

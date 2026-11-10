@@ -32,6 +32,7 @@ import { registerWorkspace } from "./tools/workspace.js";
 import { registerArtifacts } from "./tools/artifacts.js";
 import { registerSsh } from "./tools/ssh.js";
 import { registerAuthStatus } from "./tools/auth_status.js";
+import { readEnv } from "./env.js";
 
 export const VERSION = "0.3.1";
 
@@ -87,12 +88,12 @@ interface GuardOpts {
 function readGuardOpts(): GuardOpts {
 	const truthy = (v?: string) => v === "1" || (v ?? "").toLowerCase() === "true";
 	const disabled = new Set(
-		(process.env.TENKI_MCP_DISABLED_TOOLS || "")
+		(readEnv("MCP_DISABLED_TOOLS") || "")
 			.split(",")
 			.map((s) => s.trim())
 			.filter(Boolean),
 	);
-	return { readonly: truthy(process.env.TENKI_MCP_READONLY), disabled, audit: truthy(process.env.TENKI_MCP_AUDIT) };
+	return { readonly: truthy(readEnv("MCP_READONLY")), disabled, audit: truthy(readEnv("MCP_AUDIT")) };
 }
 
 /** Log a tool call's name + argument KEYS (never values/content/token) to stderr. */

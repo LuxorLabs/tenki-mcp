@@ -21,6 +21,19 @@
       "category": "development",
       "tags": ["sandbox", "microvm", "code-execution", "mcp"],
       "keywords": ["tenki", "sandbox", "microvm", "code-execution"]
+    },
+    {
+      "name": "luxor",
+      "source": "./plugins/luxor",
+      "description": "Disposable microVM sandboxes for AI agents: create sandboxes, run code, read/write files, run git, expose preview URLs.",
+      "version": "0.2.0",
+      "author": { "name": "Luxor AI", "url": "https://luxor.ai" },
+      "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
+      "repository": "https://github.com/LuxorLabs/tenki-mcp",
+      "license": "MIT",
+      "category": "development",
+      "tags": ["sandbox", "microvm", "code-execution", "mcp"],
+      "keywords": ["luxor", "sandbox", "microvm", "code-execution"]
     }
   ]
 }
