@@ -77,6 +77,15 @@ const CREATE_WAIT_READY_TIMEOUT_MS = 90_000; // server holds wait_ready up to 60
  * successful resume as failed.
  */
 const SLOW_METHOD = /^(CreateSnapshot|PauseSession|ForkSession|ResumeSession)$/;
+
+/**
+ * True when the call ended on THIS side — the client's deadline or an MCP-side
+ * cancel — so the server never answered and the operation may still complete.
+ * A server error never carries the marker, even when its message says "timed out".
+ */
+export function isClientAbort(e: unknown): boolean {
+	return typeof (e as { clientAbort?: unknown })?.clientAbort === "string";
+}
 const DEFAULT_SLOW_TIMEOUT_MS = 600_000;
 
 // Session-credential cache lifetime handling: a credential whose expiry the API
@@ -245,9 +254,11 @@ export class TenkiClient {
 			return { ok: res.ok, status: res.status, headers: res.headers, text };
 		} catch (e) {
 			const name = (e as Error)?.name;
-			if (cancel?.aborted && !timeout.aborted) throw new Error(`Tenki ${what} was cancelled by the MCP client before it returned.`);
+			if (cancel?.aborted && !timeout.aborted) {
+				throw Object.assign(new Error(`Tenki ${what} was cancelled by the MCP client before it returned.`), { clientAbort: "cancelled" });
+			}
 			if (name === "TimeoutError" || name === "AbortError") {
-				throw new Error(`Tenki ${what} timed out after ${budget}ms with no response.`);
+				throw Object.assign(new Error(`Tenki ${what} timed out after ${budget}ms with no response.`), { clientAbort: "timeout" });
 			}
 			throw e;
 		}

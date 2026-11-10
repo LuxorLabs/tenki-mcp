@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import type { TenkiClient } from "../client.js";
+import { isClientAbort, type TenkiClient } from "../client.js";
 import { ok, envSchema, pathSchema, protoEnum, sessionIdSchema, tagsSchema } from "./common.js";
 import { allowedPortsSchema, egressBodyToWire, httpRulesSchema, interceptHttpsSchema, policyNameSchema } from "./egress.js";
 
@@ -411,7 +411,8 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 				);
 			} catch (e) {
 				// The deadline ends the wait for RUNNING, not the resume itself (it runs detached server-side).
-				if (!isAsync && e instanceof Error && /timed out|cancelled/.test(e.message)) {
+				// Only a client-side abort qualifies: a server "resume failed" stays as the server said it.
+				if (!isAsync && e instanceof Error && isClientAbort(e)) {
 					throw new Error(
 						`${e.message} — the sandbox may still be resuming; check tenki_get_sandbox, or call tenki_resume_sandbox again (it joins the resume in progress).`,
 					);
@@ -469,7 +470,7 @@ function forkFailure(e: unknown): unknown {
 	const detail = details?.find((d) => (d as { type?: string })?.type === "tenki.sandbox.v1.ForkSessionResponse") as
 		| { debug?: { snapshotId?: string; sessions?: { id?: string }[] } }
 		| undefined;
-	if (!detail && e instanceof Error && /timed out|cancelled/.test(e.message)) {
+	if (!detail && e instanceof Error && isClientAbort(e)) {
 		return new Error(
 			`${e.message} — the fork may have left a snapshot (named after the prefix) and children behind; check tenki_list_snapshots and tenki_list_sandboxes.`,
 		);
