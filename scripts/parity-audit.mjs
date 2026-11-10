@@ -13,7 +13,7 @@
  *
  * Coverage is detected by grepping src/tools/*.ts for client.control("X") /
  * client.data(_, "X") calls, plus HELPER_COVERAGE for methods a tool reaches
- * through a client helper (e.g. read_file → ReadFile via client.readTextFile).
+ * through a client helper (e.g. read_file → ReadFile via client.readFileBytes).
  *
  * Surface last synced to tenki-app origin/main 6f76dbaa73 (2026-11-04). When the
  * proto changes, update SURFACE / DEPRECATED here in the same PR.
@@ -85,7 +85,7 @@ const DEPRECATED = {
 
 // Methods a tool reaches via a client helper rather than a direct client.control/data call.
 const HELPER_COVERAGE = new Set([
-	"ReadFile", "WriteFile", // read_file/write_file → client.readTextFile/writeTextFile
+	"ReadFile", "WriteFile", // read_file/write_file → client.readFileBytes/writeTextFile
 	"ExecuteCommand", // exec/run_code/move_path → client.execCaptured
 ]);
 

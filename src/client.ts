@@ -511,10 +511,15 @@ export class TenkiClient {
 		}
 	}
 
-	async readTextFile(sessionId: string, path: string): Promise<string> {
+	/** A file's raw bytes. The data plane's ReadFile has no range support, so this is always the whole file. */
+	async readFileBytes(sessionId: string, path: string): Promise<Buffer> {
 		const resp = await this.data(sessionId, "ReadFile", { path });
 		const content = (resp.content ?? resp.data ?? resp.file?.content ?? "") as string;
-		return content ? Buffer.from(content, "base64").toString("utf8") : "";
+		return content ? Buffer.from(content, "base64") : Buffer.alloc(0);
+	}
+
+	async readTextFile(sessionId: string, path: string): Promise<string> {
+		return (await this.readFileBytes(sessionId, path)).toString("utf8");
 	}
 
 	async writeTextFile(sessionId: string, path: string, text: string): Promise<Record<string, any>> {

@@ -99,7 +99,7 @@ export function registerExec(server: McpServer, client: TenkiClient): void {
 				args: z.array(z.string()).optional().describe("Arguments."),
 				cwd: z.string().optional().describe("Working directory (honored in-script)."),
 				env: envSchema,
-				timeout_seconds: z.number().int().positive().optional(),
+				timeout_seconds: z.number().int().positive().optional().describe("Maximum seconds the command may run before it is stopped; omit to use the API's default."),
 				max_output_bytes: z
 					.number()
 					.int()

@@ -110,7 +110,7 @@ try {
 	check("serverInfo.version matches package.json version", info?.version === PKG.version, `${info?.version} vs ${PKG.version}`);
 
 	const { tools } = await client.listTools();
-	check("advertises 79 tools (78 + tenki_auth_status)", tools.length === 79, `${tools.length}`);
+	check("advertises 82 tools (81 + tenki_auth_status)", tools.length === 82, `${tools.length}`);
 	const names = tools.map((t) => t.name);
 	check("standalone registry terminology is absent", !/registry/i.test(JSON.stringify(tools)));
 	check("no duplicate tool names", new Set(names).size === names.length);
@@ -170,8 +170,12 @@ try {
 			await rejectsPreNetwork("tenki_create_sandbox", { registry_ref: "workspace/template:latest" }, /unrecognized key|registry_ref/i),
 		);
 		check(
-			"unsupported git operation rejected pre-network ('push' — API supports clone/checkout/diff/log)",
-			await rejectsPreNetwork("tenki_git", { session_id: "s", operation: "push" }, /clone.*checkout.*diff.*log|invalid enum/is),
+			"git clone without a repo rejected pre-network",
+			await rejectsPreNetwork("tenki_git_clone", { session_id: "s" }, /repo/i),
+		);
+		check(
+			"git log max_count above 1000 rejected pre-network",
+			await rejectsPreNetwork("tenki_git_log", { session_id: "s", max_count: 5000 }, /1000|less than or equal/i),
 		);
 		check(
 			"whitespace-only session id rejected pre-network",

@@ -95,8 +95,8 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 			sort_desc: z.boolean().optional().describe("Sort descending (default ascending)."),
 			include_facets: z.boolean().optional().describe("Also return per-state counts for the same filter scope."),
 			workspace_id: z.string().optional().describe("Workspace to list from (defaults to the key's first workspace)."),
-			page_size: z.number().int().min(1).max(100).optional(),
-			page_token: z.string().optional(),
+			page_size: z.number().int().min(1).max(100).optional().describe("Rows per page (max 100)."),
+			page_token: z.string().optional().describe("Cursor from a previous response's nextPageToken."),
 		},
 		async ({ tags, search, states, sort_by, sort_desc, include_facets, workspace_id, page_size, page_token }) => {
 			const owner = await client.resolveOwner();

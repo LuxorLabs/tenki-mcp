@@ -31,6 +31,12 @@ All notable changes to `@tenkicloud/mcp`. This project follows semantic versioni
 - A fork that fails partway names the snapshot and sandboxes it already created, and is never retried automatically. Create, fork and other non-repeatable calls refused by a workspace limit now fail at once instead of retrying.
 - `tenki_resize_volume` and `tenki_detach_volume` descriptions now match the API: only a never-attached volume can be resized, and a forced detach loses unflushed writes.
 - Update `@modelcontextprotocol/sdk` to 1.32.1 (fixes GHSA-6qxp-vccf-f47h: the OAuth client could send credentials to an authorization server chosen by the MCP server) and refresh transitive pins flagged by `npm audit`.
+- **Breaking:** `tenki_git` is replaced by `tenki_git_clone`, `tenki_git_checkout`, `tenki_git_diff` and `tenki_git_log`, so reads and writes are separate tools. Each takes typed arguments instead of an `operation` + `args` map, and checkout/diff/log take `directory` to target a repository cloned into a subdirectory (previously they always ran in `/home/tenki` and failed with "not a git repository"). Values git would parse as options (a leading `-`, e.g. `--output=<file>`) are refused, and output over 64 KiB is truncated with `totalBytes`.
+- Every tool now has a human-readable `title` (MCP `Tool.title` and `annotations.title`).
+- `destructiveHint` now marks every tool that can overwrite, modify, interrupt or delete existing state, not only deletes: `tenki_exec`, `tenki_write_file`, `tenki_move_path`, `tenki_git_checkout`, every `update` tool, `tenki_pause_sandbox`, `tenki_open_preview`, `tenki_bind_preview_url`, `tenki_resize_volume`, `tenki_cancel_template_build`, `tenki_build_template` (a build with `image_name` changes what `workspace/name` boots) and `tenki_get_upload_url`. Clients that prompt before destructive tools will now prompt for these. Only tools that create or extend (create/fork/clone/snapshot, extend, keep-alive) are non-destructive.
+- `tenki_read_file` returns at most `max_bytes` (default 65536, up to 1 MiB) from `offset`, with `totalBytes`, and `truncated` + `nextOffset` when more remains. Cuts never split a UTF-8 character. Previously it returned the whole file.
+- `tenki_open_preview`'s description now says what it returns (a viewer-token-gated, non-public URL; 7681 is the web terminal) and that reopening a port replaces its earlier URL, instead of steering callers away from it.
+- Every tool parameter now has a description.
 
 ## [0.2.0] — 2026-08-21
 
