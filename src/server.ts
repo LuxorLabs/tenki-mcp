@@ -37,7 +37,7 @@ import { registerAuthStatus } from "./tools/auth_status.js";
 import { readEnv } from "./env.js";
 import { TOOL_TITLES } from "./tools/titles.js";
 
-export const VERSION = "0.3.1";
+export const VERSION = "0.4.0";
 
 const modules = [
 	registerIdentity,
