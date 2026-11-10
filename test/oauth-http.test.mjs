@@ -127,7 +127,7 @@ process.env.LUXORAI_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp,https://mcp.luxor
 process.env.TENKI_MCP_OAUTH_RESOURCE = "https://ignored.tenki.test/mcp";
 process.env.TENKI_API_ENDPOINT = `http://127.0.0.1:${apiAddress.port}`;
 
-const { authorizationBinding, loadOAuthConfig, resourceForHost } = await import("../dist/oauth.js");
+const { authorizationBinding, loadOAuthConfig, metadataUrlForHost, resourceForHost } = await import("../dist/oauth.js");
 const { startHttp } = await import("../dist/http.js");
 const server = startHttp(null, 0);
 if (!server.listening) await once(server, "listening");
@@ -150,6 +150,12 @@ try {
 	}
 	if (resourceForHost(config, "unknown.test") !== "http://127.0.0.1/mcp") {
 		throw new Error("unknown host does not fall back to the first resource");
+	}
+	if (metadataUrlForHost(config, "mcp.luxor.test") !== "https://mcp.luxor.test/.well-known/oauth-protected-resource/mcp") {
+		throw new Error("challenge resource_metadata does not follow the request host");
+	}
+	if (metadataUrlForHost(config, "unknown.test") !== config.metadataUrl) {
+		throw new Error("unknown host challenge does not fall back to the public metadata URL");
 	}
 
 	const unauthorized = await fetch(`${base}/mcp`, { method: "POST" });

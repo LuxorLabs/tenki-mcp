@@ -181,6 +181,14 @@ export function resourceForHost(config: Pick<OAuthConfig, "resource" | "resource
 	return config.resources.find((resource) => urlHost(resource) === wanted) ?? config.resource;
 }
 
+/** Protected-resource metadata URL to advertise in a challenge, on the same host as the matched resource. */
+export function metadataUrlForHost(config: Pick<OAuthConfig, "resources" | "publicUrl" | "metadataUrl">, host: string | undefined): string {
+	const wanted = (host ?? "").toLowerCase();
+	const matched = config.resources.find((resource) => urlHost(resource) === wanted);
+	if (!matched || wanted === urlHost(config.publicUrl)) return config.metadataUrl;
+	return `${new URL(matched).origin}/.well-known/oauth-protected-resource/mcp`;
+}
+
 /** Lowercased host of a URL, or undefined when it does not parse (a resource may be any absolute URI). */
 function urlHost(value: string): string | undefined {
 	return URL.canParse(value) ? new URL(value).host.toLowerCase() : undefined;

@@ -26,6 +26,7 @@ import {
 	authorizationBinding,
 	bearerToken,
 	loadOAuthConfig,
+	metadataUrlForHost,
 } from "./oauth.js";
 import { createServer } from "./server.js";
 import { readEnv } from "./env.js";
@@ -198,7 +199,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 				const token = bearerToken(req.headers["authorization"]);
 				delegated = token ? await oauthVerifier.verify(token) : null;
 				if (!delegated) {
-					oauthUnauthorized(res, oauthConfig.metadataUrl, oauthConfig.scope);
+					oauthUnauthorized(res, metadataUrlForHost(oauthConfig, req.headers.host), oauthConfig.scope);
 					return;
 				}
 			} else if (!authOk(req.headers["authorization"], httpToken)) {
@@ -212,7 +213,7 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 				delegated &&
 				existingEntry.authorization.binding !== authorizationBinding(delegated)
 			) {
-				oauthUnauthorized(res, oauthConfig!.metadataUrl, oauthConfig!.scope);
+				oauthUnauthorized(res, metadataUrlForHost(oauthConfig!, req.headers.host), oauthConfig!.scope);
 				return;
 			}
 			if (existingEntry?.authorization && delegated) {
