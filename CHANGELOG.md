@@ -1,6 +1,10 @@
 # Changelog
 
-All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
+All notable changes to `@luxorai/mcp` (also published as `@tenkicloud/mcp`). This project follows semantic versioning.
+
+## [0.4.1] - 2026-11-12
+
+- Package page now shows Luxor names, install commands and links.
 
 ## [0.4.0] - 2026-11-10
 
