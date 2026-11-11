@@ -2,6 +2,11 @@
 
 All notable changes to `@tenkicloud/mcp`. This project follows semantic versioning.
 
+## Unreleased
+
+- The 401 challenge and protected-resource metadata match the request host even when it carries an explicit default port (`:443`); malformed Host headers fall back to the first resource.
+- Protected-resource metadata `resource_name` is now `Luxor MCP`, configurable with `TENKI_MCP_RESOURCE_NAME` / `LUXORAI_MCP_RESOURCE_NAME`.
+
 ## [0.4.0] - 2026-11-10
 
 - Read `LUXORAI_*` environment variables before their `TENKI_*` equivalents (credentials, endpoint, and every `TENKI_MCP_*` option). `TENKI_*` keeps working.
