@@ -1,8 +1,8 @@
 {
   "name": "@tenkicloud/mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "mcpName": "io.github.LuxorLabs/tenki-mcp",
-  "description": "Model Context Protocol server for Tenki Cloud — disposable microVM sandboxes for AI agents. Create sandboxes, run code, read/write files, run git, expose preview URLs — from any MCP client.",
+  "description": "Model Context Protocol server for Luxor Sandbox (Luxor Agent Cloud): disposable microVM sandboxes for AI agents. Create sandboxes, run code, read/write files, run git, expose preview URLs, from any MCP client.",
   "type": "module",
   "bin": {
     "tenki-mcp": "dist/index.js",
@@ -27,16 +27,19 @@
     "test:offline": "npm run build && node test/offline.test.mjs"
   },
   "keywords": [
-    "tenki",
+    "luxor",
+    "luxor-ai",
+    "luxor-agent-cloud",
     "mcp",
     "model-context-protocol",
     "sandbox",
     "microvm",
     "ai-agents",
-    "code-execution"
+    "code-execution",
+    "tenki"
   ],
   "license": "MIT",
-  "author": "Tenki Cloud (https://tenki.cloud)",
+  "author": "Luxor AI (https://luxor.ai)",
   "publishConfig": {
     "access": "public"
   },
@@ -55,7 +58,7 @@
     "type": "git",
     "url": "git+https://github.com/LuxorLabs/tenki-mcp.git"
   },
-  "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
+  "homepage": "https://luxor.ai",
   "bugs": {
     "url": "https://github.com/LuxorLabs/tenki-mcp/issues"
   }

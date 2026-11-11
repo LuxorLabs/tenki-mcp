@@ -1,10 +1,10 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.LuxorLabs/tenki-mcp",
-  "title": "Tenki Sandbox MCP",
+  "title": "Luxor Sandbox MCP",
   "description": "Disposable microVM sandboxes for AI agents: run code, read/write files, git, preview URLs.",
-  "version": "0.4.0",
-  "websiteUrl": "https://tenki.cloud/?utm_source=mcp-registry&utm_medium=mcp-registry&utm_campaign=mcp-registry",
+  "version": "0.4.1",
+  "websiteUrl": "https://luxor.ai/?utm_source=mcp-registry&utm_medium=mcp-registry&utm_campaign=mcp-registry",
   "repository": {
     "url": "https://github.com/LuxorLabs/tenki-mcp",
     "source": "github"
@@ -14,20 +14,20 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@tenkicloud/mcp",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "TENKI_API_KEY",
-          "description": "Tenki API key (starts with tk_). Alternatively set TENKI_AUTH_TOKEN (an ory_st_ session token or session cookie); the header is chosen by token prefix.",
+          "description": "Luxor API key (starts with lx_; tk_ is still accepted). Alternatively set TENKI_AUTH_TOKEN (an ory_st_ session token or session cookie); the header is chosen by token prefix. LUXORAI_* names are read first.",
           "isRequired": true,
           "isSecret": true
         },
         {
           "name": "TENKI_API_ENDPOINT",
-          "description": "Override the control-plane endpoint. Defaults to https://api.tenki.cloud.",
+          "description": "Override the control-plane endpoint. Defaults to https://api.tenki.cloud (the same API as https://api.luxor.ai).",
           "isRequired": false,
           "isSecret": false
         }

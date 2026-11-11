@@ -1,11 +1,11 @@
 {
   "name": "tenki",
   "owner": {
-    "name": "Tenki Cloud",
-    "url": "https://tenki.cloud"
+    "name": "Luxor AI",
+    "url": "https://luxor.ai"
   },
   "metadata": {
-    "description": "Tenki Cloud plugins for Claude Code — disposable microVM sandboxes for agents.",
+    "description": "Luxor Sandbox plugins for Claude Code: disposable microVM sandboxes for agents.",
     "pluginRoot": "./plugins"
   },
   "plugins": [
