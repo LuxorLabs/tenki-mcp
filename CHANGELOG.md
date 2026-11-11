@@ -2,6 +2,11 @@
 
 All notable changes to `@luxorai/mcp` (also published as `@tenkicloud/mcp`). This project follows semantic versioning.
 
+## Unreleased
+
+- The 401 challenge and protected-resource metadata match the request host even when it carries an explicit default port (`:443`); malformed Host headers fall back to the first resource.
+- Protected-resource metadata `resource_name` is now `Luxor MCP`, configurable with `LUXORAI_MCP_RESOURCE_NAME` (or `TENKI_MCP_RESOURCE_NAME`).
+
 ## [0.4.2] - 2026-11-16
 
 - The Docker image builds and runs on Node 22.23.5, from the Node.js 2026-11-11 security release, pinned by digest.

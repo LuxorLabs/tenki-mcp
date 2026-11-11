@@ -3,6 +3,7 @@ import type http from "node:http";
 import { readEnv } from "./env.js";
 
 const DEFAULT_SCOPE = "mcp";
+const DEFAULT_RESOURCE_NAME = "Luxor MCP";
 const FETCH_TIMEOUT_MS = 8_000;
 const TOKEN_CACHE_MS = 15_000;
 const EXCHANGE_PROCEDURE =
@@ -20,6 +21,7 @@ export interface OAuthConfig {
 	identityUrl: string;
 	identityServiceToken: string;
 	scope: string;
+	resourceName: string;
 }
 
 export interface DelegatedAuthorization {
@@ -59,6 +61,7 @@ export function loadOAuthConfig(): OAuthConfig | null {
 		identityUrl,
 		identityServiceToken,
 		scope: (readEnv("MCP_OAUTH_SCOPE") || DEFAULT_SCOPE).trim(),
+		resourceName: (readEnv("MCP_RESOURCE_NAME") || DEFAULT_RESOURCE_NAME).trim(),
 	};
 }
 
@@ -163,7 +166,7 @@ export class OAuthResourceRoutes {
 				authorization_servers: [this.config.issuer],
 				scopes_supported: [this.config.scope, "offline_access"],
 				bearer_methods_supported: ["header"],
-				resource_name: "Tenki MCP",
+				resource_name: this.config.resourceName,
 			});
 			return true;
 		}
@@ -177,21 +180,26 @@ export class OAuthResourceRoutes {
 
 /** The configured resource whose host matches the request (RFC 9728 requires an exact match), else the first. */
 export function resourceForHost(config: Pick<OAuthConfig, "resource" | "resources">, host: string | undefined): string {
-	const wanted = (host ?? "").toLowerCase();
-	return config.resources.find((resource) => urlHost(resource) === wanted) ?? config.resource;
+	return matchResource(config.resources, host) ?? config.resource;
 }
 
 /** Protected-resource metadata URL to advertise in a challenge, on the same host as the matched resource. */
 export function metadataUrlForHost(config: Pick<OAuthConfig, "resources" | "publicUrl" | "metadataUrl">, host: string | undefined): string {
-	const wanted = (host ?? "").toLowerCase();
-	const matched = config.resources.find((resource) => urlHost(resource) === wanted);
-	if (!matched || wanted === urlHost(config.publicUrl)) return config.metadataUrl;
+	const matched = matchResource(config.resources, host);
+	if (!matched || sameHost(config.publicUrl, host)) return config.metadataUrl;
 	return `${new URL(matched).origin}/.well-known/oauth-protected-resource/mcp`;
 }
 
-/** Lowercased host of a URL, or undefined when it does not parse (a resource may be any absolute URI). */
-function urlHost(value: string): string | undefined {
-	return URL.canParse(value) ? new URL(value).host.toLowerCase() : undefined;
+function matchResource(resources: string[], host: string | undefined): string | undefined {
+	return resources.find((resource) => sameHost(resource, host));
+}
+
+/** Whether a Host header names the URL's host; an explicit default port (`:443` for https) still matches. */
+function sameHost(value: string, host: string | undefined): boolean {
+	if (!host || /[\s/?#@\\]/.test(host) || !URL.canParse(value)) return false;
+	const url = new URL(value);
+	const candidate = `${url.protocol}//${host}`;
+	return URL.canParse(candidate) && new URL(candidate).host === url.host;
 }
 
 export function bearerToken(header: string | undefined): string | null {

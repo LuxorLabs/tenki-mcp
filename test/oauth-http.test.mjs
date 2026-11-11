@@ -134,6 +134,20 @@ if (!server.listening) await once(server, "listening");
 const address = server.address();
 const base = `http://127.0.0.1:${address.port}`;
 
+/** fetch() cannot set Host, so use node:http to act as a request routed to a public hostname. */
+function requestAs(host, path, method = "GET") {
+	return new Promise((resolve, reject) => {
+		const req = http.request({ host: "127.0.0.1", port: address.port, path, method, headers: { Host: host } }, (res) => {
+			let body = "";
+			res.setEncoding("utf8");
+			res.on("data", (chunk) => (body += chunk));
+			res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
+		});
+		req.on("error", reject);
+		req.end();
+	});
+}
+
 try {
 	const metadata = await fetch(`${base}/.well-known/oauth-protected-resource/mcp`);
 	if (!metadata.ok) throw new Error(`metadata returned ${metadata.status}`);
@@ -168,6 +182,34 @@ try {
 	if (!unauthorized.headers.get("www-authenticate")?.includes("resource_metadata=")) {
 		throw new Error("401 challenge omitted resource_metadata");
 	}
+
+	const luxorMetadataUrl = "https://mcp.luxor.test/.well-known/oauth-protected-resource/mcp";
+	const hosts = [
+		["mcp.luxor.test", "https://mcp.luxor.test/mcp", luxorMetadataUrl],
+		["MCP.Luxor.Test:443", "https://mcp.luxor.test/mcp", luxorMetadataUrl],
+		["127.0.0.1", "http://127.0.0.1/mcp", config.metadataUrl],
+		["unknown.test", "http://127.0.0.1/mcp", config.metadataUrl],
+		["x@mcp.luxor.test", "http://127.0.0.1/mcp", config.metadataUrl],
+	];
+	for (const [host, expectedResource, expectedMetadataUrl] of hosts) {
+		for (const path of ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]) {
+			const response = await requestAs(host, path);
+			const body = JSON.parse(response.body);
+			if (response.status !== 200 || body.resource !== expectedResource) {
+				throw new Error(`${path} for Host ${host} returned resource ${body.resource}; expected ${expectedResource}`);
+			}
+			if (body.resource_name !== "Luxor MCP" || body.authorization_servers.join(",") !== "https://oauth.tenki.test") {
+				throw new Error(`${path} for Host ${host} changed resource_name or authorization_servers`);
+			}
+		}
+		const challenge = await requestAs(host, "/mcp", "POST");
+		if (challenge.status !== 401 || !challenge.headers["www-authenticate"]?.includes(`resource_metadata="${expectedMetadataUrl}"`)) {
+			throw new Error(`401 for Host ${host} pointed at ${challenge.headers["www-authenticate"]}; expected ${expectedMetadataUrl}`);
+		}
+	}
+	process.env.LUXORAI_MCP_RESOURCE_NAME = "Custom MCP";
+	if (loadOAuthConfig().resourceName !== "Custom MCP") throw new Error("LUXORAI_MCP_RESOURCE_NAME was ignored");
+	delete process.env.LUXORAI_MCP_RESOURCE_NAME;
 
 	for (const path of ["/.well-known/oauth-authorization-server", "/oauth/register", "/mcp/oauth2/auth"]) {
 		const response = await fetch(`${base}${path}`);
@@ -211,6 +253,7 @@ try {
 
 	console.log("✓ RFC 9728 protected-resource metadata is public");
 	console.log("✓ OAuth resource accepts a list and answers per request host");
+	console.log("✓ metadata and 401 challenges follow the request host, unknown hosts fall back to the primary");
 	console.log("✓ OAuth provider routes are owned by Tenki Identity");
 	console.log("✓ unauthenticated MCP requests return an OAuth challenge");
 	console.log("✓ MCP access tokens are exchanged through Tenki Identity");
