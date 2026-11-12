@@ -71,7 +71,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24" # Active LTS; Node 20 went EOL 2026-04-30
+          node-version: "24.22.3" # Active LTS; Node 20 went EOL 2026-04-30
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
 

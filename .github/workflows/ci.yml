@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "24.22.3"
       - name: Validate server.json / package.json for MCP Registry publish
         run: node scripts/validate-server-json.mjs
 
@@ -36,7 +36,7 @@ jobs:
       matrix:
         # 24 = Active LTS, 22 = Maintenance LTS. Node 20 went EOL 2026-04-30
         # and was dropped; keep this matrix in step with package.json engines.
-        node: [22, 24]
+        node: ["22.23.5", "24.22.3"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "24.22.3"
           cache: "npm"
       - run: npm ci
       # Its own job so a transient registry hiccup or a fresh advisory does not
@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "24.22.3"
           cache: "npm"
       - run: npm ci
       - name: Pack and list contents
