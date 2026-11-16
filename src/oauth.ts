@@ -163,7 +163,7 @@ export class OAuthResourceRoutes {
 				authorization_servers: [this.config.issuer],
 				scopes_supported: [this.config.scope, "offline_access"],
 				bearer_methods_supported: ["header"],
-				resource_name: "Tenki MCP",
+				resource_name: "Luxor MCP",
 			});
 			return true;
 		}
