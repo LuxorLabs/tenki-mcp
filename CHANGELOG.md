@@ -2,6 +2,11 @@
 
 All notable changes to `@luxorai/mcp` (also published as `@tenkicloud/mcp`). This project follows semantic versioning.
 
+## [0.4.2] - 2026-11-16
+
+- The Docker image builds and runs on Node 22.23.5, from the Node.js 2026-11-11 security release, pinned by digest.
+- Dependency install scripts are blocked (`npm ci --ignore-scripts`, `strict-allow-scripts`).
+
 ## [0.4.1] - 2026-11-12
 
 - Package page now shows Luxor names, install commands and links.
