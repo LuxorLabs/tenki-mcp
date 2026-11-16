@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
+import { withToolNames } from "../toolNames.js";
 import { capText, ok, sessionIdSchema } from "./common.js";
 
 /**
@@ -44,10 +45,10 @@ const directorySchema = gitArg(
 
 /** How to get less output, per operation (only diff/log take narrowing args). */
 const NARROW: Record<string, string> = {
-	diff: "Narrow it with path or range/base/head, or run git through tenki_exec and page its output.",
-	log: "Narrow it with max_count, path or range, or run git through tenki_exec and page its output.",
+	diff: withToolNames("Narrow it with path or range/base/head, or run git through tenki_exec and page its output."),
+	log: withToolNames("Narrow it with max_count, path or range, or run git through tenki_exec and page its output."),
 };
-const NARROW_DEFAULT = "Run git through tenki_exec to page the full output.";
+const NARROW_DEFAULT = withToolNames("Run git through tenki_exec to page the full output.");
 
 async function gitOperation(client: TenkiClient, sessionId: string, operation: string, args: Record<string, string | number | boolean | undefined>) {
 	const stringArgs = Object.fromEntries(

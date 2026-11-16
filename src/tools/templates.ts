@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
+import { withToolNames } from "../toolNames.js";
 import { envSchema, listQuery, ok, protoEnum, searchSchema, tagsPatch, tagsSchema } from "./common.js";
 
 /**
@@ -46,7 +47,7 @@ export function registerTemplates(server: McpServer, client: TenkiClient): void 
 				.record(z.string(), z.unknown())
 				.optional()
 				.describe(
-					"Typed template spec, passed through as-is — e.g. {specVersion:'tenki.template.v1', base:{image:'sandbox'}, workdir:'/home/tenki', steps:[{run:{command:'...'}}], resources:{cpuCores,memoryMb,diskSizeGb}}. Mutually exclusive with base_image_id/setup_script/start_cmd/env_vars/cpu_cores/memory_mb/disk_size_gb/parent_* (the API rejects mixing). Required if the template's builds should publish an image (tenki_build_template image_name).",
+					withToolNames("Typed template spec, passed through as-is — e.g. {specVersion:'tenki.template.v1', base:{image:'sandbox'}, workdir:'/home/tenki', steps:[{run:{command:'...'}}], resources:{cpuCores,memoryMb,diskSizeGb}}. Mutually exclusive with base_image_id/setup_script/start_cmd/env_vars/cpu_cores/memory_mb/disk_size_gb/parent_* (the API rejects mixing). Required if the template's builds should publish an image (tenki_build_template image_name)."),
 				),
 			workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),
 		},

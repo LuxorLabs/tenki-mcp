@@ -26,7 +26,7 @@
       "name": "luxor",
       "source": "./plugins/luxor",
       "description": "Disposable microVM sandboxes for AI agents: create sandboxes, run code, read/write files, run git, expose preview URLs.",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "author": { "name": "Luxor AI", "url": "https://luxor.ai" },
       "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
       "repository": "https://github.com/LuxorLabs/tenki-mcp",

@@ -50,6 +50,8 @@ The repo doubles as a plugin marketplace. This prompts for your API key on insta
 
 If you added this marketplace before it was named `luxor`, your installs keep working as `luxor@tenki` and `tenki@tenki`. To switch to the new name, run `/plugin marketplace remove tenki` (this uninstalls its plugins and their saved API key), then add the marketplace again.
 
+The `luxor` plugin names its tools `luxor_*`; the legacy `tenki` plugin keeps `tenki_*`.
+
 ### Use it in Claude Desktop
 
 Add to `claude_desktop_config.json`:
@@ -100,7 +102,7 @@ After adding the server, **start a fresh session** so the client loads it, then 
 - _"Check Luxor auth status."_: confirms your credential was picked up.
 - _"Run `print(2+2)` in a fresh Luxor sandbox."_: a full boot → run → teardown round-trip.
 
-If the `tenki_*` tools don't show up, restart the client so it re-reads its config.
+If the tools don't show up, restart the client so it re-reads its config.
 
 No key yet? Start the server without one and ask the agent to check `tenki_auth_status`; it reports what to set and where. See [Auth](#auth).
 
@@ -126,6 +128,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | `LUXOR_MCP_READONLY`               | off                                                                | `1` registers only read tools (no create/run/delete/spend).                                                                                                                                               |
 | `LUXOR_MCP_DISABLED_TOOLS`         | -                                                                  | Comma-separated tool names to skip registering.                                                                                                                                                           |
 | `LUXOR_MCP_AUDIT`                  | off                                                                | `1` logs each tool call name + arg keys to stderr.                                                                                                                                                        |
+| `LUXOR_MCP_TOOL_PREFIX`            | `tenki`                                                            | `luxor` names every tool `luxor_*` instead of `tenki_*` (the `luxor` Claude Code plugin sets it). Descriptions and errors use the same names.                                                             |
 | `LUXOR_MCP_TRANSPORT`              | `stdio`                                                            | `http` serves Streamable HTTP instead (see below).                                                                                                                                                        |
 | `PORT`                             | `3000`                                                             | HTTP transport port.                                                                                                                                                                                      |
 | `LUXOR_MCP_HTTP_HOST`              | `127.0.0.1`                                                        | HTTP bind host; non-loopback requires `LUXOR_MCP_HTTP_TOKEN`.                                                                                                                                             |
@@ -142,7 +145,7 @@ Every `LUXOR_*` variable above is still accepted under its `TENKI_*` name (for e
 
 ## Tools
 
-**82 tools**: all 76 tool-worthy public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has; `GitOperation` is exposed as one tool per operation), two workflow helpers, and `tenki_auth_status`. Tool names keep the `tenki_` prefix. A few admin surfaces (published images, saved Tailscale connections) and implementation-only control-plane methods are intentionally excluded. Grouped by domain:
+**82 tools**: all 76 tool-worthy public unary API methods (enforced by a CI [parity audit](scripts/parity-audit.mjs), which also fails if a tool calls a method the API no longer has; `GitOperation` is exposed as one tool per operation), two workflow helpers, and `tenki_auth_status`. Tool names use the `tenki_` prefix by default; set `LUXOR_MCP_TOOL_PREFIX=luxor` (as the `luxor` plugin does) to name them `luxor_*`. A few admin surfaces (published images, saved Tailscale connections) and implementation-only control-plane methods are intentionally excluded. Grouped by domain:
 
 | Domain                          | Tools                                                                                                                                                                                                                                 |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

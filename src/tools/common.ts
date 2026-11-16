@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { withToolNames } from "../toolNames.js";
+
 const PUBLIC_KEYS: Record<string, string> = {
 	registryRef: "image",
 	registry_ref: "image",
@@ -82,7 +84,7 @@ export const sessionIdSchema = z
 	.string()
 	.trim()
 	.min(1)
-	.describe("Sandbox session id (UUID), from tenki_create_sandbox or tenki_list_sandboxes.");
+	.describe(withToolNames("Sandbox session id (UUID), from tenki_create_sandbox or tenki_list_sandboxes."));
 
 /** Shared TCP-port schema. */
 export const portSchema = z.number().int().min(1).max(65535).describe("TCP port inside the sandbox (1-65535).");
