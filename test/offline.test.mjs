@@ -92,7 +92,7 @@ async function connectWith(env, name) {
 // The API endpoint is pinned to a dead loopback port so the suite's "ZERO
 // network calls" promise is enforced, not assumed: if a validation regression
 // ever lets a request escape, it fails loudly here instead of reaching
-// api.tenki.cloud with the dummy key.
+// api.luxor.ai with the dummy key.
 const transport = new StdioClientTransport({
 	command: process.execPath,
 	args: [SERVER],

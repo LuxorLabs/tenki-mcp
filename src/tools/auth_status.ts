@@ -92,7 +92,7 @@ export function registerAuthStatus(server: McpServer, client: TenkiClient | null
 		},
 		async () => {
 			const cred = describeCredential();
-			const endpoint = readEnv("API_ENDPOINT", "API_URL") || "https://api.tenki.cloud";
+			const endpoint = readEnv("API_ENDPOINT", "API_URL") || "https://api.luxor.ai";
 			const base = {
 				credential: cred.kind,
 				...(cred.source ? { source: cred.source } : {}),

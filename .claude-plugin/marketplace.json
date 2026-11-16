@@ -1,5 +1,5 @@
 {
-  "name": "tenki",
+  "name": "luxor",
   "owner": {
     "name": "Luxor AI",
     "url": "https://luxor.ai"
@@ -12,9 +12,9 @@
     {
       "name": "tenki",
       "source": "./plugins/tenki",
-      "description": "Disposable microVM sandboxes for AI agents: create sandboxes, run code, read/write files, run git, expose preview URLs.",
-      "version": "0.2.0",
-      "author": { "name": "Tenki Cloud", "url": "https://tenki.cloud" },
+      "description": "Legacy name for the luxor plugin, kept for existing installs. Install luxor instead.",
+      "version": "0.2.1",
+      "author": { "name": "Luxor AI", "url": "https://luxor.ai" },
       "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
       "repository": "https://github.com/LuxorLabs/tenki-mcp",
       "license": "MIT",
@@ -26,7 +26,7 @@
       "name": "luxor",
       "source": "./plugins/luxor",
       "description": "Disposable microVM sandboxes for AI agents: create sandboxes, run code, read/write files, run git, expose preview URLs.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": { "name": "Luxor AI", "url": "https://luxor.ai" },
       "homepage": "https://github.com/LuxorLabs/tenki-mcp#readme",
       "repository": "https://github.com/LuxorLabs/tenki-mcp",
