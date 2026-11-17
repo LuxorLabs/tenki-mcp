@@ -63,6 +63,18 @@ try {
 	// modern registration path honors the denylist.
 	const den = await toolsWith({ TENKI_MCP_DISABLED_TOOLS: "tenki_run_code,tenki_terminate_sandbox,tenki_exec" });
 	check("denylist removes exactly the named tools", den.length === def.length - 3 && !den.some((t) => ["tenki_run_code", "tenki_terminate_sandbox", "tenki_exec"].includes(t.name)), `${den.length}`);
+
+	// 4) LUXOR_MCP_TOOL_PREFIX=luxor: same tools and hints, advertised as luxor_*
+	const lux = await toolsWith({ LUXOR_MCP_TOOL_PREFIX: "luxor" });
+	check("luxor prefix advertises the same 82 tools", lux.length === def.length, `${lux.length}`);
+	check("luxor prefix renames every tool to luxor_*", lux.every((t) => t.name.startsWith("luxor_")) && lux.map((t) => t.name.replace(/^luxor_/, "tenki_")).sort().join() === def.map((t) => t.name).sort().join());
+	check("luxor prefix keeps titles and annotations", lux.every((t) => JSON.stringify(t.annotations) === JSON.stringify(byName[t.name.replace(/^luxor_/, "tenki_")]?.annotations)));
+	const leftover = JSON.stringify(lux).match(/\btenki_(?!session\b)[a-z][a-z_]*/g);
+	check("luxor prefix leaves no tenki_* tool name in descriptions or schemas", !leftover, `${leftover}`);
+	const luxDis = await toolsWith({ LUXOR_MCP_TOOL_PREFIX: "luxor", LUXOR_MCP_DISABLED_TOOLS: "luxor_exec,tenki_run_code" });
+	check("denylist accepts luxor_* and tenki_* names under the luxor prefix", !luxDis.some((t) => ["luxor_exec", "luxor_run_code"].includes(t.name)) && luxDis.length === def.length - 2, `${luxDis.length}`);
+	const bogus = await toolsWith({ LUXOR_MCP_TOOL_PREFIX: "acme" });
+	check("an unknown prefix keeps tenki_*", bogus.every((t) => t.name.startsWith("tenki_")) && bogus.length === def.length);
 } catch (e) {
 	console.error("  ✗ " + (e?.message ?? e));
 	fail++;

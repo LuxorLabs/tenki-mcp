@@ -10,6 +10,8 @@
  *   2. enforces least-privilege via env:
  *        TENKI_MCP_READONLY=1        → register ONLY read tools (no create/run/delete/spend)
  *        TENKI_MCP_DISABLED_TOOLS=a,b → skip these named tools
+ *      and advertises tools as luxor_* instead of tenki_* when
+ *      LUXOR_MCP_TOOL_PREFIX=luxor (classification and titles use the tenki_* name);
  *   3. optionally audit-logs each call name to stderr: TENKI_MCP_AUDIT=1
  *      (tool name + argument KEYS only — never values, content, or the token).
  */
@@ -36,6 +38,7 @@ import { registerEgress } from "./tools/egress.js";
 import { registerAuthStatus } from "./tools/auth_status.js";
 import { readEnv } from "./env.js";
 import { TOOL_TITLES } from "./tools/titles.js";
+import { TOOL_PREFIX, toolName, withToolNames } from "./toolNames.js";
 
 export const VERSION = "0.4.4";
 
@@ -215,7 +218,8 @@ function noopToolHandle() {
 function guard(server: McpServer, opts: GuardOpts): McpServer {
 	const register = (target: McpServer, name: string, config: Record<string, unknown>, handler: (...a: unknown[]) => unknown) => {
 		const cls = classifyTool(name);
-		if (opts.disabled.has(name)) return noopToolHandle(); // explicit denylist
+		const advertised = toolName(name);
+		if (opts.disabled.has(name) || opts.disabled.has(advertised)) return noopToolHandle(); // explicit denylist
 		if (opts.readonly && cls !== "read") return noopToolHandle(); // read-only posture: skip anything that mutates/spends
 		if (opts.registered) opts.registered.count++;
 		// Name-derived classification and title stay authoritative so a module
@@ -224,10 +228,23 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 			...(config.annotations as Record<string, unknown> | undefined),
 			...annotationsFor(name, cls),
 		};
+		const description = typeof config.description === "string" ? withToolNames(config.description) : config.description;
+		// Handler errors name tools too (e.g. "tenki_update_sandbox: pass at least one field").
+		const named =
+			TOOL_PREFIX === "tenki"
+				? handler
+				: async (...args: unknown[]) => {
+						try {
+							return await handler(...args);
+						} catch (e) {
+							if (e instanceof Error) e.message = withToolNames(e.message);
+							throw e;
+						}
+					};
 		return (target.registerTool as (...a: unknown[]) => unknown)(
-			name,
-			{ ...config, title: titleFor(name), annotations },
-			withAudit(name, handler, opts.audit),
+			advertised,
+			{ ...config, description, title: titleFor(name), annotations },
+			withAudit(advertised, named, opts.audit),
 		);
 	};
 	return new Proxy(server, {
@@ -265,7 +282,7 @@ export function createServer(client: TenkiClient | null): McpServer {
 	// READ_OVERRIDE keeps it available under TENKI_MCP_READONLY;
 	// TENKI_MCP_DISABLED_TOOLS can still drop it.
 	registerAuthStatus(guarded, client, opts.registered.count + 1);
-	if (!client) console.error("tenki-mcp: no credential, only tenki_auth_status registered. Set LUXOR_API_KEY or LUXOR_AUTH_TOKEN (or the legacy TENKI_API_KEY / TENKI_AUTH_TOKEN) and restart.");
+	if (!client) console.error(`tenki-mcp: no credential, only ${toolName("tenki_auth_status")} registered. Set LUXOR_API_KEY or LUXOR_AUTH_TOKEN (or the legacy TENKI_API_KEY / TENKI_AUTH_TOKEN) and restart.`);
 	if (opts.readonly) console.error("tenki-mcp: TENKI_MCP_READONLY — only read-only tools registered.");
 	else if (opts.disabled.size) console.error(`tenki-mcp: disabled tools — ${[...opts.disabled].join(", ")}`);
 	return server;

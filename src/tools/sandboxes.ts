@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { isClientAbort, type TenkiClient } from "../client.js";
+import { withToolNames } from "../toolNames.js";
 import { ok, envSchema, pathSchema, protoEnum, sessionIdSchema, tagsSchema } from "./common.js";
 import { allowedPortsSchema, egressBodyToWire, httpRulesSchema, interceptHttpsSchema, policyNameSchema } from "./egress.js";
 
@@ -144,16 +145,16 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.array(policyNameSchema)
 						.max(16)
 						.optional()
-						.describe("Names of saved workspace egress policies to pin (≤16; see tenki_list_egress_policies). Merged with the inline egress_* fields at create; later edits or deletes of a policy do not change this sandbox. Cannot be combined with allow_outbound: false."),
+						.describe(withToolNames("Names of saved workspace egress policies to pin (≤16; see tenki_list_egress_policies). Merged with the inline egress_* fields at create; later edits or deletes of a policy do not change this sandbox. Cannot be combined with allow_outbound: false.")),
 					snapshot_id: z
 						.string()
 						.optional()
-						.describe("Boot from a snapshot. Expired snapshots and pause snapshots are refused (failed_precondition); resume a paused sandbox with tenki_resume_sandbox instead."),
+						.describe(withToolNames("Boot from a snapshot. Expired snapshots and pause snapshots are refused (failed_precondition); resume a paused sandbox with tenki_resume_sandbox instead.")),
 					image: z
 						.string()
 						.optional()
 						.describe(
-							"Boot from a template image, passed as a reference STRING: the imageDigestRef of a READY build from tenki_build_template / tenki_get_template_build (e.g. 'ws/name@sha256:...'), or 'workspace/name' for its latest version.",
+							withToolNames("Boot from a template image, passed as a reference STRING: the imageDigestRef of a READY build from tenki_build_template / tenki_get_template_build (e.g. 'ws/name@sha256:...'), or 'workspace/name' for its latest version."),
 						),
 					template_spec_id: z
 						.string()
@@ -196,11 +197,11 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 							}),
 						)
 						.optional()
-						.describe("Volumes to attach at boot (also attachable later with tenki_attach_volume)."),
+						.describe(withToolNames("Volumes to attach at boot (also attachable later with tenki_attach_volume).")),
 					ssh_authorized_keys: z
 						.array(z.string().min(1))
 						.optional()
-						.describe("SSH public keys to authorize at boot (also settable later with tenki_update_ssh_keys)."),
+						.describe(withToolNames("SSH public keys to authorize at boot (also settable later with tenki_update_ssh_keys).")),
 					metadata: z.record(z.string(), z.string()).optional().describe("Free-form key→value metadata stored on the session."),
 					tags: tagsSchema.describe("Tags for later filtering (≤20, each ≤32 chars of a-z 0-9 _ : . -)."),
 					workspace_id: z.string().optional().describe("Workspace to create in (defaults to the key's first workspace)."),

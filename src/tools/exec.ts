@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient, ExecResult } from "../client.js";
+import { withToolNames } from "../toolNames.js";
 import { envSchema, sessionIdSchema } from "./common.js";
 
 /**
@@ -31,11 +32,11 @@ const execOutputSchema = {
 	stdoutPath: z
 		.string()
 		.optional()
-		.describe("Sandbox path holding the FULL stdout, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c)."),
+		.describe(withToolNames("Sandbox path holding the FULL stdout, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c).")),
 	stderrPath: z
 		.string()
 		.optional()
-		.describe("Sandbox path holding the FULL stderr, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c)."),
+		.describe(withToolNames("Sandbox path holding the FULL stderr, present only when truncated — page through it with tenki_exec (e.g. sed -n / tail -c).")),
 };
 
 /**

@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { TenkiClient } from "../client.js";
+import { withToolNames } from "../toolNames.js";
 import { ok, sessionIdSchema, tagsPatch, tagsSchema } from "./common.js";
 
 /**
@@ -30,7 +31,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 			async: z
 				.boolean()
 				.optional()
-				.describe("Return as soon as the snapshot row exists and poll tenki_get_snapshot for READY, instead of blocking until the capture finishes (default false)."),
+				.describe(withToolNames("Return as soon as the snapshot row exists and poll tenki_get_snapshot for READY, instead of blocking until the capture finishes (default false).")),
 		},
 		async ({ session_id, name, expires_at, store_raw_image, async: isAsync }) =>
 			ok(
@@ -47,7 +48,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 	server.tool(
 		"tenki_get_snapshot",
 		"Fetch one snapshot's status and metadata by ID.",
-		{ snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.") },
+		{ snapshot_id: z.string().describe(withToolNames("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.")) },
 		async ({ snapshot_id }) => ok(await client.control("GetSnapshot", { snapshotId: snapshot_id })),
 	);
 
@@ -105,7 +106,7 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 		"tenki_update_snapshot",
 		"Update a snapshot's mutable metadata: name, expiry (set or clear), and tags. An expired snapshot can no longer be updated, and a pause snapshot's expiry is managed by its sandbox (both failed_precondition).",
 		{
-			snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots."),
+			snapshot_id: z.string().describe(withToolNames("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.")),
 			name: z.string().max(64).optional().describe("New human-readable name (max 64 chars)."),
 			expires_at: z
 				.string()
@@ -138,14 +139,14 @@ export function registerSnapshots(server: McpServer, client: TenkiClient): void 
 	server.tool(
 		"tenki_delete_snapshot",
 		"Permanently delete a snapshot by ID.",
-		{ snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.") },
+		{ snapshot_id: z.string().describe(withToolNames("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.")) },
 		async ({ snapshot_id }) => ok(await client.control("DeleteSnapshot", { snapshotId: snapshot_id })),
 	);
 
 	server.tool(
 		"tenki_get_snapshot_download_url",
 		"Get a short-lived, pre-signed URL to download a snapshot's raw disk image (requires the snapshot to have been created with store_raw_image).",
-		{ snapshot_id: z.string().describe("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.") },
+		{ snapshot_id: z.string().describe(withToolNames("Snapshot id, from tenki_create_snapshot or tenki_list_snapshots.")) },
 		async ({ snapshot_id }) => ok(await client.control("GetSnapshotDownloadURL", { snapshotId: snapshot_id })),
 	);
 
