@@ -3,7 +3,7 @@
   "name": "io.github.LuxorLabs/tenki-mcp",
   "title": "Luxor Sandbox MCP",
   "description": "Disposable microVM sandboxes for AI agents: run code, read/write files, git, preview URLs.",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "websiteUrl": "https://luxor.ai/?utm_source=mcp-registry&utm_medium=mcp-registry&utm_campaign=mcp-registry",
   "repository": {
     "url": "https://github.com/LuxorLabs/tenki-mcp",
@@ -14,14 +14,14 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@tenkicloud/mcp",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "TENKI_API_KEY",
-          "description": "Luxor API key (starts with lx_; tk_ is still accepted). Alternatively set TENKI_AUTH_TOKEN (an ory_st_ session token or session cookie); the header is chosen by token prefix. LUXORAI_* names are read first.",
+          "description": "Luxor API key (starts with lx_; tk_ is still accepted). Alternatively set TENKI_AUTH_TOKEN (an ory_st_ session token or session cookie); the header is chosen by token prefix. LUXOR_* names are read first.",
           "isRequired": true,
           "isSecret": true
         },

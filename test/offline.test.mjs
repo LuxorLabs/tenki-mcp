@@ -56,7 +56,7 @@ async function connectWith(env, name) {
 	check("auth_status reports authenticated:false", s.authenticated === false, JSON.stringify(s).slice(0, 120));
 	check("auth_status reports credential 'none'", s.credential === "none", JSON.stringify(s.credential));
 	check("auth_status reports toolsRegistered 1 (degraded mode is visible)", s.toolsRegistered === 1, JSON.stringify(s.toolsRegistered));
-	check("auth_status detail names the env vars to set", /TENKI_API_KEY/.test(s.detail ?? "") && /TENKI_AUTH_TOKEN/.test(s.detail ?? ""));
+	check("auth_status detail names the env vars to set", ["LUXOR_API_KEY", "LUXOR_AUTH_TOKEN", "TENKI_API_KEY", "TENKI_AUTH_TOKEN"].every((name) => (s.detail ?? "").includes(name)));
 	check("auth_status made no network call (no probe error on a dead endpoint)", s.error === undefined, JSON.stringify(s.error));
 	await c.close();
 }
@@ -76,16 +76,45 @@ async function connectWith(env, name) {
 	await c.close();
 }
 
-// 1c) LUXORAI_* env wins over TENKI_*, and lx_ keys are API keys (Bearer).
+// 1c) LUXOR_* env wins over TENKI_*, and lx_ keys are API keys (Bearer).
 {
 	const LX = "lx_offline_dummy_key";
-	const c = await connectWith({ LUXORAI_API_KEY: LX, TENKI_API_KEY: DUMMY, TENKI_AUTH_TOKEN: "ory_st_legacy" }, "offline-luxorai");
+	const c = await connectWith({ LUXOR_API_KEY: LX, TENKI_API_KEY: DUMMY, TENKI_AUTH_TOKEN: "ory_st_legacy" }, "offline-luxor");
 	const res = await c.callTool({ name: "tenki_auth_status", arguments: {} });
 	const s = res.structuredContent ?? {};
-	check("LUXORAI_API_KEY wins over TENKI_AUTH_TOKEN/TENKI_API_KEY", s.source === "LUXORAI_API_KEY", JSON.stringify(s.source));
+	check("LUXOR_API_KEY wins over TENKI_AUTH_TOKEN/TENKI_API_KEY", s.source === "LUXOR_API_KEY", JSON.stringify(s.source));
 	check("lx_ key classified as api_key", s.credential === "api_key", JSON.stringify(s.credential));
 	check("auth_status never echoes the lx_ key", !JSON.stringify(res).includes(LX));
 	await c.close();
+}
+
+// 1d) LUXOR_API_KEY is shared with the Luxor Mining Pool key, so only lx_/tk_ values count.
+{
+	const POOL = "pool-key-123";
+	const status = async (env, name) => {
+		const c = await connectWith({ LUXOR_AUTH_TOKEN: "", TENKI_AUTH_TOKEN: "", ...env }, name);
+		const { tools } = await c.listTools();
+		const res = await c.callTool({ name: "tenki_auth_status", arguments: {} });
+		await c.close();
+		return { s: res.structuredContent ?? {}, tools, raw: JSON.stringify(res) };
+	};
+
+	const tk = await status({ LUXOR_API_KEY: "tk_offline_luxor_key", TENKI_API_KEY: DUMMY }, "offline-luxor-tk");
+	check("LUXOR_API_KEY with a tk_ value is used", tk.s.source === "LUXOR_API_KEY" && tk.s.credential === "api_key", JSON.stringify(tk.s.source));
+
+	const padded = await status({ LUXOR_API_KEY: "  lx_offline_padded_key ", TENKI_API_KEY: DUMMY }, "offline-luxor-padded");
+	check("LUXOR_API_KEY prefix is checked after trimming whitespace", padded.s.source === "LUXOR_API_KEY", JSON.stringify(padded.s.source));
+
+	const fallback = await status({ LUXOR_API_KEY: POOL, TENKI_API_KEY: DUMMY }, "offline-luxor-pool");
+	check("non-prefixed LUXOR_API_KEY is ignored → TENKI_API_KEY is used", fallback.s.source === "TENKI_API_KEY" && fallback.s.credential === "api_key", JSON.stringify(fallback.s));
+	check("ignored LUXOR_API_KEY value never leaks", !fallback.raw.includes(POOL));
+
+	const none = await status({ LUXOR_API_KEY: POOL, TENKI_API_KEY: "" }, "offline-luxor-pool-only");
+	check("non-prefixed LUXOR_API_KEY alone → credential 'none'", none.s.credential === "none" && none.s.authenticated === false, JSON.stringify(none.s).slice(0, 120));
+	check("non-prefixed LUXOR_API_KEY alone → unauthenticated mode (1 tool)", none.tools.length === 1, `${none.tools.length}`);
+
+	const session = await status({ LUXOR_AUTH_TOKEN: "ory_st_offline_luxor", LUXOR_API_KEY: "lx_offline_dummy_key", TENKI_API_KEY: DUMMY }, "offline-luxor-token");
+	check("LUXOR_AUTH_TOKEN wins over LUXOR_API_KEY and is not prefix-guarded", session.s.source === "LUXOR_AUTH_TOKEN" && session.s.credential === "oauth_session_token", JSON.stringify(session.s.source));
 }
 
 // 2) the server over a real MCP client (spawned with a dummy key) — no network hit.

@@ -2,6 +2,10 @@
 
 All notable changes to `@luxorai/mcp` (also published as `@tenkicloud/mcp`). This project follows semantic versioning.
 
+## [0.4.4] - 2026-11-17
+
+- Environment variables now use the `LUXOR_` prefix (for example `LUXOR_API_KEY`). `LUXORAI_*` variables are no longer read; `TENKI_*` still works as a fallback. `LUXOR_API_KEY` is only used when it starts with `lx_` or `tk_`.
+
 ## [0.4.3] - 2026-11-16
 
 - The 401 challenge and protected-resource metadata match the request host even when it carries an explicit default port (`:443`); malformed Host headers fall back to the first resource.

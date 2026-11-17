@@ -22,7 +22,7 @@
       "command": "npx",
       "args": ["-y", "@luxorai/mcp"],
       "env": {
-        "LUXORAI_API_KEY": "${user_config.api_key}",
+        "LUXOR_API_KEY": "${user_config.api_key}",
         "TENKI_API_KEY": "${user_config.api_key}"
       }
     }

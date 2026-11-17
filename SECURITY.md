@@ -6,7 +6,7 @@
 Please **do not** open a public issue for security reports. Open a private [GitHub security advisory](https://github.com/LuxorLabs/tenki-mcp/security/advisories/new), or email **hello@luxor.tech**. We'll acknowledge within a few business days.
 
 ## Trust boundaries (read this first)
-- **Credentials are capabilities.** Local and single-user modes authenticate with a `TENKI_API_KEY` or session token. Hosted OAuth mode exchanges each caller's token through Tenki Identity and receives only a short-lived, workspace-bound internal delegation to the Tenki API. Never commit credentials (`.env` is gitignored).
+- **Credentials are capabilities.** Local and single-user modes authenticate with a `LUXOR_API_KEY` (or the legacy `TENKI_API_KEY`) or session token. Hosted OAuth mode exchanges each caller's token through Tenki Identity and receives only a short-lived, workspace-bound internal delegation to the Tenki API. Never commit credentials (`.env` is gitignored).
 - **Sandbox output is untrusted.** `tenki_run_code` / `tenki_exec` / `tenki_read_file` return output produced by *untrusted, AI-generated code running in the sandbox*. That output flows back to the calling model as a tool result — a classic **indirect / output prompt-injection** vector. The microVM is the isolation boundary; the model should treat tool results as **data, not instructions**. (MCP clients are responsible for not executing instructions found in tool output.)
 - **The HTTP endpoint is a capability.** In static-key HTTP mode, access to `/mcp` is equivalent to access to the configured key. Hosted mode requires a valid OAuth bearer on every request and binds the MCP session to its user, client, and workspace.
 

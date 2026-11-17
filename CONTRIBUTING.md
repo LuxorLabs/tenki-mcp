@@ -26,7 +26,7 @@ There are two tiers:
   ```
 
 - **Live suites — need a real Tenki token.** These drive the actual MCP protocol against
-  `api.luxor.ai`. Set `LUXORAI_API_KEY` (or `LUXORAI_AUTH_TOKEN`) first.
+  `api.luxor.ai`. Set `LUXOR_API_KEY` (or `LUXOR_AUTH_TOKEN`) first.
 
   ```bash
   TENKI_API_KEY=tk_... npm run test:all

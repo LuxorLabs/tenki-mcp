@@ -123,7 +123,7 @@ process.env.TENKI_MCP_OAUTH_ISSUER = "https://oauth.tenki.test";
 process.env.TENKI_MCP_IDENTITY_URL = `http://127.0.0.1:${identityAddress.port}`;
 process.env.TENKI_MCP_IDENTITY_SERVICE_TOKEN = identityServiceToken;
 process.env.TENKI_MCP_PUBLIC_URL = "http://127.0.0.1";
-process.env.LUXORAI_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp,https://mcp.luxor.test/mcp";
+process.env.LUXOR_MCP_OAUTH_RESOURCE = "http://127.0.0.1/mcp,https://mcp.luxor.test/mcp";
 process.env.TENKI_MCP_OAUTH_RESOURCE = "https://ignored.tenki.test/mcp";
 process.env.TENKI_API_ENDPOINT = `http://127.0.0.1:${apiAddress.port}`;
 
@@ -157,7 +157,7 @@ try {
 	}
 	const config = loadOAuthConfig();
 	if (config.resources.join(",") !== "http://127.0.0.1/mcp,https://mcp.luxor.test/mcp") {
-		throw new Error("LUXORAI_MCP_OAUTH_RESOURCE list was not preferred over TENKI_MCP_OAUTH_RESOURCE");
+		throw new Error("LUXOR_MCP_OAUTH_RESOURCE list was not preferred over TENKI_MCP_OAUTH_RESOURCE");
 	}
 	if (resourceForHost(config, "mcp.luxor.test") !== "https://mcp.luxor.test/mcp") {
 		throw new Error("metadata resource does not follow the request host");
@@ -207,9 +207,9 @@ try {
 			throw new Error(`401 for Host ${host} pointed at ${challenge.headers["www-authenticate"]}; expected ${expectedMetadataUrl}`);
 		}
 	}
-	process.env.LUXORAI_MCP_RESOURCE_NAME = "Custom MCP";
-	if (loadOAuthConfig().resourceName !== "Custom MCP") throw new Error("LUXORAI_MCP_RESOURCE_NAME was ignored");
-	delete process.env.LUXORAI_MCP_RESOURCE_NAME;
+	process.env.LUXOR_MCP_RESOURCE_NAME = "Custom MCP";
+	if (loadOAuthConfig().resourceName !== "Custom MCP") throw new Error("LUXOR_MCP_RESOURCE_NAME was ignored");
+	delete process.env.LUXOR_MCP_RESOURCE_NAME;
 
 	for (const path of ["/.well-known/oauth-authorization-server", "/oauth/register", "/mcp/oauth2/auth"]) {
 		const response = await fetch(`${base}${path}`);
