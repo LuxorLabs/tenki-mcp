@@ -1,6 +1,6 @@
 # Contributing to tenki-mcp
 
-Thanks for your interest! This is the Model Context Protocol server for [Tenki Cloud](https://tenki.cloud).
+Thanks for your interest! This is the Model Context Protocol server for [Luxor Sandbox](https://luxor.ai).
 
 ## Development
 
@@ -26,7 +26,7 @@ There are two tiers:
   ```
 
 - **Live suites — need a real Tenki token.** These drive the actual MCP protocol against
-  `api.tenki.cloud`. Set `TENKI_API_KEY` (or `TENKI_AUTH_TOKEN`) first.
+  `api.luxor.ai`. Set `LUXOR_API_KEY` (or `LUXOR_AUTH_TOKEN`) first.
 
   ```bash
   TENKI_API_KEY=tk_... npm run test:all

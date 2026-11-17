@@ -17,7 +17,7 @@ import { isApiKey } from "./env.js";
 
 const CONTROL_SERVICE = "tenki.sandbox.v1.SandboxService";
 const DATA_SERVICE = "tenki.sandbox.v1.SandboxSessionDataPlaneService";
-const DEFAULT_BASE_URL = "https://api.tenki.cloud";
+const DEFAULT_BASE_URL = "https://api.luxor.ai";
 
 const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 500;

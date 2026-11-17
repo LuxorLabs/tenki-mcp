@@ -45,10 +45,10 @@ The repo doubles as a plugin marketplace. This prompts for your API key on insta
 
 ```
 /plugin marketplace add LuxorLabs/tenki-mcp
-/plugin install luxor@tenki
+/plugin install luxor@luxor
 ```
 
-The `tenki@tenki` plugin is still available.
+If you added this marketplace before it was named `luxor`, your installs keep working as `luxor@tenki` and `tenki@tenki`. To switch to the new name, run `/plugin marketplace remove tenki` (this uninstalls its plugins and their saved API key), then add the marketplace again.
 
 ### Use it in Claude Desktop
 
@@ -97,7 +97,7 @@ env = { LUXOR_API_KEY = "lx_your_key_here" }
 
 After adding the server, **start a fresh session** so the client loads it, then ask your agent one of:
 
-- _"Check tenki auth status."_: confirms your credential was picked up.
+- _"Check Luxor auth status."_: confirms your credential was picked up.
 - _"Run `print(2+2)` in a fresh Luxor sandbox."_: a full boot → run → teardown round-trip.
 
 If the `tenki_*` tools don't show up, restart the client so it re-reads its config.
@@ -122,7 +122,7 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | ---------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `LUXOR_API_KEY`                    | -                                                                  | API key (`lx_…`, or `tk_…`). One of this or `LUXOR_AUTH_TOKEN` is required.                                                                                                                               |
 | `LUXOR_AUTH_TOKEN`                 | -                                                                  | Session token (`ory_st_…` or cookie value). **Takes precedence over `LUXOR_API_KEY`** when both are set.                                                                                                  |
-| `LUXOR_API_ENDPOINT`               | `https://api.tenki.cloud` (the same API as `https://api.luxor.ai`) | Control-plane base URL (`LUXOR_API_URL` is an alias).                                                                                                                                                     |
+| `LUXOR_API_ENDPOINT`               | `https://api.luxor.ai` (the same API as `https://api.tenki.cloud`) | Control-plane base URL (`LUXOR_API_URL` is an alias).                                                                                                                                                     |
 | `LUXOR_MCP_READONLY`               | off                                                                | `1` registers only read tools (no create/run/delete/spend).                                                                                                                                               |
 | `LUXOR_MCP_DISABLED_TOOLS`         | -                                                                  | Comma-separated tool names to skip registering.                                                                                                                                                           |
 | `LUXOR_MCP_AUDIT`                  | off                                                                | `1` logs each tool call name + arg keys to stderr.                                                                                                                                                        |
@@ -169,9 +169,9 @@ Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 
 ## Auth
 
-Set one of `LUXOR_API_KEY` or `LUXOR_AUTH_TOKEN` (`TENKI_API_KEY` / `TENKI_AUTH_TOKEN` are still accepted). When both are set, the auth token wins. The header is chosen by token prefix: `lx_…` or `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `LUXOR_API_ENDPOINT` (default `https://api.tenki.cloud`, the same API as `https://api.luxor.ai`).
+Set one of `LUXOR_API_KEY` or `LUXOR_AUTH_TOKEN` (`TENKI_API_KEY` / `TENKI_AUTH_TOKEN` are still accepted). When both are set, the auth token wins. The header is chosen by token prefix: `lx_…` or `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `LUXOR_API_ENDPOINT` (default `https://api.luxor.ai`, the same API as `https://api.tenki.cloud`).
 
-**Without a credential the server still starts**, registering only `tenki_auth_status`, so instead of an MCP client reporting an opaque "server failed to start", the agent can call that tool and get told what to set. Ask it "check tenki auth status" any time other tools return auth errors: it reports the credential kind (API key vs session token), the endpoint, and whether a live identity probe succeeded, never the token itself. It reports status only; get a credential from the Luxor dashboard.
+**Without a credential the server still starts**, registering only `tenki_auth_status`, so instead of an MCP client reporting an opaque "server failed to start", the agent can call that tool and get told what to set. Ask it "check Luxor auth status" any time other tools return auth errors: it reports the credential kind (API key vs session token), the endpoint, and whether a live identity probe succeeded, never the token itself. It reports status only; get a credential from the Luxor dashboard.
 
 ## Host it over HTTP (v2.0-beta)
 

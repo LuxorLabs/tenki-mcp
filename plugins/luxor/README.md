@@ -4,9 +4,9 @@ Installs the Luxor Sandbox MCP server into Claude Code. On install you are promp
 
 ```
 /plugin marketplace add LuxorLabs/tenki-mcp
-/plugin install luxor@tenki
+/plugin install luxor@luxor
 ```
 
-The server runs from `@tenkicloud/mcp` until `@luxorai/mcp` is published; the package switch is a one-line change to `args` in `.claude-plugin/plugin.json`. Tool names keep the `tenki_` prefix.
+The server runs from [`@luxorai/mcp`](https://www.npmjs.com/package/@luxorai/mcp). Tool names keep the `tenki_` prefix.
 
 Requires Node.js 22+ (`npx` fetches the server on first start).
