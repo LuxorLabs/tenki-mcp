@@ -27,7 +27,7 @@
         },
         {
           "name": "TENKI_API_ENDPOINT",
-          "description": "Override the control-plane endpoint. Defaults to https://api.tenki.cloud (the same API as https://api.luxor.ai).",
+          "description": "Override the control-plane endpoint. Defaults to https://api.luxor.ai (the same API as https://api.tenki.cloud).",
           "isRequired": false,
           "isSecret": false
         }
