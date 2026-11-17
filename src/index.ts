@@ -29,7 +29,7 @@ const token = readEnv("AUTH_TOKEN", "API_KEY");
 const oauthHttp = Boolean(readEnv("MCP_OAUTH_ISSUER"));
 if (!token && !oauthHttp) {
 	console.error(
-		"tenki-mcp: no credential — starting in unauthenticated mode (only tenki_auth_status is available). " +
+		"tenki-mcp: no credential, starting in unauthenticated mode (only tenki_auth_status is available). " +
 			"Set LUXOR_API_KEY (lx_…) or LUXOR_AUTH_TOKEN (ory_st_…) in the server's env and restart " +
 			"(TENKI_API_KEY / TENKI_AUTH_TOKEN still work as the legacy fallback), " +
 			"e.g. claude mcp add tenki --env LUXOR_API_KEY=lx_… -- npx -y @tenkicloud/mcp",
