@@ -16,7 +16,7 @@ The old `@tenkicloud/mcp` name keeps working and publishes the same code.
 ## Quickstart
 
 ```bash
-export LUXORAI_API_KEY=lx_your_key_here
+export LUXOR_API_KEY=lx_your_key_here
 npx -y @luxorai/mcp     # speaks MCP over stdio
 ```
 
@@ -36,7 +36,7 @@ Claude Code's `mcp add` command stores the server configuration; `mcp login` per
 Alternatively, run the MCP server locally with an API key:
 
 ```bash
-claude mcp add luxor --env LUXORAI_API_KEY=lx_your_key_here -- npx -y @luxorai/mcp
+claude mcp add luxor --env LUXOR_API_KEY=lx_your_key_here -- npx -y @luxorai/mcp
 ```
 
 ### Or install it as a Claude Code plugin
@@ -60,7 +60,7 @@ Add to `claude_desktop_config.json`:
     "luxor": {
       "command": "npx",
       "args": ["-y", "@luxorai/mcp"],
-      "env": { "LUXORAI_API_KEY": "lx_your_key_here" }
+      "env": { "LUXOR_API_KEY": "lx_your_key_here" }
     }
   }
 }
@@ -76,7 +76,7 @@ Add the same block to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (glob
     "luxor": {
       "command": "npx",
       "args": ["-y", "@luxorai/mcp"],
-      "env": { "LUXORAI_API_KEY": "lx_your_key_here" }
+      "env": { "LUXOR_API_KEY": "lx_your_key_here" }
     }
   }
 }
@@ -90,7 +90,7 @@ The OpenAI Codex CLI reads MCP servers from `~/.codex/config.toml`. Add:
 [mcp_servers.luxor]
 command = "npx"
 args = ["-y", "@luxorai/mcp"]
-env = { LUXORAI_API_KEY = "lx_your_key_here" }
+env = { LUXOR_API_KEY = "lx_your_key_here" }
 ```
 
 ### Confirm it's working
@@ -111,34 +111,34 @@ For development, or to run an unreleased change:
 ```bash
 git clone https://github.com/LuxorLabs/tenki-mcp.git && cd tenki-mcp
 npm install && npm run build
-LUXORAI_API_KEY=lx_your_key_here node dist/index.js
+LUXOR_API_KEY=lx_your_key_here node dist/index.js
 ```
 
 Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` command in any of the configs above. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development loop.
 
 ### Environment variables
 
-| Variable                             | Default                                                            | Purpose                                                                                                                                                                                                   |
-| ------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LUXORAI_API_KEY`                    | -                                                                  | API key (`lx_…`, or `tk_…`). One of this or `LUXORAI_AUTH_TOKEN` is required.                                                                                                                             |
-| `LUXORAI_AUTH_TOKEN`                 | -                                                                  | Session token (`ory_st_…` or cookie value). **Takes precedence over `LUXORAI_API_KEY`** when both are set.                                                                                                |
-| `LUXORAI_API_ENDPOINT`               | `https://api.tenki.cloud` (the same API as `https://api.luxor.ai`) | Control-plane base URL (`LUXORAI_API_URL` is an alias).                                                                                                                                                   |
-| `LUXORAI_MCP_READONLY`               | off                                                                | `1` registers only read tools (no create/run/delete/spend).                                                                                                                                               |
-| `LUXORAI_MCP_DISABLED_TOOLS`         | -                                                                  | Comma-separated tool names to skip registering.                                                                                                                                                           |
-| `LUXORAI_MCP_AUDIT`                  | off                                                                | `1` logs each tool call name + arg keys to stderr.                                                                                                                                                        |
-| `LUXORAI_MCP_TRANSPORT`              | `stdio`                                                            | `http` serves Streamable HTTP instead (see below).                                                                                                                                                        |
-| `PORT`                               | `3000`                                                             | HTTP transport port.                                                                                                                                                                                      |
-| `LUXORAI_MCP_HTTP_HOST`              | `127.0.0.1`                                                        | HTTP bind host; non-loopback requires `LUXORAI_MCP_HTTP_TOKEN`.                                                                                                                                           |
-| `LUXORAI_MCP_HTTP_TOKEN`             | -                                                                  | Bearer token for the HTTP endpoint; optional on loopback, required on a non-loopback host.                                                                                                                |
-| `LUXORAI_MCP_PUBLIC_URL`             | -                                                                  | Public base URL for an OAuth-protected hosted server.                                                                                                                                                     |
-| `LUXORAI_MCP_OAUTH_ISSUER`           | -                                                                  | OAuth authorization-server issuer. Enables delegated OAuth HTTP mode.                                                                                                                                     |
-| `LUXORAI_MCP_OAUTH_RESOURCE`         | `<public URL>/mcp`                                                 | RFC 8707 resource identifier accepted in access-token audiences. A comma-separated list serves one resource per domain; metadata and the 401 `resource_metadata` follow the request host, else the first. |
-| `LUXORAI_MCP_OAUTH_SCOPE`            | `mcp`                                                              | Required delegated scope.                                                                                                                                                                                 |
-| `LUXORAI_MCP_RESOURCE_NAME`          | `Luxor MCP`                                                        | `resource_name` in the protected-resource metadata.                                                                                                                                                       |
-| `LUXORAI_MCP_IDENTITY_URL`           | -                                                                  | Internal Luxor Identity service endpoint used to exchange OAuth access tokens.                                                                                                                            |
-| `LUXORAI_MCP_IDENTITY_SERVICE_TOKEN` | -                                                                  | Service credential for the private Identity token-exchange RPC.                                                                                                                                           |
+| Variable                           | Default                                                            | Purpose                                                                                                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LUXOR_API_KEY`                    | -                                                                  | API key (`lx_…`, or `tk_…`). One of this or `LUXOR_AUTH_TOKEN` is required.                                                                                                                               |
+| `LUXOR_AUTH_TOKEN`                 | -                                                                  | Session token (`ory_st_…` or cookie value). **Takes precedence over `LUXOR_API_KEY`** when both are set.                                                                                                  |
+| `LUXOR_API_ENDPOINT`               | `https://api.tenki.cloud` (the same API as `https://api.luxor.ai`) | Control-plane base URL (`LUXOR_API_URL` is an alias).                                                                                                                                                     |
+| `LUXOR_MCP_READONLY`               | off                                                                | `1` registers only read tools (no create/run/delete/spend).                                                                                                                                               |
+| `LUXOR_MCP_DISABLED_TOOLS`         | -                                                                  | Comma-separated tool names to skip registering.                                                                                                                                                           |
+| `LUXOR_MCP_AUDIT`                  | off                                                                | `1` logs each tool call name + arg keys to stderr.                                                                                                                                                        |
+| `LUXOR_MCP_TRANSPORT`              | `stdio`                                                            | `http` serves Streamable HTTP instead (see below).                                                                                                                                                        |
+| `PORT`                             | `3000`                                                             | HTTP transport port.                                                                                                                                                                                      |
+| `LUXOR_MCP_HTTP_HOST`              | `127.0.0.1`                                                        | HTTP bind host; non-loopback requires `LUXOR_MCP_HTTP_TOKEN`.                                                                                                                                             |
+| `LUXOR_MCP_HTTP_TOKEN`             | -                                                                  | Bearer token for the HTTP endpoint; optional on loopback, required on a non-loopback host.                                                                                                                |
+| `LUXOR_MCP_PUBLIC_URL`             | -                                                                  | Public base URL for an OAuth-protected hosted server.                                                                                                                                                     |
+| `LUXOR_MCP_OAUTH_ISSUER`           | -                                                                  | OAuth authorization-server issuer. Enables delegated OAuth HTTP mode.                                                                                                                                     |
+| `LUXOR_MCP_OAUTH_RESOURCE`         | `<public URL>/mcp`                                                 | RFC 8707 resource identifier accepted in access-token audiences. A comma-separated list serves one resource per domain; metadata and the 401 `resource_metadata` follow the request host, else the first. |
+| `LUXOR_MCP_OAUTH_SCOPE`            | `mcp`                                                              | Required delegated scope.                                                                                                                                                                                 |
+| `LUXOR_MCP_RESOURCE_NAME`          | `Luxor MCP`                                                        | `resource_name` in the protected-resource metadata.                                                                                                                                                       |
+| `LUXOR_MCP_IDENTITY_URL`           | -                                                                  | Internal Luxor Identity service endpoint used to exchange OAuth access tokens.                                                                                                                            |
+| `LUXOR_MCP_IDENTITY_SERVICE_TOKEN` | -                                                                  | Service credential for the private Identity token-exchange RPC.                                                                                                                                           |
 
-Every `LUXORAI_*` variable above is still accepted under its `TENKI_*` name (for example `TENKI_API_KEY`, `TENKI_MCP_TRANSPORT`). All `LUXORAI_*` credentials are read before any `TENKI_*` one. Keys start with `lx_`; `tk_…` keys are still accepted.
+Every `LUXOR_*` variable above is still accepted under its `TENKI_*` name (for example `TENKI_API_KEY`, `TENKI_MCP_TRANSPORT`). All `LUXOR_*` credentials are read before any `TENKI_*` one. Keys start with `lx_`; `tk_…` keys are still accepted. `LUXOR_API_KEY` is only used when it starts with `lx_` or `tk_`; any other value is ignored.
 
 ## Tools
 
@@ -169,7 +169,7 @@ Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 
 ## Auth
 
-Set one of `LUXORAI_API_KEY` or `LUXORAI_AUTH_TOKEN` (`TENKI_API_KEY` / `TENKI_AUTH_TOKEN` are still accepted). When both are set, the auth token wins. The header is chosen by token prefix: `lx_…` or `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `LUXORAI_API_ENDPOINT` (default `https://api.tenki.cloud`, the same API as `https://api.luxor.ai`).
+Set one of `LUXOR_API_KEY` or `LUXOR_AUTH_TOKEN` (`TENKI_API_KEY` / `TENKI_AUTH_TOKEN` are still accepted). When both are set, the auth token wins. The header is chosen by token prefix: `lx_…` or `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `LUXOR_API_ENDPOINT` (default `https://api.tenki.cloud`, the same API as `https://api.luxor.ai`).
 
 **Without a credential the server still starts**, registering only `tenki_auth_status`, so instead of an MCP client reporting an opaque "server failed to start", the agent can call that tool and get told what to set. Ask it "check tenki auth status" any time other tools return auth errors: it reports the credential kind (API key vs session token), the endpoint, and whether a live identity probe succeeded, never the token itself. It reports status only; get a credential from the Luxor dashboard.
 
@@ -178,23 +178,23 @@ Set one of `LUXORAI_API_KEY` or `LUXORAI_AUTH_TOKEN` (`TENKI_API_KEY` / `TENKI_A
 Besides stdio, the server speaks **Streamable HTTP** so it can be hosted for remote MCP clients:
 
 ```bash
-LUXORAI_MCP_TRANSPORT=http PORT=3000 LUXORAI_API_KEY=… npx -y @luxorai/mcp
+LUXOR_MCP_TRANSPORT=http PORT=3000 LUXOR_API_KEY=… npx -y @luxorai/mcp
 # → tenki-mcp running on http://127.0.0.1:3000/mcp (Streamable HTTP) [loopback only, no auth]
 ```
 
-For a single-user deployment, HTTP mode can hold one shared `LUXORAI_API_KEY` and therefore exposes a powerful capability. By default it:
+For a single-user deployment, HTTP mode can hold one shared `LUXOR_API_KEY` and therefore exposes a powerful capability. By default it:
 
-- **binds to loopback (`127.0.0.1`) only**: set `LUXORAI_MCP_HTTP_HOST=0.0.0.0` to expose it, but then
-- it **requires a bearer token**: set `LUXORAI_MCP_HTTP_TOKEN` and send `Authorization: Bearer <token>`. It **refuses to start** on a non-loopback host without one.
+- **binds to loopback (`127.0.0.1`) only**: set `LUXOR_MCP_HTTP_HOST=0.0.0.0` to expose it, but then
+- it **requires a bearer token**: set `LUXOR_MCP_HTTP_TOKEN` and send `Authorization: Bearer <token>`. It **refuses to start** on a non-loopback host without one.
 - **DNS-rebinding protection** is on (Host-header allowlist), so a malicious web page can't drive your local server.
 
 ```bash
 # expose to a network safely:
-LUXORAI_MCP_TRANSPORT=http LUXORAI_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
-  LUXORAI_MCP_HTTP_TOKEN=$(openssl rand -hex 32) LUXORAI_API_KEY=… npx -y @luxorai/mcp
+LUXOR_MCP_TRANSPORT=http LUXOR_MCP_HTTP_HOST=0.0.0.0 PORT=3000 \
+  LUXOR_MCP_HTTP_TOKEN=$(openssl rand -hex 32) LUXOR_API_KEY=… npx -y @luxorai/mcp
 ```
 
-Point an HTTP-capable MCP client at `/mcp`. Static-key mode uses one shared `LUXORAI_API_KEY` for all sessions. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
+Point an HTTP-capable MCP client at `/mcp`. Static-key mode uses one shared `LUXOR_API_KEY` for all sessions. Verified end-to-end (`test/http-transport.test.mjs`: auth gate, DNS-rebinding rejection, connect → tools/list → tool call over HTTP).
 
 Hosted multi-tenant deployments instead use Luxor Identity's OAuth facade. The MCP server publishes RFC 9728 protected-resource metadata and exchanges each caller's access token through the private Identity service. Identity owns Hydra, validates the requested audience and scope, and issues a short-lived API delegation bound to the user, client, and workspace selected on the Luxor consent page. `tenki-mcp` has no Hydra Admin access and does not hold the delegation-signing secret.
 
@@ -210,9 +210,9 @@ The wire details are ported from the live-verified [n8n community node](https://
 
 This server holds a Luxor API key and can run code + spend credits, so treat it as a capability. Full model + [CSA MCP Server Top-10](https://modelcontextprotocol-security.io/top10/server/) mapping in **[SECURITY.md](SECURITY.md)**. Quick controls:
 
-- **Least privilege:** every tool carries a title and MCP annotations: `readOnlyHint` on reads, and `destructiveHint` on every tool that can overwrite, modify, interrupt or delete existing state (only tools that create, resume, extend, attach or keep alive without changing existing state are non-destructive). Run `LUXORAI_MCP_READONLY=1` for an inspection-only server (read tools only), or `LUXORAI_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
+- **Least privilege:** every tool carries a title and MCP annotations: `readOnlyHint` on reads, and `destructiveHint` on every tool that can overwrite, modify, interrupt or delete existing state (only tools that create, resume, extend, attach or keep alive without changing existing state are non-destructive). Run `LUXOR_MCP_READONLY=1` for an inspection-only server (read tools only), or `LUXOR_MCP_DISABLED_TOOLS=tenki_run_code,…` to drop specific tools.
 - **HTTP transport** is loopback-only by default and requires a bearer token to expose to a network (see [Host it over HTTP](#host-it-over-http-v20-beta)).
-- **Audit:** `LUXORAI_MCP_AUDIT=1` logs each tool call's name to stderr.
+- **Audit:** `LUXOR_MCP_AUDIT=1` logs each tool call's name to stderr.
 - **Untrusted output:** `tenki_run_code`/`tenki_exec`/`tenki_read_file` return output from untrusted code; clients should treat tool results as data, not instructions.
 
 Report vulnerabilities via a private [security advisory](https://github.com/LuxorLabs/tenki-mcp/security/advisories/new), not a public issue.

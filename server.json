@@ -21,7 +21,7 @@
       "environmentVariables": [
         {
           "name": "TENKI_API_KEY",
-          "description": "Luxor API key (starts with lx_; tk_ is still accepted). Alternatively set TENKI_AUTH_TOKEN (an ory_st_ session token or session cookie); the header is chosen by token prefix. LUXORAI_* names are read first.",
+          "description": "Luxor API key (starts with lx_; tk_ is still accepted). Alternatively set TENKI_AUTH_TOKEN (an ory_st_ session token or session cookie); the header is chosen by token prefix. LUXOR_* names are read first.",
           "isRequired": true,
           "isSecret": true
         },

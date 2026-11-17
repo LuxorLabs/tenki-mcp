@@ -23,14 +23,14 @@ export type CredentialKind = "none" | "api_key" | "oauth_session_token" | "sessi
 export interface CredentialInfo {
 	kind: CredentialKind;
 	/** Env var the token came from, or undefined when there is none. */
-	source?: "LUXORAI_AUTH_TOKEN" | "LUXORAI_API_KEY" | "TENKI_AUTH_TOKEN" | "TENKI_API_KEY";
+	source?: "LUXOR_AUTH_TOKEN" | "LUXOR_API_KEY" | "TENKI_AUTH_TOKEN" | "TENKI_API_KEY";
 }
 
 /**
  * Classify the ambient credential WITHOUT returning any of its material.
  * Mirrors the header selection in client.ts (`lx_`/`tk_` → Bearer API key,
  * `ory_st_` → OAuth/Ory session token, anything else → session cookie) and
- * index.ts's precedence (LUXORAI_AUTH_TOKEN, LUXORAI_API_KEY, TENKI_AUTH_TOKEN, TENKI_API_KEY).
+ * index.ts's precedence (LUXOR_AUTH_TOKEN, LUXOR_API_KEY, TENKI_AUTH_TOKEN, TENKI_API_KEY).
  */
 export function describeCredential(env: NodeJS.ProcessEnv = process.env): CredentialInfo {
 	const source = resolvedEnvName(env, "AUTH_TOKEN", "API_KEY") as CredentialInfo["source"];
