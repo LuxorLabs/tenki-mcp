@@ -43,7 +43,7 @@ export function describeCredential(env: NodeJS.ProcessEnv = process.env): Creden
 }
 
 const CREDENTIAL_HELP: Record<CredentialKind, string> = {
-	none: "No credential found. Set TENKI_API_KEY (a tk_… API key) or TENKI_AUTH_TOKEN (an ory_st_… session token) in the server's environment, then restart it — MCP clients pass env through their server config, e.g. `claude mcp add tenki --env TENKI_API_KEY=tk_… -- npx -y @tenkicloud/mcp`, or the \"env\" block in claude_desktop_config.json / .cursor/mcp.json.",
+	none: "No credential found. Set LUXOR_API_KEY (an lx_… API key) or LUXOR_AUTH_TOKEN (an ory_st_… session token) in the server's environment (TENKI_API_KEY / TENKI_AUTH_TOKEN still work as the legacy fallback), then restart it — MCP clients pass env through their server config, e.g. `claude mcp add tenki --env LUXOR_API_KEY=lx_… -- npx -y @tenkicloud/mcp`, or the \"env\" block in claude_desktop_config.json / .cursor/mcp.json.",
 	api_key: "Authenticated with a tk_… API key (Authorization: Bearer).",
 	oauth_session_token: "Authenticated with an ory_st_… session token (X-Session-Token). Session tokens expire; an API key is the stabler choice for a long-running server.",
 	session_cookie: "Authenticated with a session cookie (the token matched neither the tk_ nor ory_st_ prefix, so it is sent as a tenki_session cookie). If that is not what you intended, check the value.",
@@ -58,7 +58,7 @@ const authOutputSchema = {
 	source: z
 		.string()
 		.optional()
-		.describe("Environment variable the credential came from (TENKI_AUTH_TOKEN takes precedence over TENKI_API_KEY)."),
+		.describe("Environment variable the credential came from (precedence: LUXOR_AUTH_TOKEN, LUXOR_API_KEY, TENKI_AUTH_TOKEN, TENKI_API_KEY)."),
 	endpoint: z.string().describe("Control-plane base URL the server is pointed at."),
 	toolsRegistered: z
 		.number()

@@ -265,7 +265,7 @@ export function createServer(client: TenkiClient | null): McpServer {
 	// READ_OVERRIDE keeps it available under TENKI_MCP_READONLY;
 	// TENKI_MCP_DISABLED_TOOLS can still drop it.
 	registerAuthStatus(guarded, client, opts.registered.count + 1);
-	if (!client) console.error("tenki-mcp: no credential — only tenki_auth_status registered. Set TENKI_API_KEY or TENKI_AUTH_TOKEN and restart.");
+	if (!client) console.error("tenki-mcp: no credential — only tenki_auth_status registered. Set LUXOR_API_KEY or LUXOR_AUTH_TOKEN (or the legacy TENKI_API_KEY / TENKI_AUTH_TOKEN) and restart.");
 	if (opts.readonly) console.error("tenki-mcp: TENKI_MCP_READONLY — only read-only tools registered.");
 	else if (opts.disabled.size) console.error(`tenki-mcp: disabled tools — ${[...opts.disabled].join(", ")}`);
 	return server;

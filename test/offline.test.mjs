@@ -56,7 +56,7 @@ async function connectWith(env, name) {
 	check("auth_status reports authenticated:false", s.authenticated === false, JSON.stringify(s).slice(0, 120));
 	check("auth_status reports credential 'none'", s.credential === "none", JSON.stringify(s.credential));
 	check("auth_status reports toolsRegistered 1 (degraded mode is visible)", s.toolsRegistered === 1, JSON.stringify(s.toolsRegistered));
-	check("auth_status detail names the env vars to set", /TENKI_API_KEY/.test(s.detail ?? "") && /TENKI_AUTH_TOKEN/.test(s.detail ?? ""));
+	check("auth_status detail names the env vars to set", ["LUXOR_API_KEY", "LUXOR_AUTH_TOKEN", "TENKI_API_KEY", "TENKI_AUTH_TOKEN"].every((name) => (s.detail ?? "").includes(name)));
 	check("auth_status made no network call (no probe error on a dead endpoint)", s.error === undefined, JSON.stringify(s.error));
 	await c.close();
 }

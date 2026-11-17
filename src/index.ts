@@ -11,7 +11,7 @@
  *   - HTTP/SSE — set TENKI_MCP_TRANSPORT=http (+ PORT, default 3000) to host it.
  *
  * Tools live in self-registering modules under ./tools; the server factory is in
- * ./server.ts. Auth: set TENKI_API_KEY (or TENKI_AUTH_TOKEN) in the environment.
+ * ./server.ts. Auth: set LUXOR_API_KEY (or LUXOR_AUTH_TOKEN) in the environment; TENKI_* is the legacy fallback.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
@@ -30,8 +30,9 @@ const oauthHttp = Boolean(readEnv("MCP_OAUTH_ISSUER"));
 if (!token && !oauthHttp) {
 	console.error(
 		"tenki-mcp: no credential — starting in unauthenticated mode (only tenki_auth_status is available). " +
-			"Set TENKI_API_KEY (tk_…) or TENKI_AUTH_TOKEN (ory_st_…) in the server's env and restart, " +
-			"e.g. claude mcp add tenki --env TENKI_API_KEY=tk_… -- npx -y @tenkicloud/mcp",
+			"Set LUXOR_API_KEY (lx_…) or LUXOR_AUTH_TOKEN (ory_st_…) in the server's env and restart " +
+			"(TENKI_API_KEY / TENKI_AUTH_TOKEN still work as the legacy fallback), " +
+			"e.g. claude mcp add tenki --env LUXOR_API_KEY=lx_… -- npx -y @tenkicloud/mcp",
 	);
 }
 const baseUrl = readEnv("API_ENDPOINT", "API_URL") || undefined;
