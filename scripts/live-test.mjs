@@ -1,5 +1,5 @@
 /**
- * Live end-to-end test against the real Tenki API.
+ * Live end-to-end test against the real Luxor API.
  *
  * Requires a real key in the environment (TENKI_API_KEY=tk_...). Run via:
  *   node --env-file=.env scripts/live-test.mjs

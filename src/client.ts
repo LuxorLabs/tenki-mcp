@@ -1,7 +1,7 @@
 /**
- * TenkiClient — a dependency-free client for the Tenki Cloud API.
+ * TenkiClient — a dependency-free client for the Luxor Agent Cloud API (formerly Tenki).
  *
- * Tenki's API is ConnectRPC (JSON over HTTP/1.1), not REST. Every control-plane
+ * Luxor's API is ConnectRPC (JSON over HTTP/1.1), not REST. Every control-plane
  * call is `POST {baseUrl}/tenki.sandbox.v1.SandboxService/{Method}` with a
  * lowerCamelCase JSON body and a JSON response. Per-session file I/O runs on a
  * separate data-plane endpoint returned at session-create time, authenticated
@@ -169,7 +169,7 @@ function shellQuote(value: string): string {
 }
 
 /**
- * Tenki's auth header is chosen by token prefix (verbatim from the SDK's auth.ts):
+ * Luxor's auth header is chosen by token prefix (verbatim from the SDK's auth.ts):
  * `lx_`/`tk_` → Bearer, `ory_st_` → X-Session-Token, otherwise a `tenki_session` cookie.
  */
 function authHeaders(token: string): Record<string, string> {
@@ -255,10 +255,10 @@ export class TenkiClient {
 		} catch (e) {
 			const name = (e as Error)?.name;
 			if (cancel?.aborted && !timeout.aborted) {
-				throw Object.assign(new Error(`Tenki ${what} was cancelled by the MCP client before it returned.`), { clientAbort: "cancelled" });
+				throw Object.assign(new Error(`Luxor ${what} was cancelled by the MCP client before it returned.`), { clientAbort: "cancelled" });
 			}
 			if (name === "TimeoutError" || name === "AbortError") {
-				throw Object.assign(new Error(`Tenki ${what} timed out after ${budget}ms with no response.`), { clientAbort: "timeout" });
+				throw Object.assign(new Error(`Luxor ${what} timed out after ${budget}ms with no response.`), { clientAbort: "timeout" });
 			}
 			throw e;
 		}
@@ -351,7 +351,7 @@ export class TenkiClient {
 			}
 			const msg = (parsed?.message as string) || res.text || `HTTP ${res.status}`;
 			// Connect error details (type, value, optional protojson `debug`) carry partial results, e.g. a failed fork's snapshot.
-			throw Object.assign(new Error(`Tenki ${method} failed (${res.status}${code ? ` ${code}` : ""}): ${msg}`), { code, details });
+			throw Object.assign(new Error(`Luxor ${method} failed (${res.status}${code ? ` ${code}` : ""}): ${msg}`), { code, details });
 		}
 	}
 
@@ -468,7 +468,7 @@ export class TenkiClient {
 					continue;
 				}
 			}
-			throw new Error(`Tenki data ${method} failed (${res.status}): ${(parsed?.message as string) || res.text}`);
+			throw new Error(`Luxor data ${method} failed (${res.status}): ${(parsed?.message as string) || res.text}`);
 		}
 	}
 

@@ -1,7 +1,7 @@
 /**
  * previews.ts — port preview-URL tools for tenki-mcp.
  *
- * Covers the preview / exposure-teardown half of Tenki's Port resource:
+ * Covers the preview / exposure-teardown half of Luxor's Port resource:
  * removing an inbound exposure (UnexposePort) and the preview-URL lifecycle
  * (CreatePreviewUrl, OpenPreview, ListPreviewUrls). Port *exposure* itself
  * (ExposePort / ListExposedPorts) lives in ports.ts and is not re-implemented here.

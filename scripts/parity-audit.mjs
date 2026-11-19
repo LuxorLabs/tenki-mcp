@@ -1,7 +1,7 @@
 /**
  * Parity audit — the "full API parity" gate.
  *
- * Enumerates every unary method of the public Tenki API (SandboxService,
+ * Enumerates every unary method of the public Luxor API (SandboxService,
  * SandboxSessionDataPlaneService, SSHGatewayClientService as declared in
  * tenki-app `proto/tenki/sandbox/v1/*.proto`) and fails if any TOOL-worthy
  * method is not covered by a registered MCP tool, or if a tool calls a method

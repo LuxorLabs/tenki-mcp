@@ -1,5 +1,5 @@
 /**
- * HTTP/SSE transport for tenki-mcp (v2.0) — makes the server hostable, not just
+ * HTTP/SSE transport for luxor-mcp (v2.0) — makes the server hostable, not just
  * local-stdio. Uses the MCP SDK's StreamableHTTPServerTransport with a stateful
  * per-session model: one server + transport per MCP session.
  *
@@ -308,14 +308,14 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 			// Never echo internals to the client; log server-side only.
 			if (!res.headersSent) res.writeHead(500, { "Content-Type": "text/plain" });
 			res.end("internal error");
-			console.error("tenki-mcp http error:", (e as Error).message);
+			console.error("luxor-mcp http error:", (e as Error).message);
 		}
 	});
 
 	httpServer.on("close", () => clearInterval(sweep));
 	httpServer.listen(port, host, () => {
 		console.error(
-			`tenki-mcp running on http://${host}:${port}/mcp (Streamable HTTP)` +
+			`luxor-mcp running on http://${host}:${port}/mcp (Streamable HTTP)` +
 				(oauthConfig ? " [OAuth required]" : httpToken ? " [bearer auth required]" : " [loopback only, no auth]"),
 		);
 	});

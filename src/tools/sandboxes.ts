@@ -21,7 +21,7 @@ const tailnetSchema = z.object({
 		.regex(UUID, "connection_id is a UUID")
 		.optional()
 		.describe(
-			"ID of a Tailscale connection saved in the Tenki dashboard, instead of auth_key (permission_denied unless Tailscale connections are enabled for the workspace). Tags default to the connection's authorized tags and must be a subset of them; the node is always ephemeral; control_url and exit nodes are not allowed.",
+			"ID of a Tailscale connection saved in the Luxor dashboard, instead of auth_key (permission_denied unless Tailscale connections are enabled for the workspace). Tags default to the connection's authorized tags and must be a subset of them; the node is always ephemeral; control_url and exit nodes are not allowed.",
 		),
 	connection_revision: z
 		.number()
@@ -62,7 +62,7 @@ const tailnetSchema = z.object({
 	exit_policy: z
 		.enum(["TENKI_ALLOWLIST", "EXIT_NODE_MANAGED"])
 		.optional()
-		.describe("Egress policy while attached: TENKI_ALLOWLIST keeps Tenki's egress rules; EXIT_NODE_MANAGED routes all egress through exit_node (requires exit_node and must be enabled for the workspace)."),
+		.describe("Egress policy while attached: TENKI_ALLOWLIST keeps Luxor's egress rules; EXIT_NODE_MANAGED routes all egress through exit_node (requires exit_node and must be enabled for the workspace)."),
 })
 	.refine((t) => (t.auth_key !== undefined) !== (t.connection_id !== undefined), "pass exactly one of auth_key or connection_id")
 	.refine((t) => t.connection_revision === undefined || t.connection_id !== undefined, "connection_revision requires connection_id")
@@ -126,7 +126,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.array(z.string().max(253))
 						.max(256)
 						.optional()
-						.describe("Egress allowlist: exact hostnames or single-label '*.example.com' wildcards. Omit for unrestricted egress. Cannot be combined with allow_outbound: false. Any egress setting (this, egress_allow_cidrs, egress_intercept_https, egress_http_rules, egress_allowed_ports, egress_policies) is refused with failed_precondition if session egress policies are disabled for the workspace (on by default; Tenki staff can turn it off per workspace)."),
+						.describe("Egress allowlist: exact hostnames or single-label '*.example.com' wildcards. Omit for unrestricted egress. Cannot be combined with allow_outbound: false. Any egress setting (this, egress_allow_cidrs, egress_intercept_https, egress_http_rules, egress_allowed_ports, egress_policies) is refused with failed_precondition if session egress policies are disabled for the workspace (on by default; Luxor staff can turn it off per workspace)."),
 					egress_allow_cidrs: z
 						.array(z.string().max(18))
 						.max(64)
@@ -178,7 +178,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 						.array(policyNameSchema)
 						.max(64)
 						.optional()
-						.describe("Names of saved secret access policies to attach (≤64). A policy holds the request rules that inject a workspace secret into matching outbound HTTPS requests, so the value never enters the sandbox; policies are managed in the Tenki dashboard / workspace secrets API, not through this server."),
+						.describe("Names of saved secret access policies to attach (≤64). A policy holds the request rules that inject a workspace secret into matching outbound HTTPS requests, so the value never enters the sandbox; policies are managed in the Luxor dashboard / workspace secrets API, not through this server."),
 					tailnet: tailnetSchema
 						.optional()
 						.describe(
@@ -434,7 +434,7 @@ export function registerSandboxes(server: McpServer, client: TenkiClient): void 
 				.min(1)
 				.max(2147483647)
 				.optional()
-				.describe("Children to create (default 1). The workspace caps children per request (10 by default; Tenki staff can change it; more is resource_exhausted) and each child counts toward the concurrent-sandbox limit."),
+				.describe("Children to create (default 1). The workspace caps children per request (10 by default; Luxor staff can change it; more is resource_exhausted) and each child counts toward the concurrent-sandbox limit."),
 			name_prefix: z
 				.string()
 				.max(64)

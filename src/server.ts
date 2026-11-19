@@ -169,7 +169,7 @@ function annotationsFor(name: string, cls: Cls) {
 		readOnlyHint: cls === "read",
 		destructiveHint: cls === "destructive",
 		idempotentHint: cls === "read",
-		openWorldHint: true, // every tool reaches the external Tenki API
+		openWorldHint: true, // every tool reaches the external Luxor API
 	};
 }
 
