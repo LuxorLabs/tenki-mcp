@@ -86,7 +86,7 @@ export function registerAuthStatus(server: McpServer, client: TenkiClient | null
 		"tenki_auth_status",
 		{
 			description:
-				"Report whether the server has a usable Tenki credential, which kind (API key vs OAuth session token), and the endpoint it targets — verified with a live identity probe. Call this first when other tools fail with auth errors, or when this is the only tool available (which means no credential is configured). Reports status only; it does not log in and never returns the token.",
+				"Report whether the server has a usable Luxor credential, which kind (API key vs OAuth session token), and the endpoint it targets — verified with a live identity probe. Call this first when other tools fail with auth errors, or when this is the only tool available (which means no credential is configured). Reports status only; it does not log in and never returns the token.",
 			inputSchema: {},
 			outputSchema: authOutputSchema,
 		},

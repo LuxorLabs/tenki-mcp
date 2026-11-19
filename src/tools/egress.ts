@@ -122,7 +122,7 @@ const revisionSchema = z
 	.max(4294967295)
 	.describe(withToolNames("The policy's current revision (from tenki_get_egress_policy); a stale revision is refused with ABORTED."));
 const ENABLE_NOTE =
-	"Sandboxes cannot pin policies (failed_precondition) if session egress policies are disabled for the workspace (on by default; Tenki staff can turn it off).";
+	"Sandboxes cannot pin policies (failed_precondition) if session egress policies are disabled for the workspace (on by default; Luxor staff can turn it off).";
 
 export function registerEgress(server: McpServer, client: TenkiClient): void {
 	const workspace = async (workspace_id?: string) => {

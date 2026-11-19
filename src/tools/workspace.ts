@@ -46,7 +46,7 @@ export function registerWorkspace(server: McpServer, client: TenkiClient): void 
 
 	server.tool(
 		"tenki_list_ci_runner_sizes",
-		"List the Linux x64 runner sizes Tenki CI can run for a workspace — each runs-on label with its vCPUs and memory in GiB, smallest first, limited to the workspace's job-size limits — and defaultRunsOnLabel, the size a job gets when its runs-on names none. Use it to pick a runs-on label for a GitHub Actions workflow.",
+		"List the Linux x64 runner sizes Luxor CI can run for a workspace — each runs-on label with its vCPUs and memory in GiB, smallest first, limited to the workspace's job-size limits — and defaultRunsOnLabel, the size a job gets when its runs-on names none. Use it to pick a runs-on label for a GitHub Actions workflow.",
 		{
 			workspace_id: z
 				.string()

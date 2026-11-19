@@ -182,7 +182,7 @@ Besides stdio, the server speaks **Streamable HTTP** so it can be hosted for rem
 
 ```bash
 LUXOR_MCP_TRANSPORT=http PORT=3000 LUXOR_API_KEY=… npx -y @luxorai/mcp
-# → tenki-mcp running on http://127.0.0.1:3000/mcp (Streamable HTTP) [loopback only, no auth]
+# → luxor-mcp running on http://127.0.0.1:3000/mcp (Streamable HTTP) [loopback only, no auth]
 ```
 
 For a single-user deployment, HTTP mode can hold one shared `LUXOR_API_KEY` and therefore exposes a powerful capability. By default it:

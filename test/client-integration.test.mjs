@@ -35,7 +35,7 @@ const SERVER = join(REPO_ROOT, "dist", "index.js");
 const OLDER_PROTOCOL = "2024-11-05"; // a known older supported MCP protocol version (must still negotiate)
 const NAME_RE = /^tenki_[a-z0-9_]+$/;
 const DOC_STDERR = "set TENKI_API_KEY (or TENKI_AUTH_TOKEN)"; // documented no-key stderr line
-const BANNER = "tenki-mcp running on stdio";
+const BANNER = "luxor-mcp running on stdio";
 
 /** Minimal, hermetic env: never inherit the runner's real TENKI_* so probes are deterministic. */
 const baseEnv = () => ({ PATH: process.env.PATH, HOME: process.env.HOME });

@@ -1,5 +1,5 @@
 /**
- * Volume tools — workspace-scoped persistent block storage for Tenki sandboxes.
+ * Volume tools — workspace-scoped persistent block storage for Luxor sandboxes.
  *
  * Volumes are durable disks that outlive any single sandbox: create one in a
  * workspace, then attach it into a running session at a mount path. All calls
@@ -163,7 +163,7 @@ export function registerVolumes(server: McpServer, client: TenkiClient): void {
 	// ── Detach ────────────────────────────────────────────────────────────────
 	server.tool(
 		"tenki_detach_volume",
-		"Unmount a volume from a sandbox session and sync it back to storage. A volume whose sync back is still pending (SYNC_PENDING) cannot be detached, even with force (failed_precondition): wait for the upload to finish or ask Tenki support to recover it. Set force to unplug an attached volume the guest cannot unmount — writes the guest has not flushed are lost.",
+		"Unmount a volume from a sandbox session and sync it back to storage. A volume whose sync back is still pending (SYNC_PENDING) cannot be detached, even with force (failed_precondition): wait for the upload to finish or ask Luxor support to recover it. Set force to unplug an attached volume the guest cannot unmount — writes the guest has not flushed are lost.",
 		{
 			session_id: sessionIdSchema.describe("The sandbox session to detach the volume from."),
 			volume_id: z.string().describe("The volume id to detach."),

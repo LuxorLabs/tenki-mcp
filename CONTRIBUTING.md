@@ -1,4 +1,4 @@
-# Contributing to tenki-mcp
+# Contributing to luxor-mcp (formerly tenki-mcp)
 
 Thanks for your interest! This is the Model Context Protocol server for [Luxor Sandbox](https://luxor.ai).
 

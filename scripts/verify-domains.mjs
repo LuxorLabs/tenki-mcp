@@ -1,5 +1,5 @@
 /**
- * Live verification of the parity domains against the real Tenki API.
+ * Live verification of the parity domains against the real Luxor API.
  * Sends the SAME request bodies the tools send (owner-derived fields included).
  * Continue-on-error: every check runs, pass/fail collected, resources cleaned up.
  *   TENKI_API_KEY=… node scripts/verify-domains.mjs

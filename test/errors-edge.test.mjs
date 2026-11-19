@@ -51,7 +51,7 @@ function fail(name, e) {
 	console.log(`  ✗ ${name}\n      ${(e?.message ?? e).toString().replace(/\s+/g, " ").slice(0, 240)}`);
 }
 
-const API_FAIL = /Tenki [\w ]*failed \(\d/i; // "Tenki GetSession failed (404 …)" / "Tenki data ReadFile failed (500…)"
+const API_FAIL = /(?:Luxor|Tenki) [\w ]*failed \(\d/i; // "Luxor GetSession failed (404 …)" / "Luxor data ReadFile failed (500…)"
 const ZOD_FAIL = /Input validation error|-32602/i;
 const FIVE_XX = /\(5\d\d/;
 const HANG = /timed out|timeout/i;

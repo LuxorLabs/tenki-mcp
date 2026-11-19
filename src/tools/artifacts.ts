@@ -2,7 +2,7 @@
  * artifacts.ts — signed-URL binary transfer for tenki-mcp.
  *
  * The text file tools (read_file/write_file) round-trip UTF-8 over the data plane.
- * For binary payloads (datasets, wheels, images, build outputs) Tenki issues short-
+ * For binary payloads (datasets, wheels, images, build outputs) Luxor issues short-
  * lived signed URLs: GetArtifactUploadUrl to PUT a file into the sandbox, and
  * GetArtifactDownloadUrl to GET one out. These tools return the signed URL; the
  * caller performs the actual HTTP PUT/GET.

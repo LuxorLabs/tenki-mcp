@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * tenki-mcp — a Model Context Protocol server for Tenki Cloud.
+ * tenki-mcp — a Model Context Protocol server for Luxor Sandbox (Luxor Agent Cloud, formerly Tenki Cloud).
  *
- * Exposes Tenki's sandbox platform (disposable microVMs for AI agents) as MCP
+ * Exposes Luxor's sandbox platform (disposable microVMs for AI agents) as MCP
  * tools, so any agent — Claude, Codex, Cursor — can create sandboxes, run code,
  * manage files/snapshots/volumes/templates/images, run git, and expose preview URLs.
  *
@@ -33,7 +33,7 @@ if (!token && !oauthHttp) {
 		`tenki-mcp: no credential, starting in unauthenticated mode (only ${toolName("tenki_auth_status")} is available). ` +
 			"Set LUXOR_API_KEY (lx_…) or LUXOR_AUTH_TOKEN (ory_st_…) in the server's env and restart " +
 			"(TENKI_API_KEY / TENKI_AUTH_TOKEN still work as the legacy fallback), " +
-			"e.g. claude mcp add tenki --env LUXOR_API_KEY=lx_… -- npx -y @tenkicloud/mcp",
+			"e.g. claude mcp add luxor --env LUXOR_API_KEY=lx_… -- npx -y @luxorai/mcp",
 	);
 }
 const baseUrl = readEnv("API_ENDPOINT", "API_URL") || undefined;
@@ -60,10 +60,10 @@ async function main() {
 	const server = createServer(client);
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
-	console.error("tenki-mcp running on stdio");
+	console.error("luxor-mcp running on stdio");
 }
 
 main().catch((err) => {
-	console.error("tenki-mcp fatal:", err);
+	console.error("luxor-mcp fatal:", err);
 	process.exit(1);
 });
