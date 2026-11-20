@@ -128,6 +128,9 @@ Substitute `node /absolute/path/to/tenki-mcp/dist/index.js` for the `npx` comman
 | `LUXOR_MCP_READONLY`               | off                                                                | `1` registers only read tools (no create/run/delete/spend).                                                                                                                                               |
 | `LUXOR_MCP_DISABLED_TOOLS`         | -                                                                  | Comma-separated tool names to skip registering.                                                                                                                                                           |
 | `LUXOR_MCP_AUDIT`                  | off                                                                | `1` logs each tool call name + arg keys to stderr.                                                                                                                                                        |
+| `LUXOR_MCP_POSTHOG_TOKEN`          | -                                                                  | PostHog project token. **Analytics is off unless this is set.** See [Usage analytics](#usage-analytics).                                                                                                  |
+| `LUXOR_MCP_POSTHOG_HOST`           | `https://us.i.posthog.com`                                         | PostHog ingestion host.                                                                                                                                                                                   |
+| `LUXOR_MCP_ANALYTICS`              | on when a token is set                                             | `0` turns analytics off even when a token is set. `DO_NOT_TRACK=1` does the same.                                                                                                                         |
 | `LUXOR_MCP_TOOL_PREFIX`            | `tenki`                                                            | `luxor` names every tool `luxor_*` instead of `tenki_*` (the `luxor` Claude Code plugin sets it). Descriptions and errors use the same names.                                                             |
 | `LUXOR_MCP_TRANSPORT`              | `stdio`                                                            | `http` serves Streamable HTTP instead (see below).                                                                                                                                                        |
 | `PORT`                             | `3000`                                                             | HTTP transport port.                                                                                                                                                                                      |
@@ -208,6 +211,12 @@ Luxor's API is **ConnectRPC**: JSON over HTTP/1.1, not REST. Every control-plane
 Command output: `tenki_exec` and `tenki_run_code` capture `stdout`/`stderr` by redirecting to files (`sh -c '… > out 2> err'`) and reading them back over the data plane, so you get the output inline through a plain HTTP client.
 
 The wire details are ported from the live-verified [n8n community node](https://github.com/opencolin/n8n-nodes-tenki).
+
+## Usage analytics
+
+Optional, and **off unless `LUXOR_MCP_POSTHOG_TOKEN` is set** (the npm package ships with no token). When on, the server sends [PostHog MCP Analytics](https://posthog.com/docs/mcp-analytics) events: each tool call's name, duration, success or error, argument **names**, the MCP client name and version, the model if the client reports it, and a short "why" the agent gives in an added `context` argument. Hosted OAuth sessions are attributed to the signed-in user and workspace.
+
+It never sends tool argument **values** or tool **results** (commands, file contents, git output, URLs). Turn it off with `LUXOR_MCP_ANALYTICS=0` or `DO_NOT_TRACK=1`.
 
 ## Security
 

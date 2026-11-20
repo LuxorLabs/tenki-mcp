@@ -2,6 +2,10 @@
 
 All notable changes to `@luxorai/mcp` (also published as `@tenkicloud/mcp`). This project follows semantic versioning.
 
+## [Unreleased]
+
+- Optional usage analytics through PostHog MCP Analytics, off unless `LUXOR_MCP_POSTHOG_TOKEN` is set. Tool argument values and results are never sent. `LUXOR_MCP_ANALYTICS=0` or `DO_NOT_TRACK=1` turn it off.
+
 ## [0.4.4] - 2026-11-17
 
 - Environment variables now use the `LUXOR_` prefix (for example `LUXOR_API_KEY`). `LUXORAI_*` variables are no longer read; `TENKI_*` still works as a fallback. `LUXOR_API_KEY` is only used when it starts with `lx_` or `tk_`.

@@ -37,6 +37,7 @@ import { registerSsh } from "./tools/ssh.js";
 import { registerEgress } from "./tools/egress.js";
 import { registerAuthStatus } from "./tools/auth_status.js";
 import { readEnv } from "./env.js";
+import { instrumentServer, type AnalyticsIdentity } from "./analytics.js";
 import { TOOL_TITLES } from "./tools/titles.js";
 import { TOOL_PREFIX, toolName, withToolNames } from "./toolNames.js";
 
@@ -272,8 +273,11 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
  * discover and explain the missing credential. Registering the other tools in
  * that state would offer 82 tools that can only fail.
  */
-export function createServer(client: TenkiClient | null): McpServer {
+export function createServer(client: TenkiClient | null, identity?: AnalyticsIdentity): McpServer {
 	const server = new McpServer({ name: "tenki", version: VERSION });
+	// Optional PostHog MCP Analytics (off unless LUXOR_MCP_POSTHOG_TOKEN is set).
+	// Instrument the REAL server before any registration so every tool is wrapped.
+	instrumentServer(server, VERSION, identity);
 	const opts = { ...readGuardOpts(), registered: { count: 0 } };
 	const guarded = guard(server, opts);
 	if (client) for (const register of modules) register(guarded, client);

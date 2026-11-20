@@ -20,6 +20,7 @@ import { createServer } from "./server.js";
 import { startHttp } from "./http.js";
 import { readEnv } from "./env.js";
 import { toolName } from "./toolNames.js";
+import { shutdownAnalytics } from "./analytics.js";
 
 // A missing credential is NOT fatal: exiting here is reported by MCP clients as
 // an opaque "server failed to start" with stderr usually swallowed, leaving the
@@ -53,13 +54,18 @@ async function main() {
 	if ((readEnv("MCP_TRANSPORT") || "stdio").toLowerCase() === "http") {
 		const httpServer = startHttp(client, Number(process.env.PORT) || 3000);
 		for (const sig of ["SIGINT", "SIGTERM"] as const) {
-			process.on(sig, () => httpServer.close(() => process.exit(0)));
+			process.on(sig, () => httpServer.close(() => void shutdownAnalytics().then(() => process.exit(0))));
 		}
 		return;
 	}
 	const server = createServer(client);
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
+	// MCP clients end a stdio server by closing stdin and may never send SIGTERM,
+	// so flush queued analytics on both.
+	const stop = () => void shutdownAnalytics().then(() => process.exit(0));
+	process.stdin.on("end", stop);
+	for (const sig of ["SIGINT", "SIGTERM"] as const) process.on(sig, stop);
 	console.error("tenki-mcp running on stdio");
 }
 
