@@ -273,7 +273,12 @@ export function startHttp(client: TenkiClient | null, port: number): http.Server
 								bearerTokenProvider: () => sessionAuthorization!.apiDelegationToken,
 							})
 						: client;
-					await createServer(sessionClient).connect(transport);
+					await createServer(
+						sessionClient,
+						delegated
+							? { subject: delegated.subject, workspaceId: delegated.workspaceId, clientId: delegated.clientId }
+							: undefined,
+					).connect(transport);
 					entry = {
 						transport,
 						lastSeen: Date.now(),

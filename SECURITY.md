@@ -30,6 +30,7 @@ Grant the smallest set that the use case needs.
 ### Secrets & audit (MCP-04, Observability)
 - Static credentials are read from env and sent only as auth headers. Hosted OAuth tokens are sent only to the private Tenki Identity exchange endpoint and are never forwarded to the Tenki API; the API receives a short-lived signed delegation instead.
 - `TENKI_MCP_AUDIT=1` logs each tool call's **name + argument keys** to stderr (never values, content, or the token) for an operator audit trail.
+- Usage analytics (PostHog) is **off unless `LUXOR_MCP_POSTHOG_TOKEN` is set**. When on, events carry tool names, timings, error flags, argument keys, client/model metadata and the agent's stated intent; argument values and tool results are removed before sending (`src/analytics.ts`, covered by `test/analytics.test.mjs`). `LUXOR_MCP_ANALYTICS=0` or `DO_NOT_TRACK=1` force it off.
 
 ## CSA MCP Server Top-10 mapping
 
