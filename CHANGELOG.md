@@ -2,6 +2,10 @@
 
 All notable changes to `@luxorai/mcp` (also published as `@tenkicloud/mcp`). This project follows semantic versioning.
 
+## [Unreleased]
+
+- MCP Apps widgets: `tenki_run_code` and `tenki_exec` render in `ui://luxor/terminal`, `tenki_expose_port` and `tenki_create_preview_url` in `ui://luxor/preview`, and `tenki_list_files` and `tenki_read_file` in `ui://luxor/files` (`text/html;profile=mcp-app`). Each tool advertises its widget in `_meta.ui.resourceUri`; hosts without MCP Apps support keep using the text result.
+
 ## [0.4.4] - 2026-11-17
 
 - Environment variables now use the `LUXOR_` prefix (for example `LUXOR_API_KEY`). `LUXORAI_*` variables are no longer read; `TENKI_*` still works as a fallback. `LUXOR_API_KEY` is only used when it starts with `lx_` or `tk_`.

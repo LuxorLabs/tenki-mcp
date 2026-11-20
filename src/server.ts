@@ -39,6 +39,7 @@ import { registerAuthStatus } from "./tools/auth_status.js";
 import { readEnv } from "./env.js";
 import { TOOL_TITLES } from "./tools/titles.js";
 import { TOOL_PREFIX, toolName, withToolNames } from "./toolNames.js";
+import { registerUiResources, uiMetaFor } from "./ui/widgets.js";
 
 export const VERSION = "0.4.4";
 
@@ -241,9 +242,12 @@ function guard(server: McpServer, opts: GuardOpts): McpServer {
 							throw e;
 						}
 					};
+		// MCP Apps: tools with a widget advertise its ui:// resource (ui/widgets.ts).
+		const uiMeta = uiMetaFor(name);
+		const _meta = uiMeta ? { ...(config._meta as Record<string, unknown> | undefined), ...uiMeta } : config._meta;
 		return (target.registerTool as (...a: unknown[]) => unknown)(
 			advertised,
-			{ ...config, description, title: titleFor(name), annotations },
+			{ ...config, description, title: titleFor(name), annotations, ...(_meta ? { _meta } : {}) },
 			withAudit(advertised, named, opts.audit),
 		);
 	};
@@ -282,6 +286,9 @@ export function createServer(client: TenkiClient | null): McpServer {
 	// READ_OVERRIDE keeps it available under TENKI_MCP_READONLY;
 	// TENKI_MCP_DISABLED_TOOLS can still drop it.
 	registerAuthStatus(guarded, client, opts.registered.count + 1);
+	// MCP Apps widgets (ui://luxor/*). Static HTML, no API access, so they are
+	// served in every posture, including no-credential and read-only.
+	registerUiResources(server);
 	if (!client) console.error(`tenki-mcp: no credential, only ${toolName("tenki_auth_status")} registered. Set LUXOR_API_KEY or LUXOR_AUTH_TOKEN (or the legacy TENKI_API_KEY / TENKI_AUTH_TOKEN) and restart.`);
 	if (opts.readonly) console.error("tenki-mcp: TENKI_MCP_READONLY — only read-only tools registered.");
 	else if (opts.disabled.size) console.error(`tenki-mcp: disabled tools — ${[...opts.disabled].join(", ")}`);

@@ -170,6 +170,18 @@ Full per-release breakdown in [CHANGELOG.md](CHANGELOG.md).
 
 **Deprecated upstream, still served:** `tenki_expose_port` / `tenki_unexpose_port` / `tenki_list_exposed_ports` (the API prefers the preview-URL tools), `tenki_list_workspace_sandboxes` / `tenki_list_workspace_snapshots` (prefer the credential-scoped lists), and the `ExecuteCommand` RPC behind `tenki_exec` / `tenki_run_code` / `tenki_move_path` (successor is the data-plane `Run` stream, which needs an HTTP/2 transport this server does not have yet). The parity audit prints these on every run.
 
+### MCP Apps widgets
+
+In hosts that support [MCP Apps](https://apps.extensions.modelcontextprotocol.io) (assistant-ui, Claude, ChatGPT and others), some tools render as interactive widgets instead of JSON:
+
+| Widget                | Tools                                          | Shows                                                    |
+| --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
+| `ui://luxor/terminal` | `tenki_run_code`, `tenki_exec`                 | Command, stdout, stderr and exit code                    |
+| `ui://luxor/preview`  | `tenki_expose_port`, `tenki_create_preview_url`| The preview URL in an embedded frame, with Open and Reload |
+| `ui://luxor/files`    | `tenki_list_files`, `tenki_read_file`          | A browsable listing; click a folder or file to open it   |
+
+The widgets are self-contained HTML served as `resources/read` with MIME type `text/html;profile=mcp-app`. Other hosts ignore them.
+
 ## Auth
 
 Set one of `LUXOR_API_KEY` or `LUXOR_AUTH_TOKEN` (`TENKI_API_KEY` / `TENKI_AUTH_TOKEN` are still accepted). When both are set, the auth token wins. The header is chosen by token prefix: `lx_…` or `tk_…` → `Authorization: Bearer`, `ory_st_…` → `X-Session-Token`, otherwise a session cookie. Override the endpoint with `LUXOR_API_ENDPOINT` (default `https://api.luxor.ai`, the same API as `https://api.tenki.cloud`).
